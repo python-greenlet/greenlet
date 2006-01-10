@@ -1,6 +1,12 @@
-from py.magic import greenlet
+from greenlet import greenlet
 import sys, thread, threading
-from py.test import raises
+
+def raises(exc, fn, *args, **kw):
+    try:
+        fn(*args, **kw)
+    except exc:
+        return
+    assert False, "did not raise " + exc.__name__
 
 def test_simple():
     lst = []
@@ -63,7 +69,7 @@ def test_send_exception():
     seen = []
     g1 = greenlet(fmain)
     g1.switch(seen)
-    raises(KeyError, "send_exception(g1, KeyError)")
+    raises(KeyError, send_exception, g1, KeyError)
     assert seen == [KeyError]
 
 def test_dealloc():
