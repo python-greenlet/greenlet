@@ -549,6 +549,25 @@ static PyObject* single_result(PyObject* results)
 		return results;
 }
 
+PyDoc_STRVAR(green_switch_doc,
+"switch(*args)\n\
+\n\
+Switch execution to this greenlet.\n\
+\n\
+If this greenlet has never been run, then this greenlet\n\
+will be switched to using the body of self.run(*args).\n\
+\n\
+If the greenlet is active (has been run, but was switch()'ed\n\
+out before leaving its run function), then this greenlet will\n\
+be resumed and the return value to its switch call will be\n\
+None if no arguments are given, the given argument if one\n\
+argument is given, or the args tuple if multiple arguments\n\
+are given\n\
+\n\
+If the greenlet is dead, or is the current greenlet then this\n\
+function will simply return the args using the same rules as\n\
+above.");
+
 static PyObject* green_switch(PyGreenlet* self, PyObject* args)
 {
 	Py_INCREF(args);
@@ -686,7 +705,7 @@ int PyGreen_SetParent(PyObject* g, PyObject* nparent)
 
 
 static PyMethodDef green_methods[] = {
-    {"switch", (PyCFunction)green_switch, METH_VARARGS, /*XXXswitch_doc*/ NULL},
+    {"switch", (PyCFunction)green_switch, METH_VARARGS, green_switch_doc},
     {NULL,     NULL}		/* sentinel */
 };
 
