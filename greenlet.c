@@ -83,6 +83,17 @@ The running greenlet's stack_start is undefined but not NULL.
 #define Py_VISIT(o) if (o) {if ((err = visit((PyObject *)(o), arg))) return err;}
 #endif /* !Py_VISIT */
 
+#ifndef Py_CLEAR
+#define Py_CLEAR(op) \
+	do { \
+		if (op) { \
+			PyObject *tmp = (PyObject *)(op); \
+			(op) = NULL; \
+			Py_DECREF(tmp); \
+		} \
+	} while (0)
+#endif /* !Py_CLEAR */
+
 static PyGreenlet* ts_current;
 static PyGreenlet* ts_origin;
 static PyGreenlet* ts_target;
@@ -514,10 +525,8 @@ static void green_clear(PyGreenlet* self)
 #ifndef GREENLET_USE_GC
 	assert(false);
 #endif /* !GREENLET_USE_GC */
-	Py_XDECREF(self->parent);
-	self->parent = NULL;
-	Py_XDECREF(self->run_info);
-	self->run_info = NULL;
+	Py_CLEAR(self->parent);
+	Py_CLEAR(self->run_info);
 }
 
 static void green_dealloc(PyGreenlet* self)
@@ -528,8 +537,7 @@ static void green_dealloc(PyGreenlet* self)
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
-	Py_XDECREF(self->parent);
-	self->parent = NULL;
+	Py_CLEAR(self->parent);
 	if (PyGreen_ACTIVE(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
@@ -574,7 +582,7 @@ static void green_dealloc(PyGreenlet* self)
 	}
 	if (self->weakreflist != NULL)
 		PyObject_ClearWeakRefs((PyObject *) self);
-	Py_XDECREF(self->run_info);
+	Py_CLEAR(self->run_info);
 	self->ob_type->tp_free((PyObject*) self);
 green_dealloc_end:
 #ifdef GREENLET_USE_GC
