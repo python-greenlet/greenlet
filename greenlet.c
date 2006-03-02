@@ -94,9 +94,13 @@ The running greenlet's stack_start is undefined but not NULL.
 	} while (0)
 #endif /* !Py_CLEAR */
 
+/* The current greenlet in this thread state (holds a reference) */
 static PyGreenlet* ts_current;
+/* Holds a reference to the switching-from stack during the slp switch */
 static PyGreenlet* ts_origin;
+/* Holds a reference to the switching-to stack during the slp switch */
 static PyGreenlet* ts_target;
+/* NULL if error, otherwise args tuple to pass around during slp switch */
 static PyObject* ts_passaround;
 
 /***********************************************************/
