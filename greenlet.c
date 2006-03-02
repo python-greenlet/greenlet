@@ -110,14 +110,22 @@ static PyObject* ts_delkey;
 static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
 
+#undef GREENLET_USE_GC
+
 #ifdef GREENLET_USE_GC
 #define GREENLET_GC_FLAGS Py_TPFLAGS_HAVE_GC
 #define GREENLET_tp_alloc PyType_GenericAlloc
 #define GREENLET_tp_free PyObject_GC_Del
+#define GREENLET_tp_traverse green_traverse
+#define GREENLET_tp_clear green_clear
+#define GREENLET_tp_is_gc green_is_gc
 #else /* GREENLET_USE_GC */
 #define GREENLET_GC_FLAGS 0
 #define GREENLET_tp_alloc 0
 #define GREENLET_tp_free 0
+#define GREENLET_tp_traverse 0
+#define GREENLET_tp_clear 0
+#define GREENLET_tp_is_gc 0
 #endif /* !GREENLET_USE_GC */
 
 static PyGreenlet* green_create_main(void)
@@ -138,6 +146,9 @@ static PyGreenlet* green_create_main(void)
 	gmain->stack_stop = (char*) -1;
 	gmain->run_info = dict;
 	Py_INCREF(dict);
+#ifdef GREENLET_USE_GC
+	printf("green_create_main %p\n", gmain);
+#endif
 	return gmain;
 }
 
@@ -447,6 +458,9 @@ static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		Py_INCREF(ts_current);
 		((PyGreenlet*) o)->parent = ts_current;
 	}
+#ifdef GREENLET_USE_GC
+	printf("green_new %p\n", o);
+#endif
 	return o;
 }
 
@@ -475,6 +489,9 @@ static int kill_greenlet(PyGreenlet* self)
 {
 	/* Cannot raise an exception to kill the greenlet if
 	   it is not running in the same thread! */
+#ifdef GREENLET_USE_GC
+	printf("kill_greenlet %p\n", self);
+#endif
 	if (self->run_info == PyThreadState_GET()->dict) {
 		/* The dying greenlet cannot be a parent of ts_current
 		   because the 'parent' field chain would hold a
@@ -509,31 +526,42 @@ static int kill_greenlet(PyGreenlet* self)
 	}
 }
 
+#ifdef GREENLET_USE_GC
 static int
 green_traverse(PyGreenlet *so, visitproc visit, void *arg)
 {
-#ifndef GREENLET_USE_GC
-	assert(false);
-#endif /* !GREENLET_USE_GC */
+	printf("green_traverse %p\n", so);
 	Py_VISIT((PyObject*)so->run_info);
+	Py_VISIT((PyObject*)so->parent);
+	Py_VISIT((PyObject*)so->top_frame);
+	Py_VISIT((PyObject*)so->stack_prev);
 	Py_VISIT((PyObject*)so->parent);
 	return 0;
 }
 
-static void green_clear(PyGreenlet* self)
+static int green_is_gc(PyGreenlet* self)
 {
-#ifndef GREENLET_USE_GC
-	assert(false);
-#endif /* !GREENLET_USE_GC */
-	Py_CLEAR(self->parent);
-	Py_CLEAR(self->run_info);
+	int rval;
+	rval = (self->stack_stop == ((char *)-1)) ? 0 : 1;
+	printf("green_is_gc %p = %d\n", self, rval);
+	return rval;
 }
+
+static int green_clear(PyGreenlet* self)
+{
+	printf("green_clear %p run_info %p\n", self, self->run_info);
+	if (PyGreen_ACTIVE(self))
+		return kill_greenlet(self);
+	return 0;
+}
+#endif
 
 static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
 
 #ifdef GREENLET_USE_GC
+	printf("green_dealloc %p\n", self);
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
@@ -572,6 +600,9 @@ static void green_dealloc(PyGreenlet* self)
 			/* Resurrected! */
 			int refcnt = self->ob_refcnt;
 			_Py_NewReference((PyObject*) self);
+#ifdef GREENLET_USE_GC
+			PyObject_GC_Track((PyObject *)self);
+#endif
 			self->ob_refcnt = refcnt;
 #ifdef COUNT_ALLOCS
 			--self->ob_type->tp_frees;
@@ -587,9 +618,8 @@ static void green_dealloc(PyGreenlet* self)
 green_dealloc_end:
 #ifdef GREENLET_USE_GC
 	Py_TRASHCAN_SAFE_END(self);
-#else
-	return;
 #endif /* GREENLET_USE_GC */
+	return;
 }
 
 static PyObject* single_result(PyObject* results)
@@ -810,13 +840,13 @@ PyTypeObject PyGreen_Type = {
 	0, 					/* tp_hash */
 	0,					/* tp_call */
 	0,					/* tp_str */
-	PyObject_GenericGetAttr,		/* tp_getattro */
-	PyObject_GenericSetAttr,		/* tp_setattro */
+	0,					/* tp_getattro */
+	0,					/* tp_setattro */
 	0,					/* tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS,  /* tp_flags */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS,	/* tp_flags */
 	0,					/* tp_doc */
- 	(traverseproc)green_traverse,		/* tp_traverse */
-	(inquiry)green_clear,			/* tp_clear */
+	(traverseproc)GREENLET_tp_traverse,	/* tp_traverse */
+	(inquiry)GREENLET_tp_clear,		/* tp_clear */
 	0,					/* tp_richcompare */
 	offsetof(PyGreenlet, weakreflist),	/* tp_weaklistoffset */
 	0,					/* tp_iter */
@@ -833,6 +863,7 @@ PyTypeObject PyGreen_Type = {
 	GREENLET_tp_alloc,			/* tp_alloc */
 	green_new,				/* tp_new */
 	GREENLET_tp_free,			/* tp_free */        
+	(inquiry)GREENLET_tp_is_gc,		/* tp_is_gc */
 };
 /* XXX need GC support */
 
