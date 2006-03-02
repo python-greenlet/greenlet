@@ -1,3 +1,4 @@
+/* vim:set noet ts=8 sw=8 : */
 
 /* Greenlet object interface */
 

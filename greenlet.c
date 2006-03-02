@@ -1,3 +1,4 @@
+/* vim:set noet ts=8 sw=8 : */
 #include "greenlet.h"
 #include "structmember.h"
 
@@ -92,6 +93,16 @@ static PyObject* ts_curkey;
 static PyObject* ts_delkey;
 static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
+
+#ifdef GREENLET_USE_GC
+#define GREENLET_GC_FLAGS Py_TPFLAGS_HAVE_GC
+#define GREENLET_tp_alloc PyType_GenericAlloc
+#define GREENLET_tp_free PyObject_GC_Del
+#else /* GREENLET_USE_GC */
+#define GREENLET_GC_FLAGS 0
+#define GREENLET_tp_alloc 0
+#define GREENLET_tp_free 0
+#endif /* !GREENLET_USE_GC */
 
 static PyGreenlet* green_create_main(void)
 {
@@ -252,7 +263,7 @@ static int slp_save_state(char* stackref)
 #ifndef STACK_MAGIC
 #error "greenlet needs to be ported to this platform,\
  or teached how to detect your compiler properly."
-#endif
+#endif /* !STACK_MAGIC */
 
 
 /* This is a trick to prevent the compiler from inlining or
@@ -482,10 +493,39 @@ static int kill_greenlet(PyGreenlet* self)
 	}
 }
 
+static int
+green_traverse(PyGreenlet *so, visitproc visit, void *arg)
+{
+	int err;
+#ifndef GREENLET_USE_GC
+	assert(false);
+#endif /* !GREENLET_USE_GC */
+#define VISIT(o) if (o) {if ((err = visit((PyObject *)(o), arg))) return err;}
+	VISIT(so->run_info);
+	VISIT(so->parent);
+#undef VISIT
+	return 0;
+}
+
+static void green_clear(PyGreenlet* self)
+{
+#ifndef GREENLET_USE_GC
+	assert(false);
+#endif /* !GREENLET_USE_GC */
+	Py_XDECREF(self->parent);
+	self->parent = NULL;
+	Py_XDECREF(self->run_info);
+	self->run_info = NULL;
+}
+
 static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
 
+#ifdef GREENLET_USE_GC
+	PyObject_GC_UnTrack((PyObject *)self);
+	Py_TRASHCAN_SAFE_BEGIN(self);
+#endif /* GREENLET_USE_GC */
 	Py_XDECREF(self->parent);
 	self->parent = NULL;
 	if (PyGreen_ACTIVE(self)) {
@@ -526,14 +566,20 @@ static void green_dealloc(PyGreenlet* self)
 #ifdef COUNT_ALLOCS
 			--self->ob_type->tp_frees;
 			--self->ob_type->tp_allocs;
-#endif
-			return;
+#endif /* COUNT_ALLOCS */
+			goto green_dealloc_end;
 		}
 	}
 	if (self->weakreflist != NULL)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_XDECREF(self->run_info);
 	self->ob_type->tp_free((PyObject*) self);
+green_dealloc_end:
+#ifdef GREENLET_USE_GC
+	Py_TRASHCAN_SAFE_END(self);
+#else
+	return;
+#endif /* GREENLET_USE_GC */
 }
 
 static PyObject* single_result(PyObject* results)
@@ -737,10 +783,11 @@ static PyNumberMethods green_as_number = {
 
 PyTypeObject PyGreen_Type = {
 	PyObject_HEAD_INIT(NULL)
-	0,
-	"greenlet.greenlet",
-	sizeof(PyGreenlet),
-	0,
+	0,					/* ob_size */
+	"greenlet.greenlet",			/* tp_name */
+	sizeof(PyGreenlet),			/* tp_basicsize */
+	0,					/* tp_itemsize */
+	/* methods */
 	(destructor)green_dealloc,		/* tp_dealloc */
 	0,					/* tp_print */
 	0,					/* tp_getattr */
@@ -753,13 +800,13 @@ PyTypeObject PyGreen_Type = {
 	0, 					/* tp_hash */
 	0,					/* tp_call */
 	0,					/* tp_str */
-	0,					/* tp_getattro */
-	0,					/* tp_setattro */
+	PyObject_GenericGetAttr,		/* tp_getattro */
+	PyObject_GenericSetAttr,		/* tp_setattro */
 	0,					/* tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,  /* tp_flags */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS,  /* tp_flags */
 	0,					/* tp_doc */
- 	0,					/* tp_traverse */
-	0,					/* tp_clear */
+ 	(traverseproc)green_traverse,		/* tp_traverse */
+	(inquiry)green_clear,			/* tp_clear */
 	0,					/* tp_richcompare */
 	offsetof(PyGreenlet, weakreflist),	/* tp_weaklistoffset */
 	0,					/* tp_iter */
@@ -773,8 +820,9 @@ PyTypeObject PyGreen_Type = {
 	0,					/* tp_descr_set */
 	0,					/* tp_dictoffset */
 	(initproc)green_init,			/* tp_init */
-	0,					/* tp_alloc */
+	GREENLET_tp_alloc,			/* tp_alloc */
 	green_new,				/* tp_new */
+	GREENLET_tp_free,			/* tp_free */        
 };
 /* XXX need GC support */
 
