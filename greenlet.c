@@ -78,6 +78,11 @@ The running greenlet's stack_start is undefined but not NULL.
      using the dictionary key 'ts_curkey'.
 */
 
+/* Python 2.3 support */
+#ifndef Py_VISIT
+#define Py_VISIT(o) if (o) {if ((err = visit((PyObject *)(o), arg))) return err;}
+#endif /* !Py_VISIT */
+
 static PyGreenlet* ts_current;
 static PyGreenlet* ts_origin;
 static PyGreenlet* ts_target;
@@ -496,14 +501,11 @@ static int kill_greenlet(PyGreenlet* self)
 static int
 green_traverse(PyGreenlet *so, visitproc visit, void *arg)
 {
-	int err;
 #ifndef GREENLET_USE_GC
 	assert(false);
 #endif /* !GREENLET_USE_GC */
-#define VISIT(o) if (o) {if ((err = visit((PyObject *)(o), arg))) return err;}
-	VISIT(so->run_info);
-	VISIT(so->parent);
-#undef VISIT
+	Py_VISIT((PyObject*)so->run_info);
+	Py_VISIT((PyObject*)so->parent);
 	return 0;
 }
 
@@ -877,6 +879,12 @@ void initgreenlet(void)
 	PyModule_AddObject(m, "error", PyExc_GreenletError);
 	Py_INCREF(PyExc_GreenletExit);
 	PyModule_AddObject(m, "GreenletExit", PyExc_GreenletExit);
+#ifdef GREENLET_USE_GC
+	PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(1));
+#else
+	PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(0));
+#endif
+
 
         /* also publish module-level data as attributes of the greentype. */
 	for (p=copy_on_greentype; *p; p++) {
