@@ -897,6 +897,11 @@ void initgreenlet(void)
 	_PyGreen_slp_switch = slp_switch;
 	_PyGreen_initialstub = g_initialstub;
 	m = Py_InitModule("greenlet", GreenMethods);
+	if (m == NULL)
+		return;
+	
+	if (PyModule_AddStringConstant(m, "__version__", "0.2") < 0)
+		return;
 
 	ts_curkey = PyString_InternFromString("__greenlet_ts_curkey");
 	ts_delkey = PyString_InternFromString("__greenlet_ts_delkey");
