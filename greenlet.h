@@ -24,7 +24,7 @@ typedef struct _greenlet {
 	PyObject* weakreflist;
 } PyGreenlet;
 
-extern PyTypeObject PyGreen_Type;
+static PyTypeObject PyGreen_Type;
 
 #define PyGreen_Check(op)      PyObject_TypeCheck(op, &PyGreen_Type)
 #define PyGreen_STARTED(op)    (((PyGreenlet*)(op))->stack_stop != NULL)

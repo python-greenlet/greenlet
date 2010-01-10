@@ -1,5 +1,5 @@
 from greenlet import greenlet
-import sys, thread, threading
+import sys, threading
 
 def raises(exc, fn, *args, **kw):
     try:
@@ -20,7 +20,7 @@ def test_simple():
     lst.append(2)
     g.switch()
     lst.append(4)
-    assert lst == range(5)
+    assert lst == list(range(5))
 
 def test_threads():
     success = []
@@ -87,9 +87,9 @@ def test_dealloc():
 def test_dealloc_other_thread():
     seen = []
     someref = []
-    lock = thread.allocate_lock()
+    lock = threading.Lock()
     lock.acquire()
-    lock2 = thread.allocate_lock()
+    lock2 = threading.Lock()
     lock2.acquire()
     def f():
         g1 = greenlet(fmain)
@@ -118,9 +118,9 @@ def test_dealloc_other_thread():
 def test_frame():
     def f1():
         f = sys._getframe(0)
-	assert f.f_back is None
-	greenlet.getcurrent().parent.switch(f)
-	return "meaning of life"
+        assert f.f_back is None
+        greenlet.getcurrent().parent.switch(f)
+        return "meaning of life"
     g = greenlet(f1)
     frame = g.switch()
     assert frame is g.gr_frame

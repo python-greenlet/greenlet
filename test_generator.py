@@ -14,7 +14,7 @@ class genlet(greenlet):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         self.parent = greenlet.getcurrent()
         result = self.switch()
         if self:
@@ -22,11 +22,14 @@ class genlet(greenlet):
         else:
             raise StopIteration
 
+    # Hack: Python < 2.6 compatibility
+    next = __next__
+
 def Yield(value):
     g = greenlet.getcurrent()
     while not isinstance(g, genlet):
         if g is None:
-            raise RuntimeError, 'yield outside a genlet'
+            raise RuntimeError('yield outside a genlet')
         g = g.parent
     g.parent.switch(value)
 
