@@ -382,6 +382,40 @@ static PyObject* g_switch(PyGreenlet* target, PyObject* args)
 	}
 }
 
+static PyObject *
+g_handle_exit(PyObject *result)
+{
+	if (result == NULL && PyErr_ExceptionMatches(PyExc_GreenletExit))
+	{
+		/* catch and ignore GreenletExit */
+		PyObject *exc, *val, *tb;
+		PyErr_Fetch(&exc, &val, &tb);
+		if (val == NULL)
+		{
+			Py_INCREF(Py_None);
+			val = Py_None;
+		}
+		result = val;
+		Py_DECREF(exc);
+		Py_XDECREF(tb);
+	}
+	if (result != NULL)
+	{
+		/* package the result into a 1-tuple */
+		PyObject *r = result;
+		result = PyTuple_New(1);
+		if (result)
+		{
+			PyTuple_SET_ITEM(result, 0, r);
+		}
+		else
+		{
+			Py_DECREF(r);
+		}
+	}
+	return result;
+}
+
 static void g_initialstub(void* mark)
 {
 	int err;
@@ -649,6 +683,20 @@ static PyObject* single_result(PyObject* results)
 		return results;
 }
 
+static PyObject *
+throw_greenlet(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
+{
+	/* Note: _consumes_ a reference to typ, val, tb */
+	PyObject *result = NULL;
+	PyErr_Restore(typ, val, tb);
+	if (PyGreen_STARTED(self) && !PyGreen_ACTIVE(self))
+	{
+		/* dead greenlet: turn GreenletExit into a regular return */
+		result = g_handle_exit(result);
+	}
+	return single_result(g_switch(self, result));
+}
+
 PyDoc_STRVAR(green_switch_doc,
 "switch(*args)\n\
 \n\
@@ -672,6 +720,105 @@ static PyObject* green_switch(PyGreenlet* self, PyObject* args)
 {
 	Py_INCREF(args);
 	return single_result(g_switch(self, args));
+}
+
+/* Macros required to support Python < 2.6 for green_throw() */
+#ifndef PyExceptionClass_Check
+#  define PyExceptionClass_Check    PyClass_Check
+#endif
+#ifndef PyExceptionInstance_Check
+#  define PyExceptionInstance_Check PyInstance_Check
+#endif
+#ifndef PyExceptionInstance_Class
+#  define PyExceptionInstance_Class(x) \
+	((PyObject *) ((PyInstanceObject *)(x))->in_class)
+#endif
+
+PyDoc_STRVAR(green_throw_doc,
+"Switches execution to the greenlet ``g``, but immediately raises the\n"
+"given exception in ``g``.  If no argument is provided, the exception\n"
+"defaults to ``greenlet.GreenletExit``.  The normal exception\n"
+"propagation rules apply, as described above.  Note that calling this\n"
+"method is almost equivalent to the following::\n"
+"\n"
+"    def raiser():\n"
+"        raise typ, val, tb\n"
+"    g_raiser = greenlet(raiser, parent=g)\n"
+"    g_raiser.switch()\n"
+"\n"
+"except that this trick does not work for the\n"
+"``greenlet.GreenletExit`` exception, which would not propagate\n"
+"from ``g_raiser`` to ``g``.\n");
+
+static PyObject *
+green_throw(PyGreenlet *self, PyObject *args)
+{
+	PyObject *typ = PyExc_GreenletExit;
+	PyObject *val = NULL;
+	PyObject *tb = NULL;
+
+	if (!PyArg_ParseTuple(args, "|OOO:throw", &typ, &val, &tb))
+	{
+		return NULL;
+	}
+
+	/* First, check the traceback argument, replacing None, with NULL */
+	if (tb == Py_None)
+	{
+		tb = NULL;
+	}
+	else if (tb != NULL && !PyTraceBack_Check(tb))
+	{
+		PyErr_SetString(
+			PyExc_TypeError,
+			"throw() third argument must be a traceback object");
+		return NULL;
+	}
+
+	Py_INCREF(typ);
+	Py_XINCREF(val);
+	Py_XINCREF(tb);
+
+	if (PyExceptionClass_Check(typ))
+	{
+		PyErr_NormalizeException(&typ, &val, &tb);
+	}
+	else if (PyExceptionInstance_Check(typ))
+	{
+		/* Raising an instance. The value should be a dummy. */
+		if (val && val != Py_None)
+		{
+			PyErr_SetString(
+				PyExc_TypeError,
+				"instance exception may not have a separate value");
+			goto failed_throw;
+		}
+		else
+		{
+			/* Normalize to raise <class>, <instance> */
+			Py_XDECREF(val);
+			val = typ;
+			typ = PyExceptionInstance_Class(typ);
+			Py_INCREF(typ);
+		}
+	}
+	else
+	{
+		/* Not something you can raise. throw() fails. */
+		PyErr_Format(
+			PyExc_TypeError,
+			"exceptions must be classes, or instances, not %s",
+			Py_TYPE(typ)->tp_name);
+		goto failed_throw;
+	}
+
+	return throw_greenlet(self, typ, val, tb);
+
+ failed_throw:
+	Py_DECREF(typ);
+	Py_XDECREF(val);
+	Py_XDECREF(tb);
+	return NULL;
 }
 
 static int green_bool(PyGreenlet* self)
@@ -806,6 +953,7 @@ int PyGreen_SetParent(PyObject* g, PyObject* nparent)
 
 static PyMethodDef green_methods[] = {
     {"switch", (PyCFunction)green_switch, METH_VARARGS, green_switch_doc},
+    {"throw",  (PyCFunction)green_throw,  METH_VARARGS, green_throw_doc},
     {NULL,     NULL}		/* sentinel */
 };
 

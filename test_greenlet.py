@@ -72,6 +72,28 @@ def test_send_exception():
     raises(KeyError, send_exception, g1, KeyError)
     assert seen == [KeyError]
 
+def test_greenlet_throw_instance():
+    def f():
+        greenlet.getcurrent().parent.throw(SomeError("handle this!"))
+    g = greenlet(f)
+    seen = []
+    try:
+        g.switch()
+    except SomeError:
+        seen.append(SomeError)
+    assert seen == [SomeError]
+
+def test_greenlet_throw_exception():
+    def f():
+        greenlet.getcurrent().parent.throw(SomeError, "handle this!")
+    g = greenlet(f)
+    seen = []
+    try:
+        g.switch()
+    except SomeError:
+        seen.append(SomeError)
+    assert seen == [SomeError]
+
 def test_dealloc():
     seen = []
     g1 = greenlet(fmain)
