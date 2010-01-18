@@ -39,7 +39,13 @@ slp_switch(void)
      * last line of this function, if this header file is meant to be compiled
      * non-dynamically!
      */
-    __asm__ volatile ("" : : : "esi", "edi");
+    __asm__ volatile ("" : : :
+      "esi",
+      "edi"
+#ifdef __MINGW32__
+    , "ebx"
+#endif
+    );
     __asm__ ("movl %%esp, %0" : "=g" (stackref));
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -51,7 +57,13 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
-    __asm__ volatile ("" : : : "esi", "edi");
+    __asm__ volatile ("" : : :
+      "esi",
+      "edi"
+#ifdef __MINGW32__
+    , "ebx"
+#endif
+    );
     return 0;
 }
 
