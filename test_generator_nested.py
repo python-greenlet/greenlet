@@ -17,7 +17,7 @@ class genlet(greenlet):
     def set_child(self, child):
         self.child = child
 
-    def next(self):
+    def __next__(self):
         if self.child:
             child = self.child
             while child.child:
@@ -35,12 +35,15 @@ class genlet(greenlet):
         else:
             raise StopIteration
 
+    # Hack: Python < 2.6 compatibility
+    next = __next__
+
 def Yield(value, level = 1):
     g = greenlet.getcurrent()
     
     while level != 0:
         if not isinstance(g, genlet):
-            raise RuntimeError, 'yield outside a genlet'
+            raise RuntimeError('yield outside a genlet')
         if level > 1:
             g.parent.set_child(g)
         g = g.parent
@@ -122,13 +125,13 @@ def perms(l):
 perms = Genlet(perms)
 
 def test_perms():
-    gen_perms = perms(range(4))
+    gen_perms = perms(list(range(4)))
     permutations = list(gen_perms)
     assert len(permutations) == 4*3*2*1
     assert [0,1,2,3] in permutations
     assert [3,2,1,0] in permutations
     res = []
-    for ii in zip(perms(range(4)), perms(range(3))):
+    for ii in zip(perms(list(range(4))), perms(list(range(3)))):
         res.append(ii)
     # XXX Test to make sure we are working as a generator expression
 test_perms()

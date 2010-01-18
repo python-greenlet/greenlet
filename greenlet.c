@@ -94,6 +94,16 @@ The running greenlet's stack_start is undefined but not NULL.
 	} while (0)
 #endif /* !Py_CLEAR */
 
+/* Python <= 2.5 support */
+#if PY_MAJOR_VERSION < 3
+#ifndef Py_REFCNT
+#  define Py_REFCNT(ob) (((PyObject *) (ob))->ob_refcnt)
+#endif
+#ifndef Py_TYPE
+#  define Py_TYPE(ob)   (((PyObject *) (ob))->ob_type)
+#endif
+#endif
+
 /* The current greenlet in this thread state (holds a reference) */
 static PyGreenlet* ts_current;
 /* Holds a reference to the switching-from stack during the slp switch */
@@ -372,6 +382,40 @@ static PyObject* g_switch(PyGreenlet* target, PyObject* args)
 	}
 }
 
+static PyObject *
+g_handle_exit(PyObject *result)
+{
+	if (result == NULL && PyErr_ExceptionMatches(PyExc_GreenletExit))
+	{
+		/* catch and ignore GreenletExit */
+		PyObject *exc, *val, *tb;
+		PyErr_Fetch(&exc, &val, &tb);
+		if (val == NULL)
+		{
+			Py_INCREF(Py_None);
+			val = Py_None;
+		}
+		result = val;
+		Py_DECREF(exc);
+		Py_XDECREF(tb);
+	}
+	if (result != NULL)
+	{
+		/* package the result into a 1-tuple */
+		PyObject *r = result;
+		result = PyTuple_New(1);
+		if (result)
+		{
+			PyTuple_SET_ITEM(result, 0, r);
+		}
+		else
+		{
+			Py_DECREF(r);
+		}
+	}
+	return result;
+}
+
 static void g_initialstub(void* mark)
 {
 	int err;
@@ -573,8 +617,8 @@ static void green_dealloc(PyGreenlet* self)
 	if (PyGreen_ACTIVE(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
-		assert(self->ob_refcnt == 0);
-		self->ob_refcnt = 1;
+		assert(Py_REFCNT(self) == 0);
+		Py_REFCNT(self) = 1;
 		/* Save the current exception, if any. */
 		PyErr_Fetch(&error_type, &error_value, &error_traceback);
 		if (kill_greenlet(self) < 0) {
@@ -586,9 +630,9 @@ static void green_dealloc(PyGreenlet* self)
 		/* Undo the temporary resurrection; can't use DECREF here,
 		 * it would cause a recursive call.
 		 */
-		assert(self->ob_refcnt > 0);
-		--self->ob_refcnt;
-		if (self->ob_refcnt == 0 && PyGreen_ACTIVE(self)) {
+		assert(Py_REFCNT(self) > 0);
+		--Py_REFCNT(self);
+		if (Py_REFCNT(self) == 0 && PyGreen_ACTIVE(self)) {
 			/* Not resurrected, but still not dead!
 			   XXX what else should we do? we complain. */
 			PyObject* f = PySys_GetObject("stderr");
@@ -600,17 +644,17 @@ static void green_dealloc(PyGreenlet* self)
 			}
 			Py_INCREF(self);   /* leak! */
 		}
-		if (self->ob_refcnt != 0) {
+		if (Py_REFCNT(self) != 0) {
 			/* Resurrected! */
-			int refcnt = self->ob_refcnt;
+			int refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
 #ifdef GREENLET_USE_GC
 			PyObject_GC_Track((PyObject *)self);
 #endif
-			self->ob_refcnt = refcnt;
+			Py_REFCNT(self) = refcnt;
 #ifdef COUNT_ALLOCS
-			--self->ob_type->tp_frees;
-			--self->ob_type->tp_allocs;
+			--Py_TYPE(self)->tp_frees;
+			--Py_TYPE(self)->tp_allocs;
 #endif /* COUNT_ALLOCS */
 			goto green_dealloc_end;
 		}
@@ -618,7 +662,7 @@ static void green_dealloc(PyGreenlet* self)
 	if (self->weakreflist != NULL)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->run_info);
-	self->ob_type->tp_free((PyObject*) self);
+	Py_TYPE(self)->tp_free((PyObject*) self);
 green_dealloc_end:
 #ifdef GREENLET_USE_GC
 	Py_TRASHCAN_SAFE_END(self);
@@ -637,6 +681,20 @@ static PyObject* single_result(PyObject* results)
 	}
 	else
 		return results;
+}
+
+static PyObject *
+throw_greenlet(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
+{
+	/* Note: _consumes_ a reference to typ, val, tb */
+	PyObject *result = NULL;
+	PyErr_Restore(typ, val, tb);
+	if (PyGreen_STARTED(self) && !PyGreen_ACTIVE(self))
+	{
+		/* dead greenlet: turn GreenletExit into a regular return */
+		result = g_handle_exit(result);
+	}
+	return single_result(g_switch(self, result));
 }
 
 PyDoc_STRVAR(green_switch_doc,
@@ -664,7 +722,106 @@ static PyObject* green_switch(PyGreenlet* self, PyObject* args)
 	return single_result(g_switch(self, args));
 }
 
-static int green_nonzero(PyGreenlet* self)
+/* Macros required to support Python < 2.6 for green_throw() */
+#ifndef PyExceptionClass_Check
+#  define PyExceptionClass_Check    PyClass_Check
+#endif
+#ifndef PyExceptionInstance_Check
+#  define PyExceptionInstance_Check PyInstance_Check
+#endif
+#ifndef PyExceptionInstance_Class
+#  define PyExceptionInstance_Class(x) \
+	((PyObject *) ((PyInstanceObject *)(x))->in_class)
+#endif
+
+PyDoc_STRVAR(green_throw_doc,
+"Switches execution to the greenlet ``g``, but immediately raises the\n"
+"given exception in ``g``.  If no argument is provided, the exception\n"
+"defaults to ``greenlet.GreenletExit``.  The normal exception\n"
+"propagation rules apply, as described above.  Note that calling this\n"
+"method is almost equivalent to the following::\n"
+"\n"
+"    def raiser():\n"
+"        raise typ, val, tb\n"
+"    g_raiser = greenlet(raiser, parent=g)\n"
+"    g_raiser.switch()\n"
+"\n"
+"except that this trick does not work for the\n"
+"``greenlet.GreenletExit`` exception, which would not propagate\n"
+"from ``g_raiser`` to ``g``.\n");
+
+static PyObject *
+green_throw(PyGreenlet *self, PyObject *args)
+{
+	PyObject *typ = PyExc_GreenletExit;
+	PyObject *val = NULL;
+	PyObject *tb = NULL;
+
+	if (!PyArg_ParseTuple(args, "|OOO:throw", &typ, &val, &tb))
+	{
+		return NULL;
+	}
+
+	/* First, check the traceback argument, replacing None, with NULL */
+	if (tb == Py_None)
+	{
+		tb = NULL;
+	}
+	else if (tb != NULL && !PyTraceBack_Check(tb))
+	{
+		PyErr_SetString(
+			PyExc_TypeError,
+			"throw() third argument must be a traceback object");
+		return NULL;
+	}
+
+	Py_INCREF(typ);
+	Py_XINCREF(val);
+	Py_XINCREF(tb);
+
+	if (PyExceptionClass_Check(typ))
+	{
+		PyErr_NormalizeException(&typ, &val, &tb);
+	}
+	else if (PyExceptionInstance_Check(typ))
+	{
+		/* Raising an instance. The value should be a dummy. */
+		if (val && val != Py_None)
+		{
+			PyErr_SetString(
+				PyExc_TypeError,
+				"instance exception may not have a separate value");
+			goto failed_throw;
+		}
+		else
+		{
+			/* Normalize to raise <class>, <instance> */
+			Py_XDECREF(val);
+			val = typ;
+			typ = PyExceptionInstance_Class(typ);
+			Py_INCREF(typ);
+		}
+	}
+	else
+	{
+		/* Not something you can raise. throw() fails. */
+		PyErr_Format(
+			PyExc_TypeError,
+			"exceptions must be classes, or instances, not %s",
+			Py_TYPE(typ)->tp_name);
+		goto failed_throw;
+	}
+
+	return throw_greenlet(self, typ, val, tb);
+
+ failed_throw:
+	Py_DECREF(typ);
+	Py_XDECREF(val);
+	Py_XDECREF(tb);
+	return NULL;
+}
+
+static int green_bool(PyGreenlet* self)
 {
 	return PyGreen_ACTIVE(self);
 }
@@ -796,6 +953,7 @@ int PyGreen_SetParent(PyObject* g, PyObject* nparent)
 
 static PyMethodDef green_methods[] = {
     {"switch", (PyCFunction)green_switch, METH_VARARGS, green_switch_doc},
+    {"throw",  (PyCFunction)green_throw,  METH_VARARGS, green_throw_doc},
     {NULL,     NULL}		/* sentinel */
 };
 
@@ -815,19 +973,25 @@ static PyNumberMethods green_as_number = {
 	NULL,		/* nb_add */
 	NULL,		/* nb_subtract */
 	NULL,		/* nb_multiply */
+#if PY_MAJOR_VERSION < 3
 	NULL,		/* nb_divide */
+#endif
 	NULL,		/* nb_remainder */
 	NULL,		/* nb_divmod */
 	NULL,		/* nb_power */
 	NULL,		/* nb_negative */
 	NULL,		/* nb_positive */
 	NULL,		/* nb_absolute */
-	(inquiry)green_nonzero,	/* nb_nonzero */
+	(inquiry)green_bool,	/* nb_bool */
 };
 
-PyTypeObject PyGreen_Type = {
+static PyTypeObject PyGreen_Type = {
+#if PY_MAJOR_VERSION >= 3
+	PyVarObject_HEAD_INIT(NULL, 0)
+#else
 	PyObject_HEAD_INIT(NULL)
 	0,					/* ob_size */
+#endif
 	"greenlet.greenlet",			/* tp_name */
 	sizeof(PyGreenlet),			/* tp_basicsize */
 	0,					/* tp_itemsize */
@@ -889,37 +1053,78 @@ static char* copy_on_greentype[] = {
 	"getcurrent", "error", "GreenletExit", NULL
 };
 
+#if PY_MAJOR_VERSION >= 3
+#define INITERROR return NULL
+
+static struct PyModuleDef greenlet_module_def = {
+	PyModuleDef_HEAD_INIT,
+	"greenlet",
+	NULL,
+	-1,
+	GreenMethods,
+};
+
+PyObject *
+PyInit_greenlet(void)
+#else
+#define INITERROR return
+
 void initgreenlet(void)
+#endif
 {
-	PyObject* m;
-	char** p;
+	PyObject* m = NULL;
+	char** p = NULL;
 	_PyGreen_switchstack = g_switchstack;
 	_PyGreen_slp_switch = slp_switch;
 	_PyGreen_initialstub = g_initialstub;
-	m = Py_InitModule("greenlet", GreenMethods);
-	if (m == NULL)
-		return;
-	
-	if (PyModule_AddStringConstant(m, "__version__", "0.2") < 0)
-		return;
 
+#if PY_MAJOR_VERSION >= 3
+	m = PyModule_Create(&greenlet_module_def);
+#else
+	m = Py_InitModule("greenlet", GreenMethods);
+#endif
+	if (m == NULL)
+	{
+		INITERROR;
+	}
+
+	if (PyModule_AddStringConstant(m, "__version__", "0.2") < 0)
+	{
+		INITERROR;
+	}
+
+#if PY_MAJOR_VERSION >= 3
+	ts_curkey = PyUnicode_InternFromString("__greenlet_ts_curkey");
+	ts_delkey = PyUnicode_InternFromString("__greenlet_ts_delkey");
+#else
 	ts_curkey = PyString_InternFromString("__greenlet_ts_curkey");
 	ts_delkey = PyString_InternFromString("__greenlet_ts_delkey");
+#endif
 	if (ts_curkey == NULL || ts_delkey == NULL)
-		return;
+	{
+		INITERROR;
+	}
 	if (PyType_Ready(&PyGreen_Type) < 0)
-		return;
+	{
+		INITERROR;
+	}
 	PyExc_GreenletError = PyErr_NewException("greenlet.error", NULL, NULL);
 	if (PyExc_GreenletError == NULL)
-		return;
+	{
+		INITERROR;
+	}
 	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
 						NULL, NULL);
 	if (PyExc_GreenletExit == NULL)
-		return;
+	{
+		INITERROR;
+	}
 
 	ts_current = green_create_main();
 	if (ts_current == NULL)
-		return;
+	{
+		INITERROR;
+	}
 
 	Py_INCREF(&PyGreen_Type);
 	PyModule_AddObject(m, "greenlet", (PyObject*) &PyGreen_Type);
@@ -941,4 +1146,8 @@ void initgreenlet(void)
 		PyDict_SetItemString(PyGreen_Type.tp_dict, *p, o);
 		Py_DECREF(o);
 	}
+
+#if PY_MAJOR_VERSION >= 3
+	return m;
+#endif
 }

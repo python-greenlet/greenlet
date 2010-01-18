@@ -21,6 +21,6 @@ if __name__ == '__main__':
     import sys
     mod = sys.modules[__name__]
     for name, fn in sorted((name, getattr(mod, name)) for name in dir(mod) if name.startswith('test_')):
-        print fn.__name__
+        print (fn.__name__)
         fn()
-        print ''
+        print ('')
