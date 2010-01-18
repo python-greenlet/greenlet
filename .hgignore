@@ -1,0 +1,10 @@
+syntax: glob
+
+*.py[co]
+greenlet.so
+
+syntax: regexp
+
+^build/.*
+^dist/.*
+^greenlet\.egg-info/.*
