@@ -1,4 +1,5 @@
 from greenlet import greenlet
+import sys
 
 import tests
 
@@ -24,7 +25,8 @@ def test_val():
     def f():
         try:
             switch("ok")
-        except RuntimeError, val:
+        except RuntimeError:
+            val = sys.exc_info()[1]
             if str(val) == "ciao":
                 switch("ok")
                 return
