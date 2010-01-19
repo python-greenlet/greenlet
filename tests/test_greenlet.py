@@ -1,12 +1,9 @@
 from greenlet import greenlet
-import sys, threading
-
-def raises(exc, fn, *args, **kw):
-    try:
-        fn(*args, **kw)
-    except exc:
-        return
-    assert False, "did not raise " + exc.__name__
+import gc
+import sys
+import tests
+import time
+import threading
 
 def test_simple():
     lst = []
@@ -54,12 +51,14 @@ def test_exception():
     g2.switch(seen)
     g2.parent = g1
     assert seen == []
-    raises(SomeError, g2.switch)
+    tests.raises(SomeError, g2.switch)
     assert seen == [SomeError]
     g2.switch()
     assert seen == [SomeError]
 
 def send_exception(g, exc):
+    # note: send_exception(g, exc)  can be now done with  g.throw(exc).
+    # the purpose of this test is to explicitely check the propagation rules.
     def crasher(exc):
         raise exc
     g1 = greenlet(crasher, parent=g)
@@ -69,7 +68,7 @@ def test_send_exception():
     seen = []
     g1 = greenlet(fmain)
     g1.switch(seen)
-    raises(KeyError, send_exception, g1, KeyError)
+    tests.raises(KeyError, send_exception, g1, KeyError)
     assert seen == [KeyError]
 
 def test_dealloc():
@@ -80,8 +79,10 @@ def test_dealloc():
     g2.switch(seen)
     assert seen == []
     del g1
+    gc.collect()
     assert seen == [greenlet.GreenletExit]
     del g2
+    gc.collect()
     assert seen == [greenlet.GreenletExit, greenlet.GreenletExit]
 
 def test_dealloc_other_thread():
@@ -96,6 +97,7 @@ def test_dealloc_other_thread():
         g1.switch(seen)
         someref.append(g1)
         del g1
+        gc.collect()
         lock.release()
         lock2.acquire()
         greenlet()   # trigger release
@@ -107,6 +109,7 @@ def test_dealloc_other_thread():
     assert seen == []
     assert len(someref) == 1
     del someref[:]
+    gc.collect()
     # g1 is not released immediately because it's from another thread
     assert seen == []
     lock2.release()
