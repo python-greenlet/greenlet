@@ -1022,7 +1022,11 @@ static PyTypeObject PyGreen_Type = {
 	0,					/* tp_setattro */
 	0,					/* tp_as_buffer*/
 	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS,	/* tp_flags */
-	0,					/* tp_doc */
+	"greenlet(run=None, parent=None) -> greenlet\n\n"
+	"Creates a new greenlet object (without running it).\n\n"
+	" - *run* -- The callable to invoke.\n"
+	" - *parent* -- The parent greenlet. The default is the current "
+	"greenlet.",                            /* tp_doc */
 	(traverseproc)GREENLET_tp_traverse,	/* tp_traverse */
 	(inquiry)GREENLET_tp_clear,		/* tp_clear */
 	0,					/* tp_richcompare */
@@ -1098,7 +1102,7 @@ void initgreenlet(void)
 		INITERROR;
 	}
 
-	if (PyModule_AddStringConstant(m, "__version__", "0.2") < 0)
+	if (PyModule_AddStringConstant(m, "__version__", "0.3") < 0)
 	{
 		INITERROR;
 	}
