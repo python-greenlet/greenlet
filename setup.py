@@ -37,7 +37,7 @@ Operating System :: OS Independent
 Topic :: Software Development :: Libraries :: Python Modules
 """.splitlines()))
 
-REPOSITORY="http://svn.red-bean.com/bob/greenlet/trunk/"
+REPOSITORY="http://bitbucket.org/ambroff/greenlet/"
 
 setup(
     name="greenlet",
