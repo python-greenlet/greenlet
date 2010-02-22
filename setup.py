@@ -2,7 +2,7 @@
 
 from setuptools import setup, Extension
 
-VERSION = '0.2'
+VERSION = '0.3'
 DESCRIPTION = 'Lightweight in-process concurrent programming'
 LONG_DESCRIPTION = """
 (This is the py.magic.greenlet module from the py lib
