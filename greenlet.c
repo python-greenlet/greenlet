@@ -229,6 +229,7 @@ static int g_save(PyGreenlet* g, char* stop)
 	 */
 	long sz1 = g->stack_saved;
 	long sz2 = stop - g->stack_start;
+	assert(g->stack_start != NULL);
 	if (sz2 > sz1) {
 		char* c = PyMem_Realloc(g->stack_copy, sz2);
 		if (!c) {
@@ -467,33 +468,14 @@ static void g_initialstub(void* mark)
 			Py_DECREF(args);
 		}
 		Py_DECREF(run);
-		if (result == NULL &&
-		    PyErr_ExceptionMatches(PyExc_GreenletExit)) {
-			/* catch and ignore GreenletExit */
-			PyObject *exc, *val, *tb;
-			PyErr_Fetch(&exc, &val, &tb);
-			if (val == NULL) {
-				Py_INCREF(Py_None);
-				val = Py_None;
-			}
-			result = val;
-			Py_DECREF(exc);
-			Py_XDECREF(tb);
-		}
-		if (result != NULL) {
-			/* package the result into a 1-tuple */
-			PyObject* r = result;
-			result = PyTuple_New(1);
-			if (result)
-				PyTuple_SET_ITEM(result, 0, r);
-			else
-				Py_DECREF(r);
-		}
+		result = g_handle_exit(result);
+
 		/* jump back to parent */
 		ts_self->stack_start = NULL;  /* dead */
 		g_switch(ts_self->parent, result);
 		/* must not return from here! */
-		Py_FatalError("XXX memory exhausted at a very bad moment");
+		PyErr_WriteUnraisable((PyObject *) ts_self);
+		Py_FatalError("greenlets cannot continue");
 	}
 	/* back in the parent */
 }
@@ -825,6 +807,7 @@ green_throw(PyGreenlet *self, PyObject *args)
 	return throw_greenlet(self, typ, val, tb);
 
  failed_throw:
+	/* Didn't use our arguments, so restore their original refcounts */
 	Py_DECREF(typ);
 	Py_XDECREF(val);
 	Py_XDECREF(tb);
@@ -941,12 +924,17 @@ PyObject* PyGreen_Current(void)
 
 PyObject* PyGreen_Switch(PyObject* g, PyObject* value)
 {
+	PyGreenlet *self = NULL;
 	if (!PyGreen_Check(g)) {
 		PyErr_BadInternalCall();
 		return NULL;
 	}
+	self = (PyGreenlet *) g;
 	Py_XINCREF(value);
-	return single_result(g_switch((PyGreenlet*) g, value));
+	if (PyGreen_STARTED(self) && !PyGreen_ACTIVE(self)) {
+		value = g_handle_exit(value);
+	}
+	return single_result(g_switch(self, value));
 }
 
 int PyGreen_SetParent(PyObject* g, PyObject* nparent)
