@@ -20,4 +20,6 @@
 #include "switch_s390_unix.h"	/* Linux/S390 zSeries (identical) */
 #elif defined(__GNUC__) && defined(__arm__)
 #include "switch_arm32_gcc.h" /* gcc using arm32 */
+#elif defined(__GNUC__) && defined(__mips__) && defined(__linux__)
+#include "switch_mips_unix.h" /* Linux/MIPS */
 #endif
