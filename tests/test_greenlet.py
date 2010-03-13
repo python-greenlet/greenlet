@@ -143,3 +143,19 @@ def test_thread_bug():
     t2.start()
     t1.join()
     t2.join()
+
+def test_switch_kwargs():
+    def foo(a, b):
+        assert a == 4
+        assert b == 2
+    greenlet(foo).switch(a=4, b=2)
+
+def test_switch_kwargs_to_parent():
+    def foo(x):
+        greenlet.getcurrent().parent.switch(x=x)
+        greenlet.getcurrent().parent.switch(2, x=3)
+        return x, x ** 2
+    g = greenlet(foo)
+    assert {'x': 3} == g.switch(3)
+    assert ((2,), {'x': 3}) == g.switch()
+    assert (3, 9) == g.switch()

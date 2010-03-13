@@ -105,13 +105,14 @@ The running greenlet's stack_start is undefined but not NULL.
 #endif
 
 /* The current greenlet in this thread state (holds a reference) */
-static PyGreenlet* ts_current;
+static PyGreenlet* ts_current = NULL;
 /* Holds a reference to the switching-from stack during the slp switch */
-static PyGreenlet* ts_origin;
+static PyGreenlet* ts_origin = NULL;
 /* Holds a reference to the switching-to stack during the slp switch */
-static PyGreenlet* ts_target;
+static PyGreenlet* ts_target = NULL;
 /* NULL if error, otherwise args tuple to pass around during slp switch */
-static PyObject* ts_passaround;
+static PyObject* ts_passaround_args = NULL;
+static PyObject* ts_passaround_kwargs = NULL;
 
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
@@ -320,8 +321,9 @@ static int g_switchstack(void)
 	   that must be set before:
 	   - ts_current: current greenlet (holds a reference)
 	   - ts_target: greenlet to switch to
-	   - ts_passaround: NULL if PyErr_Occurred(),
+	   - ts_passaround_args: NULL if PyErr_Occurred(),
 	             else a tuple of args sent to ts_target (holds a reference)
+	   - ts_passaround_kwargs: same as ts_passaround_args
 	*/
 	int err;
 	{   /* save state */
@@ -332,8 +334,11 @@ static int g_switchstack(void)
 	ts_origin = ts_current;
 	err = _PyGreen_slp_switch();
 	if (err < 0) {   /* error */
-		Py_XDECREF(ts_passaround);
-		ts_passaround = NULL;
+		Py_XDECREF(ts_passaround_args);
+		ts_passaround_args = NULL;
+
+		Py_XDECREF(ts_passaround_kwargs);
+		ts_passaround_kwargs = NULL;
 	}
 	else {
 		PyThreadState* tstate = PyThreadState_GET();
@@ -347,23 +352,28 @@ static int g_switchstack(void)
 	return err;
 }
 
-static PyObject* g_switch(PyGreenlet* target, PyObject* args)
+static PyObject *
+g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 {
-	/* _consumes_ a reference to the args tuple,
+	/* _consumes_ a reference to the args tuple and kwargs dict,
 	   and return a new tuple reference */
 
 	/* check ts_current */
 	if (!STATE_OK) {
 		Py_DECREF(args);
+		Py_DECREF(kwargs);
 		return NULL;
 	}
 	if (green_statedict(target) != ts_current->run_info) {
 		PyErr_SetString(PyExc_GreenletError,
 				"cannot switch to a different thread");
 		Py_DECREF(args);
+		Py_DECREF(kwargs);
 		return NULL;
 	}
-	ts_passaround = args;
+
+	ts_passaround_args = args;
+	ts_passaround_kwargs = kwargs;
 
 	/* find the real target by ignoring dead greenlets,
 	   and if necessary starting a greenlet. */
@@ -371,15 +381,37 @@ static PyObject* g_switch(PyGreenlet* target, PyObject* args)
 		if (PyGreen_ACTIVE(target)) {
 			ts_target = target;
 			_PyGreen_switchstack();
-			return ts_passaround;
+			break;
 		}
 		if (!PyGreen_STARTED(target)) {
 			void* dummymarker;
 			ts_target = target;
 			_PyGreen_initialstub(&dummymarker);
-			return ts_passaround;
+			break;
 		}
 		target = target->parent;
+	}
+
+	/* We need to figure out what values to pass to the target greenlet
+	   based on the arguments that have been passed to greenlet.switch(). If
+	   switch() was just passed an arg tuple, then we'll just return that.
+	   If only keyword arguments were passed, then we'll pass the keyword
+	   argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
+	   return both. */
+	if (ts_passaround_kwargs == NULL
+	    || PyDict_Size(ts_passaround_kwargs) == 0)
+	{
+		return ts_passaround_args;
+	}
+	else if (PySequence_Length(ts_passaround_args) == 0)
+	{
+		return ts_passaround_kwargs;
+	}
+	else
+	{
+		PyObject* tuple = Py_BuildValue(
+			"OO", ts_passaround_args, ts_passaround_kwargs);
+		return tuple;
 	}
 }
 
@@ -425,8 +457,11 @@ static void g_initialstub(void* mark)
 	/* ts_target.run is the object to call in the new greenlet */
 	PyObject* run = PyObject_GetAttrString((PyObject*) ts_target, "run");
 	if (run == NULL) {
-		Py_XDECREF(ts_passaround);
-		ts_passaround = NULL;
+		Py_XDECREF(ts_passaround_args);
+		ts_passaround_args = NULL;
+
+		Py_XDECREF(ts_passaround_kwargs);
+		ts_passaround_kwargs = NULL;
 		return;
 	}
 	/* now use run_info to store the statedict */
@@ -455,24 +490,28 @@ static void g_initialstub(void* mark)
 	if (err == 1) {
 		/* in the new greenlet */
 		PyObject* args;
+		PyObject* kwargs;
 		PyObject* result;
 		PyGreenlet* ts_self = ts_current;
 		ts_self->stack_start = (char*) 1;  /* running */
 
-		args = ts_passaround;
+		args = ts_passaround_args;
+		kwargs = ts_passaround_kwargs;
 		if (args == NULL)    /* pending exception */
 			result = NULL;
 		else {
-			/* call g.run(*args) */
-			result = PyEval_CallObject(run, args);
+			/* call g.run(*args, **kwargs) */
+			result = PyEval_CallObjectWithKeywords(
+				run, args, kwargs);
 			Py_DECREF(args);
+			Py_XDECREF(kwargs);
 		}
 		Py_DECREF(run);
 		result = g_handle_exit(result);
 
 		/* jump back to parent */
 		ts_self->stack_start = NULL;  /* dead */
-		g_switch(ts_self->parent, result);
+		g_switch(ts_self->parent, result, NULL);
 		/* must not return from here! */
 		PyErr_WriteUnraisable((PyObject *) ts_self);
 		Py_FatalError("greenlets cannot continue");
@@ -541,7 +580,7 @@ static int kill_greenlet(PyGreenlet* self)
 		self->parent = ts_current;
 		/* Send the greenlet a GreenletExit exception. */
 		PyErr_SetNone(PyExc_GreenletExit);
-		result = g_switch(self, NULL);
+		result = g_switch(self, NULL, NULL);
 		if (result == NULL)
 			return -1;
 		Py_DECREF(result);
@@ -686,32 +725,36 @@ throw_greenlet(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
 		/* dead greenlet: turn GreenletExit into a regular return */
 		result = g_handle_exit(result);
 	}
-	return single_result(g_switch(self, result));
+	return single_result(g_switch(self, result, NULL));
 }
 
 PyDoc_STRVAR(green_switch_doc,
-"switch(*args)\n\
+"switch(*args, **kwargs)\n\
 \n\
 Switch execution to this greenlet.\n\
 \n\
 If this greenlet has never been run, then this greenlet\n\
-will be switched to using the body of self.run(*args).\n\
+will be switched to using the body of self.run(*args, **kwargs).\n\
 \n\
 If the greenlet is active (has been run, but was switch()'ed\n\
 out before leaving its run function), then this greenlet will\n\
 be resumed and the return value to its switch call will be\n\
 None if no arguments are given, the given argument if one\n\
-argument is given, or the args tuple if multiple arguments\n\
-are given\n\
+argument is given, or the args tuple and keyword args dict if\n\
+multiple arguments are given.\n\
 \n\
 If the greenlet is dead, or is the current greenlet then this\n\
-function will simply return the args using the same rules as\n\
+function will simply return the arguments using the same rules as\n\
 above.");
 
-static PyObject* green_switch(PyGreenlet* self, PyObject* args)
+static PyObject* green_switch(
+	PyGreenlet* self,
+	PyObject* args,
+	PyObject* kwargs)
 {
 	Py_INCREF(args);
-	return single_result(g_switch(self, args));
+	Py_XINCREF(kwargs);
+	return single_result(g_switch(self, args, kwargs));
 }
 
 /* Macros required to support Python < 2.6 for green_throw() */
@@ -934,7 +977,7 @@ PyObject* PyGreen_Switch(PyObject* g, PyObject* value)
 	if (PyGreen_STARTED(self) && !PyGreen_ACTIVE(self)) {
 		value = g_handle_exit(value);
 	}
-	return single_result(g_switch(self, value));
+	return single_result(g_switch(self, value, NULL));
 }
 
 int PyGreen_SetParent(PyObject* g, PyObject* nparent)
@@ -948,9 +991,9 @@ int PyGreen_SetParent(PyObject* g, PyObject* nparent)
 
 /***********************************************************/
 
-
 static PyMethodDef green_methods[] = {
-    {"switch", (PyCFunction)green_switch, METH_VARARGS, green_switch_doc},
+    {"switch", (PyCFunction)green_switch,
+     METH_VARARGS | METH_KEYWORDS, green_switch_doc},
     {"throw",  (PyCFunction)green_throw,  METH_VARARGS, green_throw_doc},
     {NULL,     NULL}		/* sentinel */
 };
