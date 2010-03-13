@@ -35,6 +35,6 @@ if __name__ == '__main__':
     if len(args) != 0:
         p.error('unexpected arguments: %s' % ', '.join(args))
 
-    start_time = time.time()
+    start_time = time.clock()
     print 'Result:', chain(options.num_greenlets)
-    print time.time() - start_time, 'seconds'
+    print time.clock() - start_time, 'seconds'
