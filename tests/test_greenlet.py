@@ -159,3 +159,24 @@ def test_switch_kwargs_to_parent():
     assert {'x': 3} == g.switch(3)
     assert ((2,), {'x': 3}) == g.switch()
     assert (3, 9) == g.switch()
+
+def test_switch_to_another_thread():
+    data = {}
+    error = None
+    created_event = threading.Event()
+    done_event = threading.Event()
+    def foo():
+        data['g'] = greenlet(lambda: None)
+        created_event.set()
+        done_event.wait()
+    thread = threading.Thread(target=foo)
+    thread.start()
+    created_event.wait()
+    try:
+        data['g'].switch()
+    except greenlet.error, error:
+        pass
+    assert error != None, "greenlet.error was not raised!"
+    done_event.set()
+    thread.join()
+
