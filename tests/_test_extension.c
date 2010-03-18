@@ -1,0 +1,154 @@
+/* This is a set of functions used by test_extension_interface.py to test the
+ * Greenlet C API.
+ */
+
+#include "../greenlet.h"
+
+static PyObject *
+test_switch(PyObject *self, PyObject *greenlet)
+{
+	PyObject *result = NULL;
+
+	if (greenlet == NULL || !PyGreenlet_Check(greenlet)) {
+		PyErr_BadArgument();
+		return NULL;
+	}
+
+	result = PyGreenlet_Switch((PyGreenlet *) greenlet, NULL, NULL);
+	if (result == NULL) {
+		if (!PyErr_Occurred()) {
+			PyErr_SetString(
+				PyExc_AssertionError,
+				"greenlet.switch() failed for some reason.");
+		}
+		return NULL;
+	}
+	Py_INCREF(result);
+	return result;
+}
+
+static PyObject *
+test_switch_kwargs(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+	PyGreenlet *g = NULL;
+	PyObject *result = NULL;
+
+	PyArg_ParseTuple(args, "O!", &PyGreenlet_Type, &g);
+
+	if (g == NULL || !PyGreenlet_Check(g)) {
+		PyErr_BadArgument();
+		return NULL;
+	}
+
+	result = PyGreenlet_Switch(g, NULL, kwargs);
+	if (result == NULL) {
+		if (!PyErr_Occurred()) {
+			PyErr_SetString(
+				PyExc_AssertionError,
+				"greenlet.switch() failed for some reason.");
+		}
+		return NULL;
+	}
+	Py_XINCREF(result);
+	return result;
+}
+
+static PyObject *
+test_getcurrent(PyObject *self)
+{
+	PyGreenlet *g = PyGreenlet_GetCurrent();
+	if (g == NULL || !PyGreenlet_Check(g) || !PyGreenlet_ACTIVE(g)) {
+		PyErr_SetString(
+			PyExc_AssertionError,
+			"getcurrent() returned an invalid greenlet");
+		return NULL;
+	}
+	Py_RETURN_NONE;
+}
+
+static PyObject *
+test_setparent(PyObject *self, PyObject *arg)
+{
+	PyGreenlet *greenlet = NULL;
+
+	if (arg == NULL || !PyGreenlet_Check(arg))
+	{
+		PyErr_BadArgument();
+		return NULL;
+	}
+	greenlet = (PyGreenlet *) arg;
+	PyGreenlet_SetParent(greenlet, PyGreenlet_GetCurrent());
+	PyGreenlet_Switch(greenlet, NULL, NULL);
+	Py_RETURN_NONE;
+}
+
+static PyObject *
+test_new_greenlet(PyObject *self, PyObject *callable)
+{
+	PyObject *result = NULL;
+	PyGreenlet *greenlet = PyGreenlet_New(callable, NULL);
+
+	if (!greenlet) {
+		return NULL;
+	}
+
+	result = PyGreenlet_Switch(greenlet, NULL, NULL);
+	if (result == NULL) {
+		return NULL;
+	}
+
+	Py_INCREF(result);
+	return result;
+}
+
+static PyObject *
+test_raise_dead_greenlet(PyObject *self)
+{
+	PyErr_SetString(PyExc_GreenletExit, "test GreenletExit exception.");
+	return NULL;
+}
+
+static PyObject *
+test_raise_greenlet_error(PyObject *self)
+{
+	PyErr_SetString(PyExc_GreenletError, "test greenlet.error exception");
+	return NULL;
+}
+
+static PyObject *
+test_throw(PyObject *self, PyGreenlet *g)
+{
+	const char msg[] = "take that sucka!";
+	PyObject *msg_obj = Py_BuildValue("s", msg);
+	PyGreenlet_Throw(g, PyExc_ValueError, msg_obj, NULL);
+	Py_RETURN_NONE;
+}
+
+static PyMethodDef test_methods[] = {
+	{"test_switch", (PyCFunction) test_switch, METH_O,
+	 "Switch to the provided greenlet sending provided arguments, and \n"
+	 "return the results."},
+	{"test_switch_kwargs", (PyCFunction) test_switch_kwargs,
+	 METH_VARARGS | METH_KEYWORDS,
+	 "Switch to the provided greenlet sending the provided keyword args."},
+	{"test_getcurrent", (PyCFunction) test_getcurrent, METH_NOARGS,
+	 "Test PyGreenlet_GetCurrent()"},
+	{"test_setparent", (PyCFunction) test_setparent, METH_O,
+	 "Se the parent of the provided greenlet and switch to it."},
+	{"test_new_greenlet", (PyCFunction) test_new_greenlet, METH_O,
+	 "Test PyGreenlet_New()"},
+	{"test_raise_dead_greenlet", (PyCFunction) test_raise_dead_greenlet,
+	 METH_NOARGS, "Just raise greenlet.GreenletExit"},
+	{"test_raise_greenlet_error", (PyCFunction) test_raise_greenlet_error,
+	 METH_NOARGS, "Just raise greenlet.error"},
+	{"test_throw", (PyCFunction) test_throw, METH_O,
+	 "Throw a ValueError at the provided greenlet"},
+	{NULL, NULL, 0, NULL}
+};
+
+PyMODINIT_FUNC
+init_test_extension(void)
+{
+	(void) Py_InitModule("_test_extension", test_methods);
+	PyGreenlet_Import();
+}

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-from setuptools import setup, Extension
+from setuptools import Extension
+from setuptools import setup
+from setuptools.command.build_ext import build_ext
 
 VERSION = '0.3'
 DESCRIPTION = 'Lightweight in-process concurrent programming'
@@ -39,6 +41,28 @@ Topic :: Software Development :: Libraries :: Python Modules
 
 REPOSITORY="http://bitbucket.org/ambroff/greenlet/"
 
+# Modules that are distributed.
+EXT_MODULES = [
+    Extension(name='greenlet', sources=['greenlet.c']),]
+
+# These modules are built only for testing and are not distributed.
+TEST_EXT_MODULES = [
+    Extension(name='_test_extension', sources=['tests/_test_extension.c']),]
+
+class custom_build_ext(build_ext):
+    """HACK: Need to build a C Extension that isn't distruted. This is used for
+    testing the C API."""
+    def finalize_options(self):
+        backup_extensions = None
+        try:
+            backup_ext_modules = self.distribution.ext_modules
+            self.distribution.ext_modules = self.distribution.ext_modules + \
+                                            TEST_EXT_MODULES
+            build_ext.finalize_options(self)
+        finally:
+            if not backup_extensions is None:
+                self.distribution.ext_modules = backup_ext_modules
+
 setup(
     name="greenlet",
     version=VERSION,
@@ -51,5 +75,6 @@ setup(
     license="MIT License",
     platforms=['any'],
     test_suite='nose.collector',
-    ext_modules=[Extension(name='greenlet', sources=['greenlet.c'])],
-)
+    headers=['greenlet.h'],
+    cmdclass={'build_ext': custom_build_ext},
+    ext_modules=EXT_MODULES)
