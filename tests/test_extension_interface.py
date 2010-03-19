@@ -1,3 +1,5 @@
+import sys
+
 import greenlet
 import _test_extension
 
@@ -53,8 +55,8 @@ def test_throw():
     def foo():
         try:
             greenlet.getcurrent().parent.switch()
-        except ValueError, e:
-            seen.append(e)
+        except ValueError:
+            seen.append(sys.exc_info()[1])
         except greenlet.GreenletExit:
             raise AssertionError
     g = greenlet.greenlet(foo)

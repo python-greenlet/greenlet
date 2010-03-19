@@ -174,8 +174,8 @@ def test_switch_to_another_thread():
     created_event.wait()
     try:
         data['g'].switch()
-    except greenlet.error, error:
-        pass
+    except greenlet.error:
+        error = sys.exc_info()[1]
     assert error != None, "greenlet.error was not raised!"
     done_event.set()
     thread.join()
