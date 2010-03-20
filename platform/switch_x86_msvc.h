@@ -30,6 +30,8 @@
 
 #define STACK_MAGIC 0
 
+#pragma optimize("g", off);
+
 static int
 slp_switch(void)
 {
@@ -49,6 +51,8 @@ slp_switch(void)
         return 0;
     }
 }
+
+#pragma optimize("g", on);
 
 #endif
 
