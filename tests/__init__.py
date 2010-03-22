@@ -1,7 +1,62 @@
+import glob
+import os
+import unittest
+import sys
 
-def raises(exc, fn, *args, **kw):
-    try:
-        fn(*args, **kw)
-    except exc:
-        return
-    assert False, "did not raise " + exc.__name__
+from distutils import dist
+from distutils import sysconfig
+from distutils import util
+from distutils.core import Extension
+from distutils.ccompiler import new_compiler
+from distutils.command import build_ext
+
+def test_collector():
+    """Collect all tests under the tests directory and return a
+    unittest.TestSuite
+    """
+    build_test_extensions()
+    tests_dir = os.path.realpath(os.path.dirname(__file__))
+    test_module_list = [
+        'tests.%s' % os.path.splitext(os.path.basename(t))[0]
+        for t in glob.glob(os.path.join(tests_dir, 'test_*.py'))]
+    test_list = unittest.TestLoader().loadTestsFromNames(test_module_list)
+    suite = unittest.TestSuite()
+    suite.addTests(test_list)
+    return suite
+
+def build_test_extensions():
+    """Because distutils sucks, it just copies the entire contents of the build
+    results dir (e.g. build/lib.linux-i686-2.6) during installation. That means
+    that we can't put any files there that we don't want to distribute. </3.
+
+    To deal with that, this code will compile the test extension and place the
+    object files in the normal temp directory using the same logic as distutils,
+    but linked shared library will go directly into the tests directory.
+    """
+    extension = Extension(
+        '_test_extension',
+        [os.path.join('tests', '_test_extension.c')],
+        include_dirs=[os.path.curdir, sysconfig.get_python_inc()])
+    build_temp_dir = os.path.join('build', 'temp.%s-%s' % (util.get_platform(), sys.version[0:3]))
+    compiler = new_compiler()
+    distribution = dist.Distribution()
+    build_ext_cmd = build_ext.build_ext(distribution)
+    sysconfig.customize_compiler(compiler)
+    # Always build with debug symbols. We aren't distributing the results
+    # anyway.
+    objects = compiler.compile(
+        extension.sources,
+        output_dir=build_temp_dir,
+        include_dirs=extension.include_dirs,
+        debug=True,
+        depends=extension.depends)
+    compiler.link_shared_object(
+        objects,
+        build_ext_cmd.get_ext_filename(extension.name),
+        libraries=build_ext_cmd.get_libraries(extension),
+        library_dirs=extension.library_dirs,
+        runtime_library_dirs=extension.runtime_library_dirs,
+        export_symbols=build_ext_cmd.get_export_symbols(extension),
+        debug=True,
+        build_temp=build_temp_dir,
+        target_lang=compiler.detect_language(extension.sources))
