@@ -1,0 +1,11 @@
+include AUTHORS
+include MANIFEST.in
+include README
+include NEWS
+include greenlet.c
+include greenlet.h
+include slp_platformselect.h
+include setup.py
+recursive-include benchmarks *
+recursive-include platform *
+recursive-include tests *
