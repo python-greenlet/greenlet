@@ -30,7 +30,11 @@
 
 #define STACK_MAGIC 0
 
-#pragma optimize("g", off);
+/* Some magic to quell warnings and keep slp_switch() from crashing when built
+   with VC90. Disable global optimizations, and the warning: frame pointer
+   register 'ebp' modified by inline assembly code */
+#pragma optimize("g", off)
+#pragma warning(disable:4731)
 
 static int
 slp_switch(void)
@@ -52,7 +56,9 @@ slp_switch(void)
     }
 }
 
-#pragma optimize("g", on);
+/* re-enable ebp warning and global optimizations. */
+#pragma optimize("g", on)
+#pragma warning(default:4731)
 
 #endif
 
