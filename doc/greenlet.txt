@@ -217,11 +217,10 @@ switches to it.
 
 Here are the precise rules for sending objects around:
 
-``g.switch(obj=None or *args)``
+``g.switch(*args, **kwargs)``
     Switches execution to the greenlet ``g``, sending it the given
-    ``obj``.  As a special case, if ``g`` did not start yet, then it will
-    start to run now; in this case, any number of arguments can be
-    provided, and ``g.run(*args)`` is called.
+    arguments.  As a special case, if ``g`` did not start yet, then it
+    will start to run now.
 
 Dying greenlet
     If a greenlet's ``run()`` finishes, its return value is the object 
@@ -248,7 +247,7 @@ parent is the "main" greenlet, which is never dead.)
 Methods and attributes of greenlets
 -----------------------------------
 
-``g.switch(obj=None or *args)``
+``g.switch(*args, **kwargs)``
     Switches execution to the greenlet ``g``.  See above.
 
 ``g.run``
