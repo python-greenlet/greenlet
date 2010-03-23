@@ -85,7 +85,7 @@ static void **_PyGreenlet_API = NULL;
  * g.throw(...)
  */
 #define PyGreenlet_Throw \
-	(* (PyGreenlet * (*) \
+	(* (PyObject * (*) \
 	    (PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)) \
 	 _PyGreenlet_API[PyGreenlet_Throw_NUM])
 

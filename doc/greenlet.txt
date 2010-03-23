@@ -312,3 +312,71 @@ GreenletExit is likely to lead to an infinite loop.
 Greenlets do not participate in garbage collection; cycles involving data
 that is present in a greenlet's frames will not be detected.  Storing
 references to other greenlets cyclically may lead to leaks.
+
+C API Reference
+===============
+
+Greenlets can be created and manipulated from extension modules written in C or
+C++, or from applications that embed Python. The ``greenlet.h`` header is
+provided, and exposes the entire API available to pure Python modules.
+
+Types
+-----
++--------------------+-------------------+
+| Type name          | Python name       |
++====================+===================+
+| PyGreenlet         | greenlet.greenlet |
++--------------------+-------------------+
+
+Exceptions
+----------
++---------------------+-----------------------+
+| Type name           | Python name           |
++=====================+=======================+
+| PyExc_GreenletError | greenlet.error        |
++---------------------+-----------------------+
+| PyExc_GreenletExit  | greenlet.GreenletExit |
++---------------------+-----------------------+
+
+Reference
+---------
+
+``PyGreenletImport()``
+    A macro that imports the greenlet module and initializes the C API. This
+    must be called once for each extension module that uses the greenlet API.
+
+``int PyGreenlet_Check(PyObject *p)``
+    Returns true if the argument is a PyGreenlet.
+
+``int PyGreenlet_STARTED(PyGreenlet *g)``
+    Returns true if the greenlet ``g`` has started.
+
+``int PyGreenlet_ACTIVE(PyGreenlet *g)``
+    Returns true if the greenlet ``g`` has started and has not died.
+
+``PyGreenlet *PyGreenlet_GET_PARENT(PyGreenlet *g)``
+    Returns the parent greenlet of ``g``.
+
+``PyGreenlet *PyGreenlet_SetParent(PyGreenlet *g)``
+    Returns the parent greenlet of ``g``.
+
+``PyGreenlet *PyGreenlet_GetCurrent(void)``
+    Returns the currently active greenlet object.
+
+``PyGreenlet *PyGreenlet_New(PyObject *run, PyObject *parent)``
+    Creates a new greenlet object with the callable ``run`` and parent
+    ``parent``. Both parameters are optional. If ``run`` is NULL, then the
+    greenlet will be created, but will fail if switched in. If ``parent`` is
+    NULL, the parent is automatically set to the current greenlet.
+
+``PyGreenlet *PyGreenlet_Switch(PyGreenlet *g, PyObject *args, PyObject *kwargs)``
+    Switches to the greenlet ``g``. ``args`` and ``kwargs`` are optional and
+    can be NULL. If ``args`` is NULL, an empty tuple is passed to the target
+    greenlet. If kwargs is NULL, no keyword arguments are passed to the target
+    greenlet. If arguments are specified, ``args`` should be a tuple and
+    ``kwargs`` should be a dict.
+
+``PyObject *PyGreenlet_Throw(PyGreenlet *g, PyObject *typ, PyObject *val, PyObject *tb)``
+    Switches to greenlet ``g``, but immediately raise an exception of type
+    ``typ`` with the value ``val``, and optionally, the traceback object
+    ``tb``. ``tb`` can be NULL.
