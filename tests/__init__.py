@@ -5,10 +5,18 @@ import sys
 
 from distutils import dist
 from distutils import sysconfig
+from distutils import file_util
 from distutils import util
 from distutils.core import Extension
 from distutils.ccompiler import new_compiler
 from distutils.command import build_ext
+
+TEST_EXTENSIONS = [
+    Extension('_test_extension',
+              [os.path.join('tests', '_test_extension.c')],
+              include_dirs=[os.path.curdir, sysconfig.get_python_inc()]),
+]
+
 
 def test_collector():
     """Collect all tests under the tests directory and return a
@@ -33,10 +41,6 @@ def build_test_extensions():
     object files in the normal temp directory using the same logic as distutils,
     but linked shared library will go directly into the tests directory.
     """
-    extension = Extension(
-        '_test_extension',
-        [os.path.join('tests', '_test_extension.c')],
-        include_dirs=[os.path.curdir, sysconfig.get_python_inc()])
     build_temp_dir = os.path.join(
         'build', 'temp.%s-%s' % (util.get_platform(), sys.version[0:3]))
     compiler = new_compiler()
@@ -45,19 +49,26 @@ def build_test_extensions():
     build_ext_cmd.finalize_options()
     compiler.set_library_dirs(build_ext_cmd.library_dirs)
     sysconfig.customize_compiler(compiler)
-    objects = compiler.compile(
-        extension.sources,
-        output_dir=build_temp_dir,
-        include_dirs=extension.include_dirs,
-        debug=False,
-        depends=extension.depends)
-    compiler.link_shared_object(
-        objects,
-        build_ext_cmd.get_ext_filename(extension.name),
-        libraries=build_ext_cmd.get_libraries(extension),
-        library_dirs=extension.library_dirs,
-        runtime_library_dirs=extension.runtime_library_dirs,
-        export_symbols=build_ext_cmd.get_export_symbols(extension),
-        debug=False,
-        build_temp=build_temp_dir,
-        target_lang=compiler.detect_language(extension.sources))
+    def build_and_copy(extension):
+        """compile sources, link shared library, and copy it into CWD"""
+        objects = compiler.compile(
+            extension.sources,
+            output_dir=build_temp_dir,
+            include_dirs=extension.include_dirs,
+            debug=False,
+            depends=extension.depends)
+        output_file = os.path.join(
+            build_temp_dir, build_ext_cmd.get_ext_filename(extension.name))
+        compiler.link_shared_object(
+            objects,
+            output_file,
+            libraries=build_ext_cmd.get_libraries(extension),
+            library_dirs=extension.library_dirs,
+            runtime_library_dirs=extension.runtime_library_dirs,
+            export_symbols=build_ext_cmd.get_export_symbols(extension),
+            debug=False,
+            build_temp=build_temp_dir,
+            target_lang=compiler.detect_language(extension.sources))
+        file_util.copy_file(output_file, os.path.curdir)
+    for extension in TEST_EXTENSIONS:
+        build_and_copy(extension)
