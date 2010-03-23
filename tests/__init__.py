@@ -40,7 +40,6 @@ def build_test_extensions():
     build_temp_dir = os.path.join(
         'build', 'temp.%s-%s' % (util.get_platform(), sys.version[0:3]))
     compiler = new_compiler()
-    compiler.set_library_dirs(None)
     distribution = dist.Distribution()
     build_ext_cmd = build_ext.build_ext(distribution)
     build_ext_cmd.finalize_options()
