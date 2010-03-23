@@ -4,10 +4,11 @@
 * New C API to expose Greenlets to C Extensions.
 * greenlet.switch() now accept's keyword arguments.
 * Fix Python crasher caused by switching to new greenlet from another thread.
-* Fix Python 2.6 crash on Windows when built with VS2009.
+* Fix Python 2.6 crash on Windows when built with VS2009. (arigo)
 * arm32 support from stackless (Sylvain Baro)
 * Linux mips support (Thiemo Seufer)
 * MingGW GCC 4.4 support (Giovanni Bajo)
 * Fix for a threading bug (issue 40 in py lib) (arigo and ghazel)
 * Loads more unit tests, some from py lib (3 times as many as Greenlet 0.2)
+* Add documentation from py lib.
 * General code, documentation and repository cleanup (Kyle Ambroff, Jared Kuolt)
