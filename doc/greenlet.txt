@@ -341,24 +341,26 @@ Exceptions
 Reference
 ---------
 
-``PyGreenletImport()``
+``PyGreenlet_Import()``
     A macro that imports the greenlet module and initializes the C API. This
-    must be called once for each extension module that uses the greenlet API.
+    must be called once for each extension module that uses the greenlet C API.
 
 ``int PyGreenlet_Check(PyObject *p)``
-    Returns true if the argument is a PyGreenlet.
+    Macro that returns true if the argument is a PyGreenlet.
 
 ``int PyGreenlet_STARTED(PyGreenlet *g)``
-    Returns true if the greenlet ``g`` has started.
+    Macro that returns true if the greenlet ``g`` has started.
 
 ``int PyGreenlet_ACTIVE(PyGreenlet *g)``
-    Returns true if the greenlet ``g`` has started and has not died.
+    Macro that returns true if the greenlet ``g`` has started and has not died.
 
 ``PyGreenlet *PyGreenlet_GET_PARENT(PyGreenlet *g)``
-    Returns the parent greenlet of ``g``.
+    Macro that returns the parent greenlet of ``g``.
 
 ``PyGreenlet *PyGreenlet_SetParent(PyGreenlet *g)``
-    Returns the parent greenlet of ``g``.
+    Set the parent greenlet of ``g``. Returns 0 for success. If -1 is returned,
+    then ``g`` is not a pointer to a PyGreenlet, and an AttributeError will
+    be raised.
 
 ``PyGreenlet *PyGreenlet_GetCurrent(void)``
     Returns the currently active greenlet object.
