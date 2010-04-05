@@ -1,3 +1,7 @@
+0.3.1
+=====
+* Fix reference leak when passing keyword arguments to greenlets (mbachry)
+
 0.3
 ===
 * Python 3 support.
