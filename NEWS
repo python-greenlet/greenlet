@@ -1,6 +1,7 @@
 0.3.1
 =====
 * Fix reference leak when passing keyword arguments to greenlets (mbachry)
+* Updated documentation.
 
 0.3
 ===
