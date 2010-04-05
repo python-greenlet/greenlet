@@ -408,9 +408,13 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	   If only keyword arguments were passed, then we'll pass the keyword
 	   argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
 	   return both. */
-	if (ts_passaround_kwargs == NULL
-	    || PyDict_Size(ts_passaround_kwargs) == 0)
+	if (ts_passaround_kwargs == NULL)
 	{
+		return ts_passaround_args;
+	}
+	else if (PyDict_Size(ts_passaround_kwargs) == 0)
+	{
+		Py_DECREF(ts_passaround_kwargs);
 		return ts_passaround_args;
 	}
 	else if (PySequence_Length(ts_passaround_args) == 0)
