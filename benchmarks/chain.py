@@ -22,11 +22,9 @@ def chain(n):
         start_node = g
     return start_node.switch(0)
 
-#greenlet.greenlet(link).switch(options.num_greenlets, greenlet.getcurrent())
-
 if __name__ == '__main__':
     p = optparse.OptionParser(
-        usage='chain.py [-n NUM_COROUTINES]', description=__doc__)
+        usage='%prog [-n NUM_COROUTINES]', description=__doc__)
     p.add_option(
         '-n', type='int', dest='num_greenlets', default=100000,
         help='The number of greenlets in the chain.')
