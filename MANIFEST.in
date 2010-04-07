@@ -8,5 +8,5 @@ include slp_platformselect.h
 include setup.py
 recursive-include benchmarks *
 recursive-include doc *
-recursive-include platform *
-recursive-include tests *
+recursive-include platform *.h
+recursive-include tests *.py
