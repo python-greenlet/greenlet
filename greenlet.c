@@ -135,7 +135,8 @@ static PyObject* ts_delkey;
 static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
 
-#undef GREENLET_USE_GC
+#define GREENLET_USE_GC
+#undef GREENLET_USE_GC_DEBUG
 
 #ifdef GREENLET_USE_GC
 #define GREENLET_GC_FLAGS Py_TPFLAGS_HAVE_GC
@@ -171,7 +172,7 @@ static PyGreenlet* green_create_main(void)
 	gmain->stack_stop = (char*) -1;
 	gmain->run_info = dict;
 	Py_INCREF(dict);
-#ifdef GREENLET_USE_GC
+#ifdef GREENLET_USE_GC_DEBUG
 	printf("green_create_main %p\n", gmain);
 #endif
 	return gmain;
@@ -419,6 +420,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	}
 	else if (PySequence_Length(ts_passaround_args) == 0)
 	{
+		Py_DECREF(ts_passaround_args);
 		return ts_passaround_kwargs;
 	}
 	else
@@ -516,8 +518,20 @@ static void g_initialstub(void* mark)
 			result = NULL;
 		else {
 			/* call g.run(*args, **kwargs) */
+			ts_self->stub_refs[0] = run;
+			ts_self->stub_refs[1] = args;
+			ts_self->stub_refs[2] = kwargs;
+#ifdef GREENLET_USE_GC_DEBUG
+			printf("greenlet %p: calling run = %p (%d refs): args = %p (%d refs), kwargs = %p (%d refs)\n", ts_self,
+				run, (int)Py_REFCNT(run),
+				args, args ? (int)Py_REFCNT(args) : 0,
+				kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
+#endif
 			result = PyEval_CallObjectWithKeywords(
 				run, args, kwargs);
+			ts_self->stub_refs[0] = NULL;
+			ts_self->stub_refs[1] = NULL;
+			ts_self->stub_refs[2] = NULL;
 			Py_DECREF(args);
 			Py_XDECREF(kwargs);
 		}
@@ -549,7 +563,7 @@ static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		Py_INCREF(ts_current);
 		((PyGreenlet*) o)->parent = ts_current;
 	}
-#ifdef GREENLET_USE_GC
+#ifdef GREENLET_USE_GC_DEBUG
 	printf("green_new %p\n", o);
 #endif
 	return o;
@@ -580,9 +594,6 @@ static int kill_greenlet(PyGreenlet* self)
 {
 	/* Cannot raise an exception to kill the greenlet if
 	   it is not running in the same thread! */
-#ifdef GREENLET_USE_GC
-	printf("kill_greenlet %p\n", self);
-#endif
 	if (self->run_info == PyThreadState_GET()->dict) {
 		/* The dying greenlet cannot be a parent of ts_current
 		   because the 'parent' field chain would hold a
@@ -622,14 +633,85 @@ static int kill_greenlet(PyGreenlet* self)
 
 #ifdef GREENLET_USE_GC
 static int
-green_traverse(PyGreenlet *so, visitproc visit, void *arg)
+green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 {
-	printf("green_traverse %p\n", so);
-	Py_VISIT((PyObject*)so->run_info);
-	Py_VISIT((PyObject*)so->parent);
-	Py_VISIT((PyObject*)so->top_frame);
-	Py_VISIT((PyObject*)so->stack_prev);
-	Py_VISIT((PyObject*)so->parent);
+	unsigned i;
+#ifdef GREENLET_USE_GC_DEBUG
+	printf("green_traverse(%p): %d refs (visit = %p, arg = %p)\n", self, (int)Py_REFCNT(self), visit, arg);
+#endif
+	/* XXX: we must only visit referenced objects, i.e. only
+	   objects Py_INCREF'ed by this greenlet (directly or indirectly, e.g. on stack):
+	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced
+	   - run_info is not visited if greenlet has started: thread state dictionary is not referenced */
+#ifdef GREENLET_USE_GC_DEBUG
+	printf("green_traverse(%p): parent = %p (%d refs)\n", self,
+		self->parent, self->parent ? (int)Py_REFCNT((PyObject*)self->parent) : 0);
+#endif
+	Py_VISIT((PyObject*)self->parent);
+	if (!PyGreenlet_STARTED(self)) {
+#ifdef GREENLET_USE_GC_DEBUG
+		printf("green_traverse(%p): run_info = %p (%d refs)\n", self,
+			self->run_info, self->run_info ? (int)Py_REFCNT(self->run_info) : 0);
+#endif
+		Py_VISIT(self->run_info);
+	}
+#ifdef GREENLET_USE_GC_DEBUG
+	printf("green_traverse(%p): top_frame = %p (%d refs)\n", self,
+		self->top_frame, self->top_frame ? (int)Py_REFCNT((PyObject*)self->top_frame) : 0);
+#endif
+	Py_VISIT((PyObject*)self->top_frame);
+	for (i = 0; i < 3; ++i) {
+		PyObject *ref = self->stub_refs[i];
+#ifdef GREENLET_USE_GC_DEBUG
+		printf("green_traverse(%p): stub_refs[%d] = %p (%d refs)\n", self, i,
+			ref, ref ? (int)Py_REFCNT(ref) : 0);
+#endif
+		Py_VISIT(ref);
+		/* XXX: need to visit args twice
+		   1. Reference is held in the stub itself
+		   2. Py_INCREF'ed in PyEval_CallObjectWithKeywords
+		   It's implementation dependent, but unfortunately there's no other way */
+		if (i == 1 && ref) {
+#ifdef GREENLET_USE_GC_DEBUG
+			printf("...double visiting %p (%d refs)\n", ref, ref ? (int)Py_REFCNT(ref) : 0);
+#endif
+			Py_VISIT(ref);
+		}
+		/* XXX: cannot properly support initial keyword arguments
+		   1. Reference is held in the stub itself
+		   2. Keys and values are copied into a tuple in function_call
+		   The problem here is that tuple is under gc as well, so the hack below
+		   doesn't work (corrently causes asserts on debug Python builds), the only
+		   way to fix it would be to visit that tuple, but there's no way to obtain
+		   reference to it. Since it can't be fixed in C (btw, a small helper in Python
+		   would help), let's just call it a gc limitation: DO NOT pass greenlets as
+		   keyword arguments in switch when target greenlet is not started yet. */
+#if 0
+		/* XXX: does not work */
+		if (i == 2 && ref && PyDict_Check(ref)) {
+			PyObject *k, *v;
+			Py_ssize_t pos = 0;
+			while (PyDict_Next(ref, &pos, &k, &v)) {
+#ifdef GREENLET_USE_GC_DEBUG
+				printf("...double visiting %p (%d refs)\n", k, k ? (int)Py_REFCNT(k) : 0);
+#endif
+				Py_VISIT(k);
+#ifdef GREENLET_USE_GC_DEBUG
+				printf("...double visiting %p (%d refs)\n", v, v ? (int)Py_REFCNT(v) : 0);
+#endif
+				Py_VISIT(v);
+			}
+		}
+#endif
+	}
+	for (i = 0; i < 2; ++i) {
+		PyObject *ref = self->switch_refs[i];
+#ifdef GREENLET_USE_GC_DEBUG
+		printf("green_traverse(%p): switch_refs[%d] = %p (%d refs)\n", self, i,
+			ref, ref ? (int)Py_REFCNT(ref) : 0);
+#endif
+		Py_VISIT(ref);
+	}
 	return 0;
 }
 
@@ -637,13 +719,11 @@ static int green_is_gc(PyGreenlet* self)
 {
 	int rval;
 	rval = (self->stack_stop == ((char *)-1)) ? 0 : 1;
-	printf("green_is_gc %p = %d\n", self, rval);
 	return rval;
 }
 
 static int green_clear(PyGreenlet* self)
 {
-	printf("green_clear %p run_info %p\n", self, self->run_info);
 	if (PyGreenlet_ACTIVE(self))
 		return kill_greenlet(self);
 	return 0;
@@ -655,7 +735,6 @@ static void green_dealloc(PyGreenlet* self)
 	PyObject *error_type, *error_value, *error_traceback;
 
 #ifdef GREENLET_USE_GC
-	printf("green_dealloc %p\n", self);
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
@@ -767,9 +846,35 @@ static PyObject* green_switch(
 	PyObject* args,
 	PyObject* kwargs)
 {
+	PyObject* result;
 	Py_INCREF(args);
 	Py_XINCREF(kwargs);
-	return single_result(g_switch(self, args, kwargs));
+	if (STATE_OK)
+	{
+#ifdef GREENLET_USE_GC_DEBUG
+		printf("switching %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", ts_current, self,
+			args, args ? (int)Py_REFCNT(args) : 0,
+			kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
+#endif
+		ts_current->switch_refs[0] = args;
+		ts_current->switch_refs[1] = kwargs;
+	}
+	result = single_result(g_switch(self, args, kwargs));
+	if (STATE_OK)
+	{
+		ts_current->switch_refs[0] = NULL;
+		ts_current->switch_refs[1] = NULL;
+#ifdef GREENLET_USE_GC_DEBUG
+		printf("returning %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", self, ts_current,
+			args, args ? (int)Py_REFCNT(args) : 0,
+			kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
+#endif
+	}
+#ifdef GREENLET_USE_GC_DEBUG
+	else
+		printf("returning from %p: failed to restore switch_refs!!!\n", self);
+#endif
+	return result;
 }
 
 /* Macros required to support Python < 2.6 for green_throw() */
@@ -803,6 +908,7 @@ PyDoc_STRVAR(green_throw_doc,
 static PyObject *
 green_throw(PyGreenlet *self, PyObject *args)
 {
+	PyObject *result;
 	PyObject *typ = PyExc_GreenletExit;
 	PyObject *val = NULL;
 	PyObject *tb = NULL;
@@ -862,7 +968,16 @@ green_throw(PyGreenlet *self, PyObject *args)
 		goto failed_throw;
 	}
 
-	return throw_greenlet(self, typ, val, tb);
+	if (STATE_OK)
+	{
+		ts_current->switch_refs[0] = args;
+	}
+	result = throw_greenlet(self, typ, val, tb);
+	if (STATE_OK)
+	{
+		ts_current->switch_refs[0] = NULL;
+	}
+	return result;
 
  failed_throw:
 	/* Didn't use our arguments, so restore their original refcounts */
@@ -1029,6 +1144,8 @@ PyGreenlet_Switch(PyGreenlet *g, PyObject *args, PyObject *kwargs)
 		kwargs = NULL;
 	}
 
+	/* XXX: don't need to save switch_refs (references are
+	   held in the caller's C code, so gc won't work anyway) */
 	return single_result(g_switch(self, args, kwargs));
 }
 
@@ -1039,6 +1156,8 @@ PyGreenlet_Throw(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
 		PyErr_BadArgument();
 		return NULL;
 	}
+	/* XXX: don't need to save switch_refs (references are
+	   held in the caller's C code, so gc won't work anyway) */
 	return throw_greenlet(self, typ, val, tb);
 }
 
@@ -1132,7 +1251,6 @@ PyTypeObject PyGreenlet_Type = {
 	GREENLET_tp_free,			/* tp_free */        
 	(inquiry)GREENLET_tp_is_gc,		/* tp_is_gc */
 };
-/* XXX need GC support */
 
 static PyObject* mod_getcurrent(PyObject* self)
 {
