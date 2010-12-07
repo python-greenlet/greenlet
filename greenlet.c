@@ -641,20 +641,17 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 #endif
 	/* XXX: we must only visit referenced objects, i.e. only
 	   objects Py_INCREF'ed by this greenlet (directly or indirectly, e.g. on stack):
-	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced
-	   - run_info is not visited if greenlet has started: thread state dictionary is not referenced */
+	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced */
 #ifdef GREENLET_USE_GC_DEBUG
 	printf("green_traverse(%p): parent = %p (%d refs)\n", self,
 		self->parent, self->parent ? (int)Py_REFCNT((PyObject*)self->parent) : 0);
 #endif
 	Py_VISIT((PyObject*)self->parent);
-	if (!PyGreenlet_STARTED(self)) {
 #ifdef GREENLET_USE_GC_DEBUG
-		printf("green_traverse(%p): run_info = %p (%d refs)\n", self,
-			self->run_info, self->run_info ? (int)Py_REFCNT(self->run_info) : 0);
+	printf("green_traverse(%p): run_info = %p (%d refs)\n", self,
+		self->run_info, self->run_info ? (int)Py_REFCNT(self->run_info) : 0);
 #endif
-		Py_VISIT(self->run_info);
-	}
+	Py_VISIT(self->run_info);
 #ifdef GREENLET_USE_GC_DEBUG
 	printf("green_traverse(%p): top_frame = %p (%d refs)\n", self,
 		self->top_frame, self->top_frame ? (int)Py_REFCNT((PyObject*)self->top_frame) : 0);
