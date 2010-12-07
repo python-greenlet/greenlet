@@ -509,7 +509,7 @@ static void g_initialstub(void* mark)
 		PyObject* args;
 		PyObject* kwargs;
 		PyObject* result;
-		PyGreenlet* ts_self = ts_current;
+		volatile PyGreenlet* ts_self = ts_current;
 		ts_self->stack_start = (char*) 1;  /* running */
 
 		args = ts_passaround_args;
