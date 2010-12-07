@@ -592,6 +592,9 @@ static int green_init(PyGreenlet *self, PyObject *args, PyObject *kwargs)
 
 static int kill_greenlet(PyGreenlet* self)
 {
+#ifdef GREENLET_USE_GC_DEBUG
+	printf("kill_greenlet %p\n", self);
+#endif
 	/* Cannot raise an exception to kill the greenlet if
 	   it is not running in the same thread! */
 	if (self->run_info == PyThreadState_GET()->dict) {
@@ -599,11 +602,14 @@ static int kill_greenlet(PyGreenlet* self)
 		   because the 'parent' field chain would hold a
 		   reference */
 		PyObject* result;
+		PyGreenlet* oldparent;
 		if (!STATE_OK) {
 			return -1;
 		}
-		Py_INCREF(ts_current);
+		oldparent = self->parent;
 		self->parent = ts_current;
+		Py_INCREF(ts_current);
+		Py_XDECREF(oldparent);
 		/* Send the greenlet a GreenletExit exception. */
 		PyErr_SetNone(PyExc_GreenletExit);
 		result = g_switch(self, NULL, NULL);
@@ -643,6 +649,8 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	   objects Py_INCREF'ed by this greenlet (directly or indirectly, e.g. on stack):
 	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced */
 #ifdef GREENLET_USE_GC_DEBUG
+	printf("green_traverse(%p): stack_prev = %p (%d refs)\n", self,
+		self->stack_prev, self->stack_prev ? (int)Py_REFCNT(self->stack_prev) : 0);
 	printf("green_traverse(%p): parent = %p (%d refs)\n", self,
 		self->parent, self->parent ? (int)Py_REFCNT((PyObject*)self->parent) : 0);
 #endif
@@ -721,6 +729,9 @@ static int green_is_gc(PyGreenlet* self)
 
 static int green_clear(PyGreenlet* self)
 {
+#ifdef GREENLET_USE_GC_DEBUG
+	printf("green_clear %p\n", self);
+#endif
 	if (PyGreenlet_ACTIVE(self))
 		return kill_greenlet(self);
 	return 0;
@@ -731,6 +742,9 @@ static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
 
+#ifdef GREENLET_USE_GC_DEBUG
+	printf("green_dealloc %p\n", self);
+#endif
 #ifdef GREENLET_USE_GC
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
