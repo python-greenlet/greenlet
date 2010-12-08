@@ -115,14 +115,14 @@ The running greenlet's stack_start is undefined but not NULL.
 extern PyTypeObject PyGreenlet_Type;
 
 /* The current greenlet in this thread state (holds a reference) */
-static PyGreenlet* ts_current = NULL;
+static PyGreenlet* volatile ts_current = NULL;
 /* Holds a reference to the switching-from stack during the slp switch */
 static PyGreenlet* ts_origin = NULL;
 /* Holds a reference to the switching-to stack during the slp switch */
 static PyGreenlet* ts_target = NULL;
 /* NULL if error, otherwise args tuple to pass around during slp switch */
-static PyObject* ts_passaround_args = NULL;
-static PyObject* ts_passaround_kwargs = NULL;
+static PyObject* volatile ts_passaround_args = NULL;
+static PyObject* volatile ts_passaround_kwargs = NULL;
 
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
