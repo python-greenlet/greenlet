@@ -5,11 +5,11 @@ import weakref
 
 import greenlet
 
-def _dump_obj(obj):
-    if obj is None:
-        return
-    for ref in gc.get_referrers(obj):
-        print "0x%08x: referred by 0x%08x %r" % (id(obj), id(ref), ref)
+#def _dump_obj(obj):
+#    if obj is None:
+#        return
+#    for ref in gc.get_referrers(obj):
+#        print "0x%08x: referred by 0x%08x %r" % (id(obj), id(ref), ref)
 
 def _live_greenlet_body():
     g = greenlet.getcurrent()
@@ -17,6 +17,17 @@ def _live_greenlet_body():
         g.parent.switch(g)
     finally:
         pass #print "live_greenlet_body dying"
+
+def _switch_to_parent():
+    g = greenlet.getcurrent()
+    g.parent.switch(g)
+
+def _live_subframe_body():
+    g = greenlet.getcurrent()
+    try:
+        _switch_to_parent()
+    finally:
+        pass #print "live_subframe_body dying"
 
 def _live_stub_body(g):
     try:
@@ -84,6 +95,17 @@ class GCTests(unittest.TestCase):
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
             return
         o = weakref.ref(greenlet.greenlet(_live_greenlet_body).switch())
+        gc.collect()
+        if gc.garbage:
+            #print gc.garbage
+            self.assertFalse(gc.garbage)
+        self.assertTrue(o() is None)
+
+    def test_live_subframe_ref(self):
+        if not greenlet.GREENLET_USE_GC:
+            #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
+            return
+        o = weakref.ref(greenlet.greenlet(_live_subframe_body).switch())
         gc.collect()
         if gc.garbage:
             #print gc.garbage

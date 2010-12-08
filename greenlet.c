@@ -638,10 +638,13 @@ static int kill_greenlet(PyGreenlet* self)
 }
 
 #ifdef GREENLET_USE_GC
+#include <frameobject.h>
+
 static int
 green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 {
 	unsigned i;
+	struct _frame *frame;
 #ifdef GREENLET_USE_GC_DEBUG
 	printf("green_traverse(%p): %d refs (visit = %p, arg = %p)\n", self, (int)Py_REFCNT(self), visit, arg);
 #endif
@@ -660,11 +663,19 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 		self->run_info, self->run_info ? (int)Py_REFCNT(self->run_info) : 0);
 #endif
 	Py_VISIT(self->run_info);
+	/* XXX: hack: visit all greenlet's frames
+	   Even though we don't reference frames beyond the top one, we need
+	   to visit them all, otherwise those frames will mark this greenlet
+	   reachable during gc :( */
 #ifdef GREENLET_USE_GC_DEBUG
 	printf("green_traverse(%p): top_frame = %p (%d refs)\n", self,
 		self->top_frame, self->top_frame ? (int)Py_REFCNT((PyObject*)self->top_frame) : 0);
 #endif
-	Py_VISIT((PyObject*)self->top_frame);
+	frame = self->top_frame;
+	while (frame) {
+		Py_VISIT(frame);
+		frame = frame->f_back;
+	}
 	for (i = 0; i < 3; ++i) {
 		PyObject *ref = self->stub_refs[i];
 #ifdef GREENLET_USE_GC_DEBUG
