@@ -509,7 +509,7 @@ static void g_initialstub(void* mark)
 		PyObject* args;
 		PyObject* kwargs;
 		PyObject* result;
-		volatile PyGreenlet* ts_self = ts_current;
+		PyGreenlet* ts_self = ts_current;
 		ts_self->stack_start = (char*) 1;  /* running */
 
 		args = ts_passaround_args;
@@ -857,33 +857,27 @@ static PyObject* green_switch(
 	PyObject* args,
 	PyObject* kwargs)
 {
+	PyGreenlet* current;
 	PyObject* result;
+	if (!STATE_OK)
+		return NULL;
 	Py_INCREF(args);
 	Py_XINCREF(kwargs);
-	if (STATE_OK)
-	{
+	current = ts_current;
 #ifdef GREENLET_USE_GC_DEBUG
-		printf("switching %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", ts_current, self,
-			args, args ? (int)Py_REFCNT(args) : 0,
-			kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
+	printf("switching %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", current, self,
+		args, args ? (int)Py_REFCNT(args) : 0,
+		kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
 #endif
-		ts_current->switch_refs[0] = args;
-		ts_current->switch_refs[1] = kwargs;
-	}
+	current->switch_refs[0] = args;
+	current->switch_refs[1] = kwargs;
 	result = single_result(g_switch(self, args, kwargs));
-	if (STATE_OK)
-	{
-		ts_current->switch_refs[0] = NULL;
-		ts_current->switch_refs[1] = NULL;
+	current->switch_refs[0] = NULL;
+	current->switch_refs[1] = NULL;
 #ifdef GREENLET_USE_GC_DEBUG
-		printf("returning %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", self, ts_current,
-			args, args ? (int)Py_REFCNT(args) : 0,
-			kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
-#endif
-	}
-#ifdef GREENLET_USE_GC_DEBUG
-	else
-		printf("returning from %p: failed to restore switch_refs!!!\n", self);
+	printf("returning %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", self, ts_current,
+		args, args ? (int)Py_REFCNT(args) : 0,
+		kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
 #endif
 	return result;
 }
@@ -919,6 +913,7 @@ PyDoc_STRVAR(green_throw_doc,
 static PyObject *
 green_throw(PyGreenlet *self, PyObject *args)
 {
+	PyGreenlet *current;
 	PyObject *result;
 	PyObject *typ = PyExc_GreenletExit;
 	PyObject *val = NULL;
@@ -979,15 +974,12 @@ green_throw(PyGreenlet *self, PyObject *args)
 		goto failed_throw;
 	}
 
-	if (STATE_OK)
-	{
-		ts_current->switch_refs[0] = args;
-	}
+	if (!STATE_OK)
+		goto failed_throw;
+	current = ts_current;
+	current->switch_refs[0] = args;
 	result = throw_greenlet(self, typ, val, tb);
-	if (STATE_OK)
-	{
-		ts_current->switch_refs[0] = NULL;
-	}
+	current->switch_refs[0] = NULL;
 	return result;
 
  failed_throw:
