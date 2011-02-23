@@ -85,6 +85,7 @@ The running greenlet's stack_start is undefined but not NULL.
 #ifndef Py_VISIT
 #define Py_VISIT(o) \
 	if (o) { \
+		int err; \
 		if ((err = visit((PyObject *)(o), arg))) { \
 			return err; \
 		} \
