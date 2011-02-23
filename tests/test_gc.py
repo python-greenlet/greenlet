@@ -145,6 +145,9 @@ class GCTests(unittest.TestCase):
         self.assertTrue(o() is None)
 
     def test_stub_cluster_ref(self):
+        if not greenlet.GREENLET_USE_GC:
+            #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
+            return
         o = _make_green_weakref(_live_cluster_body)
         gc.collect()
         #_dump_obj(o())
