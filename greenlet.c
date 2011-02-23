@@ -172,9 +172,6 @@ static PyGreenlet* green_create_main(void)
 	gmain->stack_stop = (char*) -1;
 	gmain->run_info = dict;
 	Py_INCREF(dict);
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_create_main %p\n", gmain);
-#endif
 	return gmain;
 }
 
@@ -521,12 +518,6 @@ static void g_initialstub(void* mark)
 			ts_self->stub_refs[0] = run;
 			ts_self->stub_refs[1] = args;
 			ts_self->stub_refs[2] = kwargs;
-#ifdef GREENLET_USE_GC_DEBUG
-			printf("greenlet %p: calling run = %p (%d refs): args = %p (%d refs), kwargs = %p (%d refs)\n", ts_self,
-				run, (int)Py_REFCNT(run),
-				args, args ? (int)Py_REFCNT(args) : 0,
-				kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
-#endif
 			result = PyEval_CallObjectWithKeywords(
 				run, args, kwargs);
 			ts_self->stub_refs[0] = NULL;
@@ -563,9 +554,6 @@ static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		Py_INCREF(ts_current);
 		((PyGreenlet*) o)->parent = ts_current;
 	}
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_new %p\n", o);
-#endif
 	return o;
 }
 
@@ -592,9 +580,6 @@ static int green_init(PyGreenlet *self, PyObject *args, PyObject *kwargs)
 
 static int kill_greenlet(PyGreenlet* self)
 {
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("kill_greenlet %p\n", self);
-#endif
 	/* Cannot raise an exception to kill the greenlet if
 	   it is not running in the same thread! */
 	if (self->run_info == PyThreadState_GET()->dict) {
@@ -645,32 +630,15 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 {
 	unsigned i;
 	struct _frame *frame;
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_traverse(%p): %d refs (visit = %p, arg = %p)\n", self, (int)Py_REFCNT(self), visit, arg);
-#endif
 	/* XXX: we must only visit referenced objects, i.e. only
 	   objects Py_INCREF'ed by this greenlet (directly or indirectly, e.g. on stack):
 	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced */
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_traverse(%p): stack_prev = %p (%d refs)\n", self,
-		self->stack_prev, self->stack_prev ? (int)Py_REFCNT(self->stack_prev) : 0);
-	printf("green_traverse(%p): parent = %p (%d refs)\n", self,
-		self->parent, self->parent ? (int)Py_REFCNT((PyObject*)self->parent) : 0);
-#endif
 	Py_VISIT((PyObject*)self->parent);
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_traverse(%p): run_info = %p (%d refs)\n", self,
-		self->run_info, self->run_info ? (int)Py_REFCNT(self->run_info) : 0);
-#endif
 	Py_VISIT(self->run_info);
 	/* XXX: hack: visit all greenlet's frames
 	   Even though we don't reference frames beyond the top one, we need
 	   to visit them all, otherwise those frames will mark this greenlet
 	   reachable during gc :( */
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_traverse(%p): top_frame = %p (%d refs)\n", self,
-		self->top_frame, self->top_frame ? (int)Py_REFCNT((PyObject*)self->top_frame) : 0);
-#endif
 	frame = self->top_frame;
 	while (frame) {
 		Py_VISIT(frame);
@@ -678,54 +646,17 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	}
 	for (i = 0; i < 3; ++i) {
 		PyObject *ref = self->stub_refs[i];
-#ifdef GREENLET_USE_GC_DEBUG
-		printf("green_traverse(%p): stub_refs[%d] = %p (%d refs)\n", self, i,
-			ref, ref ? (int)Py_REFCNT(ref) : 0);
-#endif
 		Py_VISIT(ref);
 		/* XXX: need to visit args twice
 		   1. Reference is held in the stub itself
 		   2. Py_INCREF'ed in PyEval_CallObjectWithKeywords
 		   It's implementation dependent, but unfortunately there's no other way */
 		if (i == 1 && ref) {
-#ifdef GREENLET_USE_GC_DEBUG
-			printf("...double visiting %p (%d refs)\n", ref, ref ? (int)Py_REFCNT(ref) : 0);
-#endif
 			Py_VISIT(ref);
 		}
-		/* XXX: cannot properly support initial keyword arguments
-		   1. Reference is held in the stub itself
-		   2. Keys and values are copied into a tuple in function_call
-		   The problem here is that tuple is under gc as well, so the hack below
-		   doesn't work (corrently causes asserts on debug Python builds), the only
-		   way to fix it would be to visit that tuple, but there's no way to obtain
-		   reference to it. Since it can't be fixed in C (btw, a small helper in Python
-		   would help), let's just call it a gc limitation: DO NOT pass greenlets as
-		   keyword arguments in switch when target greenlet is not started yet. */
-#if 0
-		/* XXX: does not work */
-		if (i == 2 && ref && PyDict_Check(ref)) {
-			PyObject *k, *v;
-			Py_ssize_t pos = 0;
-			while (PyDict_Next(ref, &pos, &k, &v)) {
-#ifdef GREENLET_USE_GC_DEBUG
-				printf("...double visiting %p (%d refs)\n", k, k ? (int)Py_REFCNT(k) : 0);
-#endif
-				Py_VISIT(k);
-#ifdef GREENLET_USE_GC_DEBUG
-				printf("...double visiting %p (%d refs)\n", v, v ? (int)Py_REFCNT(v) : 0);
-#endif
-				Py_VISIT(v);
-			}
-		}
-#endif
 	}
 	for (i = 0; i < 2; ++i) {
 		PyObject *ref = self->switch_refs[i];
-#ifdef GREENLET_USE_GC_DEBUG
-		printf("green_traverse(%p): switch_refs[%d] = %p (%d refs)\n", self, i,
-			ref, ref ? (int)Py_REFCNT(ref) : 0);
-#endif
 		Py_VISIT(ref);
 	}
 	return 0;
@@ -740,9 +671,6 @@ static int green_is_gc(PyGreenlet* self)
 
 static int green_clear(PyGreenlet* self)
 {
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_clear %p\n", self);
-#endif
 	if (PyGreenlet_ACTIVE(self))
 		return kill_greenlet(self);
 	return 0;
@@ -753,9 +681,6 @@ static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
 
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("green_dealloc %p\n", self);
-#endif
 #ifdef GREENLET_USE_GC
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
@@ -875,21 +800,11 @@ static PyObject* green_switch(
 	Py_INCREF(args);
 	Py_XINCREF(kwargs);
 	current = ts_current;
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("switching %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", current, self,
-		args, args ? (int)Py_REFCNT(args) : 0,
-		kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
-#endif
 	current->switch_refs[0] = args;
 	current->switch_refs[1] = kwargs;
 	result = single_result(g_switch(self, args, kwargs));
 	current->switch_refs[0] = NULL;
 	current->switch_refs[1] = NULL;
-#ifdef GREENLET_USE_GC_DEBUG
-	printf("returning %p -> %p: args = %p (%d refs), kwargs = %p (%d refs)\n", self, ts_current,
-		args, args ? (int)Py_REFCNT(args) : 0,
-		kwargs, kwargs ? (int)Py_REFCNT(kwargs) : 0);
-#endif
 	return result;
 }
 
