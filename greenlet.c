@@ -1266,8 +1266,13 @@ void initgreenlet(void)
 	{
 		INITERROR;
 	}
+#if PY_MAJOR_VERSION >= 3 || (PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION >= 5)
+	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
+						PyExc_BaseException, NULL);
+#else
 	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
 						NULL, NULL);
+#endif
 	if (PyExc_GreenletExit == NULL)
 	{
 		INITERROR;
