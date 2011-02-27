@@ -117,10 +117,8 @@ extern PyTypeObject PyGreenlet_Type;
 
 /* The current greenlet in this thread state (holds a reference) */
 static PyGreenlet* volatile ts_current = NULL;
-/* Holds a reference to the switching-from stack during the slp switch */
-static PyGreenlet* ts_origin = NULL;
 /* Holds a reference to the switching-to stack during the slp switch */
-static PyGreenlet* ts_target = NULL;
+static PyGreenlet* volatile ts_target = NULL;
 /* NULL if error, otherwise args tuple to pass around during slp switch */
 static PyObject* volatile ts_passaround_args = NULL;
 static PyObject* volatile ts_passaround_kwargs = NULL;
@@ -257,6 +255,7 @@ static int g_save(PyGreenlet* g, char* stop)
 static void slp_restore_state(void)
 {
 	PyGreenlet* g = ts_target;
+	PyGreenlet* owner = ts_current;
 	
 	/* Restore the heap copy back into the C stack */
 	if (g->stack_saved != 0) {
@@ -265,30 +264,32 @@ static void slp_restore_state(void)
 		g->stack_copy = NULL;
 		g->stack_saved = 0;
 	}
-	if (ts_current->stack_stop == g->stack_stop)
-		g->stack_prev = ts_current->stack_prev;
-	else
-		g->stack_prev = ts_current;
+	if (owner->stack_start == NULL)
+		owner = owner->stack_prev; /* greenlet is dying, skip it */
+	while (owner && owner->stack_stop <= g->stack_stop)
+		owner = owner->stack_prev; /* find greenlet with more stack */
+	g->stack_prev = owner;
 }
 
 static int slp_save_state(char* stackref)
 {
 	/* must free all the C stack up to target_stop */
 	char* target_stop = ts_target->stack_stop;
-	assert(ts_current->stack_saved == 0);
-	if (ts_current->stack_start == NULL)
-		ts_current = ts_current->stack_prev;  /* not saved if dying */
+	PyGreenlet* owner = ts_current;
+	assert(owner->stack_saved == 0);
+	if (owner->stack_start == NULL)
+		owner = owner->stack_prev;  /* not saved if dying */
 	else
-		ts_current->stack_start = stackref;
+		owner->stack_start = stackref;
 	
-	while (ts_current->stack_stop < target_stop) {
+	while (owner->stack_stop < target_stop) {
 		/* ts_current is entierely within the area to free */
-		if (g_save(ts_current, ts_current->stack_stop))
+		if (g_save(owner, owner->stack_stop))
 			return -1;  /* XXX */
-		ts_current = ts_current->stack_prev;
+		owner = owner->stack_prev;
 	}
-	if (ts_current != ts_target) {
-		if (g_save(ts_current, target_stop))
+	if (owner != ts_target) {
+		if (g_save(owner, target_stop))
 			return -1;  /* XXX */
 	}
 	return 0;
@@ -337,11 +338,11 @@ static int g_switchstack(void)
 	*/
 	int err;
 	{   /* save state */
+		PyGreenlet* current = ts_current;
 		PyThreadState* tstate = PyThreadState_GET();
-		ts_current->recursion_depth = tstate->recursion_depth;
-		ts_current->top_frame = tstate->frame;
+		current->recursion_depth = tstate->recursion_depth;
+		current->top_frame = tstate->frame;
 	}
-	ts_origin = ts_current;
 	err = _PyGreenlet_slp_switch();
 	if (err < 0) {   /* error */
 		Py_XDECREF(ts_passaround_args);
@@ -351,13 +352,15 @@ static int g_switchstack(void)
 		ts_passaround_kwargs = NULL;
 	}
 	else {
+		PyGreenlet* target = ts_target;
+		PyGreenlet* origin = ts_current;
 		PyThreadState* tstate = PyThreadState_GET();
-		tstate->recursion_depth = ts_target->recursion_depth;
-		tstate->frame = ts_target->top_frame;
-		ts_target->top_frame = NULL;
-		ts_current = ts_target;
-		Py_INCREF(ts_target);
-		Py_DECREF(ts_origin);
+		tstate->recursion_depth = target->recursion_depth;
+		tstate->frame = target->top_frame;
+		target->top_frame = NULL;
+		ts_current = target;
+		Py_INCREF(target);
+		Py_DECREF(origin);
 	}
 	return err;
 }
