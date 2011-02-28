@@ -2,6 +2,13 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 08-Mar-11  Floris Bruynooghe <flub@devork.be>
+ *      No need to set return value register explicitly
+ *      before the stack and framepointer are adjusted
+ *      as none of the other registers are influenced by
+ *      this.  Also don't needlessly clean the windows
+ *      ('ta %0" :: "i" (ST_CLEAN_WINDOWS)') as that
+ *      clobbers the gcc PIC register (%l7).
  * 24-Nov-02  Christian Tismer  <tismer@tismer.com>
  *      needed to add another magic constant to insure
  *      that f in slp_eval_frame(PyFrameObject *f)
@@ -28,47 +35,36 @@ slp_switch(void)
 {
     register int *stackref, stsizediff;
 
-    /* Put the stack pointer into stackref */
-
-    /* Sparc special: at first, flush register windows
-     */
+    /* Flush SPARC register windows onto the stack, so they can be used to
+     * restore the registers after the stack has been switched out and
+     * restored.  Then put the stack pointer into stackref. */
     __asm__ volatile (
         "ta %1\n\t"
         "mov %%sp, %0"
         : "=r" (stackref) :  "i" (ST_FLUSH_WINDOWS));
 
-    {   /* You shalt put SLP_SAVE_STATE into a local block */
-
+    {
+        /* Thou shalt put SLP_SAVE_STATE into a local block */
+        /* Copy the current stack onto the heap */
         SLP_SAVE_STATE(stackref, stsizediff);
 
         /* Increment stack and frame pointer by stsizediff */
-
-        /* Sparc special: at first load new return address.
-           This cannot be done later, because the stack
-           might be overwritten again just after SLP_RESTORE_STATE
-           has finished. BTW: All other registers (l0-l7 and i0-i5)
-           might be clobbered too. 
-         */
         __asm__ volatile (
-        "ld [%0+60], %%i7\n\t"
-        "add %1, %%sp, %%sp\n\t"
-        "add %1, %%fp, %%fp"
-        : : "r" (_cst->stack), "r" (stsizediff)
-        : "%l0", "%l1", "%l2", "%l3", "%l4", "%l5", "%l6", "%l7",
-          "%i0", "%i1", "%i2", "%i3", "%i4", "%i5");
+            "add %0, %%sp, %%sp\n\t"
+            "add %0, %%fp, %%fp"
+            : : "r" (stsizediff));
 
+        /* Copy new stack from it's save store on the heap */
         SLP_RESTORE_STATE();
 
-        /* Run far away as fast as possible, don't look back at the sins.
-         * The LORD rained down burning sulfur on Sodom and Gomorra ...
-         */
+        /* No need to restore any registers from the stack nor clear them: the
+         * frame pointer has just been set and the return value register is
+         * also being set by the return statement below.  After returning a
+         * restore instruction is given and the frame below us will load all
+         * it's registers using a fill_trap if required. */
 
-        /* Sparc special: Must make it *very* clear to the CPU that
-           it shouldn't look back into the register windows
-         */
-        __asm__ volatile ( "ta %0" : : "i" (ST_CLEAN_WINDOWS));
         return 0;
-    } 
+    }
 }
 
 #endif
