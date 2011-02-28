@@ -46,6 +46,39 @@ class GreenletTests(unittest.TestCase):
     def test_run_equals_None(self):
         g = greenlet(run=None)
 
+    def test_two_children(self):
+        lst = []
+        def f():
+            lst.append(1)
+            greenlet.getcurrent().parent.switch()
+            lst.extend([1, 1])
+        g = greenlet(f)
+        h = greenlet(f)
+        g.switch()
+        self.assertEqual(len(lst), 1)
+        h.switch()
+        self.assertEqual(len(lst), 2)
+        h.switch()
+        self.assertEqual(len(lst), 4)
+        self.assertEqual(h.dead, True)
+        g.switch()
+        self.assertEqual(len(lst), 6)
+        self.assertEqual(g.dead, True)
+
+    def test_two_recursive_children(self):
+        lst = []
+        def f():
+            lst.append(1)
+            greenlet.getcurrent().parent.switch()
+        def g():
+            lst.append(1)
+            g = greenlet(f)
+            g.switch()
+            lst.append(1)
+        g = greenlet(g)
+        g.switch()
+        self.assertEqual(len(lst), 3)
+
     def test_threads(self):
         success = []
         def f():
