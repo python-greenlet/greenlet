@@ -9,9 +9,11 @@
 #elif defined(__GNUC__) && defined(__i386__)
 #include "platform/switch_x86_unix.h" /* gcc on X86 */
 #elif defined(__GNUC__) && defined(__PPC__) && defined(__linux__)
-#include "platform/switch_ppc_unix.h" /* gcc on PowerPC */
+#include "platform/switch_ppc_linux.h" /* gcc on PowerPC */
 #elif defined(__GNUC__) && defined(__ppc__) && defined(__APPLE__)
 #include "platform/switch_ppc_macosx.h" /* Apple MacOS X on PowerPC */
+#elif defined(__GNUC__) && defined(_ARCH_PPC) && defined(_AIX)
+#include "platform/switch_ppc_aix.h" /* gcc on AIX/PowerPC */
 #elif defined(__GNUC__) && defined(sparc) && defined(sun)
 #include "platform/switch_sparc_sun_gcc.h" /* SunOS sparc with gcc */
 #elif defined(__GNUC__) && defined(__s390__) && defined(__linux__)
