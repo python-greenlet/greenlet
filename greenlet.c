@@ -1324,7 +1324,11 @@ void initgreenlet(void)
 	_PyGreenlet_API[PyGreenlet_SetParent_NUM] =
 		(void *) PyGreenlet_SetParent;
 
+#ifdef GREENLET_USE_PYCAPSULE
+	c_api_object = PyCapsule_New((void *) _PyGreenlet_API, "greenlet._C_API", NULL);
+#else
 	c_api_object = PyCObject_FromVoidPtr((void *) _PyGreenlet_API, NULL);
+#endif
 	if (c_api_object != NULL)
 	{
 		PyModule_AddObject(m, "_C_API", c_api_object);
