@@ -40,6 +40,12 @@ class GreenletTests(unittest.TestCase):
         lst.append(4)
         self.assertEquals(lst, list(range(5)))
 
+    def test_parent_equals_None(self):
+        g = greenlet(parent=None)
+
+    def test_run_equals_None(self):
+        g = greenlet(run=None)
+
     def test_threads(self):
         success = []
         def f():

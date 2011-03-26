@@ -571,7 +571,7 @@ static int green_init(PyGreenlet *self, PyObject *args, PyObject *kwargs)
 		if (green_setrun(self, run, NULL))
 			return -1;
 	}
-	if (nparent != NULL)
+	if (nparent != NULL && nparent != Py_None)
 		return green_setparent(self, nparent, NULL);
 	return 0;
 }
