@@ -2,6 +2,11 @@ import os
 from setuptools import Extension
 from setuptools import setup
 
+extension = Extension(
+    name='greenlet',
+    sources=['greenlet.c'],
+    depends=['greenlet.h', 'slp_platformselect.h'])
+
 setup(
     name="greenlet",
     version='0.3.1',
@@ -15,7 +20,7 @@ setup(
     platforms=['any'],
     test_suite='tests.test_collector',
     headers=['greenlet.h'],
-    ext_modules=[Extension(name='greenlet', sources=['greenlet.c'])],
+    ext_modules=[extension],
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
