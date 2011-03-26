@@ -51,4 +51,4 @@ class GeneratorTests(unittest.TestCase):
         for k in range(3):
             for j in g(5):
                 seen.append(j)
-        self.assertEquals(seen, 3 * [0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
+        self.assertEqual(seen, 3 * [0, 0, 1, 1, 2, 2, 3, 3, 4, 4])

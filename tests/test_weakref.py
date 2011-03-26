@@ -11,9 +11,9 @@ class WeakRefTests(unittest.TestCase):
             return g
         o = weakref.ref(_dead_greenlet())
         gc.collect()
-        self.assertEquals(o(), None)
+        self.assertEqual(o(), None)
 
     def test_inactive_weakref(self):
         o = weakref.ref(greenlet.greenlet())
         gc.collect()
-        self.assertEquals(o(), None)
+        self.assertEqual(o(), None)

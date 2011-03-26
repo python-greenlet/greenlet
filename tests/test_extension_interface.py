@@ -6,22 +6,22 @@ import _test_extension
 
 class CAPITests(unittest.TestCase):
     def test_switch(self):
-        self.assertEquals(
+        self.assertEqual(
             50, _test_extension.test_switch(greenlet.greenlet(lambda: 50)))
 
     def test_switch_kwargs(self):
         def foo(x, y):
             return x * y
         g = greenlet.greenlet(foo)
-        self.assertEquals(6, _test_extension.test_switch_kwargs(g, x=3, y=2))
+        self.assertEqual(6, _test_extension.test_switch_kwargs(g, x=3, y=2))
 
     def test_setparent(self):
         def foo():
             def bar():
                 greenlet.getcurrent().parent.switch()
 
-                # This final switch should go back to the main greenlet, since the
-                # test_setparent() function in the C extension should have
+                # This final switch should go back to the main greenlet, since
+                # the test_setparent() function in the C extension should have
                 # reparented this greenlet.
                 greenlet.getcurrent().parent.switch()
                 raise AssertionError("Should never have reached this code")
@@ -31,13 +31,13 @@ class CAPITests(unittest.TestCase):
             greenlet.getcurrent().parent.throw(
                 AssertionError("Should never reach this code"))
         foo_child = greenlet.greenlet(foo).switch()
-        self.assertEquals(None, _test_extension.test_setparent(foo_child))
+        self.assertEqual(None, _test_extension.test_setparent(foo_child))
 
     def test_getcurrent(self):
         _test_extension.test_getcurrent()
 
     def test_new_greenlet(self):
-        self.assertEquals(-15, _test_extension.test_new_greenlet(lambda: -15))
+        self.assertEqual(-15, _test_extension.test_new_greenlet(lambda: -15))
 
     def test_raise_greenlet_dead(self):
         self.assertRaises(
@@ -59,11 +59,11 @@ class CAPITests(unittest.TestCase):
         g = greenlet.greenlet(foo)
         g.switch()
         _test_extension.test_throw(g)
-        self.assertEquals(len(seen), 1)
+        self.assertEqual(len(seen), 1)
         self.assertTrue(
             isinstance(seen[0], ValueError),
             "ValueError was not raised in foo()")
-        self.assertEquals(
+        self.assertEqual(
             str(seen[0]),
             'take that sucka!',
             "message doesn't match")

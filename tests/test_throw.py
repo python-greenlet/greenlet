@@ -17,9 +17,9 @@ class ThrowTests(unittest.TestCase):
             switch("fail")
         g = greenlet(f)
         res = g.switch()
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
         res = g.throw(RuntimeError)
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
 
     def test_val(self):
         def f():
@@ -34,15 +34,15 @@ class ThrowTests(unittest.TestCase):
 
         g = greenlet(f)
         res = g.switch()
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
         res = g.throw(RuntimeError("ciao"))
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
 
         g = greenlet(f)
         res = g.switch()
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
         res = g.throw(RuntimeError, "ciao")
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
 
     def test_kill(self):
         def f():
@@ -50,7 +50,7 @@ class ThrowTests(unittest.TestCase):
             switch("fail")
         g = greenlet(f)
         res = g.switch()
-        self.assertEquals(res, "ok")
+        self.assertEqual(res, "ok")
         res = g.throw()
         self.assertTrue(isinstance(res, greenlet.GreenletExit))
         self.assertTrue(g.dead)
@@ -78,19 +78,19 @@ class ThrowTests(unittest.TestCase):
         g1 = greenlet(f1)
         g2 = greenlet(f2, parent=g1)
         res = g1.switch()
-        self.assertEquals(res, "f1 ready to catch")
+        self.assertEqual(res, "f1 ready to catch")
         res = g2.throw(IndexError)
-        self.assertEquals(res, "caught")
+        self.assertEqual(res, "caught")
         self.assertTrue(g2.dead)
         self.assertTrue(g1.dead)
 
         g1 = greenlet(f1)
         g2 = greenlet(f2, parent=g1)
         res = g1.switch()
-        self.assertEquals(res, "f1 ready to catch")
+        self.assertEqual(res, "f1 ready to catch")
         res = g2.switch()
-        self.assertEquals(res, "from f2")
+        self.assertEqual(res, "from f2")
         res = g2.throw(IndexError)
-        self.assertEquals(res, "caught")
+        self.assertEqual(res, "caught")
         self.assertTrue(g2.dead)
         self.assertTrue(g1.dead)

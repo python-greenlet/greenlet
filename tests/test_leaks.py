@@ -10,7 +10,7 @@ class ArgRefcountTests(unittest.TestCase):
             lambda *args: greenlet.getcurrent().parent.switch(*args))
         for i in range(100):
             g.switch(*args)
-        self.assertEquals(sys.getrefcount(args), 3)
+        self.assertEqual(sys.getrefcount(args), 3)
 
     def test_kwarg_refs(self):
         kwargs = {}
@@ -18,4 +18,4 @@ class ArgRefcountTests(unittest.TestCase):
             lambda **kwargs: greenlet.getcurrent().parent.switch(**kwargs))
         for i in range(100):
             g.switch(**kwargs)
-        self.assertEquals(sys.getrefcount(kwargs), 2)
+        self.assertEqual(sys.getrefcount(kwargs), 2)
