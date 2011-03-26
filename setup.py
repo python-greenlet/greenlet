@@ -11,7 +11,6 @@ setup(
     maintainer="Kyle Ambroff",
     maintainer_email="kyle@ambroff.com",
     url="http://bitbucket.org/ambroff/greenlet",
-    repository='http://bitbucket.org/ambroff/greenlet/',
     license="MIT License",
     platforms=['any'],
     test_suite='tests.test_collector',
