@@ -2,10 +2,15 @@ import os
 from setuptools import Extension
 from setuptools import setup
 
+def _find_platform_headers():
+    return [os.path.join('platform', name)
+            for name in os.listdir('platform')
+            if name.startswith('switch_') and name.endswith('.h')]
+
 extension = Extension(
     name='greenlet',
     sources=['greenlet.c'],
-    depends=['greenlet.h', 'slp_platformselect.h'])
+    depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())
 
 setup(
     name="greenlet",
