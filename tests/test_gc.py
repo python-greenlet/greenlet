@@ -66,6 +66,11 @@ def _make_green_weakref(body, kw=False):
         pass
     return weakref.ref(g)
 
+def fullgconly(func):
+    if greenlet.GREENLET_USE_GC:
+        return func
+    return None
+
 class GCTests(unittest.TestCase):
     def test_circular_greenlet(self):
         class circular_greenlet(greenlet.greenlet):
@@ -79,6 +84,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def test_dead_circular_ref(self):
         if not greenlet.GREENLET_USE_GC:
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
@@ -90,6 +96,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def test_live_circular_ref(self):
         if not greenlet.GREENLET_USE_GC:
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
@@ -101,6 +108,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def test_live_subframe_ref(self):
         if not greenlet.GREENLET_USE_GC:
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
@@ -112,6 +120,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def test_stub_circular_ref(self):
         if not greenlet.GREENLET_USE_GC:
             return
@@ -122,6 +131,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def __disabled_test_stub_circular_ref_kw(self):
         if not greenlet.GREENLET_USE_GC:
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
@@ -133,6 +143,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def test_stub_throw_ref(self):
         if not greenlet.GREENLET_USE_GC:
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
@@ -144,6 +155,7 @@ class GCTests(unittest.TestCase):
             self.assertFalse(gc.garbage)
         self.assertTrue(o() is None)
 
+    @fullgconly
     def test_stub_cluster_ref(self):
         if not greenlet.GREENLET_USE_GC:
             #print >>sys.stderr, "skipped", sys._getframe().f_code.co_name
