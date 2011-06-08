@@ -6,11 +6,6 @@
 #include "structmember.h"
 
 
-/* XXX major open bugs:
-   XXX - no GC.  Unfinished greenlets won't be deallocated if they
-   XXX   contain a cycle to themselves from anywhere in their frame stack.
-*/
-
 /***********************************************************
 
 A PyGreenlet is a range of C stack addresses that must be
@@ -134,7 +129,7 @@ static PyObject* ts_delkey;
 static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
 
-#undef GREENLET_USE_GC
+#define GREENLET_USE_GC
 
 #ifdef GREENLET_USE_GC
 #define GREENLET_GC_FLAGS Py_TPFLAGS_HAVE_GC
@@ -518,14 +513,8 @@ static void g_initialstub(void* mark)
 			result = NULL;
 		else {
 			/* call g.run(*args, **kwargs) */
-			ts_self->stub_refs[0] = run;
-			ts_self->stub_refs[1] = args;
-			ts_self->stub_refs[2] = kwargs;
 			result = PyEval_CallObjectWithKeywords(
 				run, args, kwargs);
-			ts_self->stub_refs[0] = NULL;
-			ts_self->stub_refs[1] = NULL;
-			ts_self->stub_refs[2] = NULL;
 			Py_DECREF(args);
 			Py_XDECREF(kwargs);
 		}
@@ -626,57 +615,29 @@ static int kill_greenlet(PyGreenlet* self)
 }
 
 #ifdef GREENLET_USE_GC
-#include <frameobject.h>
-
 static int
 green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 {
-	unsigned i;
-	struct _frame *frame;
-	/* XXX: we must only visit referenced objects, i.e. only
-	   objects Py_INCREF'ed by this greenlet (directly or indirectly, e.g. on stack):
-	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced */
+	/* We must only visit referenced objects, i.e. only objects
+	   Py_INCREF'ed by this greenlet (directly or indirectly):
+	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced
+	   - frames are not visited: alive greenlets are not garbage collected anyway */
 	Py_VISIT((PyObject*)self->parent);
 	Py_VISIT(self->run_info);
-	/* XXX: hack: visit all greenlet's frames
-	   Even though we don't reference frames beyond the top one, we need
-	   to visit them all, otherwise those frames will mark this greenlet
-	   reachable during gc :( */
-	frame = self->top_frame;
-	while (frame) {
-		Py_VISIT(frame);
-		frame = frame->f_back;
-	}
-	for (i = 0; i < 3; ++i) {
-		PyObject *ref = self->stub_refs[i];
-		Py_VISIT(ref);
-		/* XXX: need to visit args twice
-		   1. Reference is held in the stub itself
-		   2. Py_INCREF'ed in PyEval_CallObjectWithKeywords
-		   It's implementation dependent, but unfortunately there's no other way */
-		if (i == 1 && ref) {
-			Py_VISIT(ref);
-		}
-	}
-	for (i = 0; i < 2; ++i) {
-		PyObject *ref = self->switch_refs[i];
-		Py_VISIT(ref);
-	}
 	return 0;
 }
 
 static int green_is_gc(PyGreenlet* self)
 {
 	int rval;
-	rval = (self->stack_stop == ((char *)-1)) ? 0 : 1;
+	/* Main and alive greenlets are not garbage collectable */
+	rval = (self->stack_stop == (char *)-1 || self->stack_start != NULL) ? 0 : 1;
 	return rval;
 }
 
 static int green_clear(PyGreenlet* self)
 {
-	if (PyGreenlet_ACTIVE(self))
-		return kill_greenlet(self);
-	return 0;
+	return 0; /* greenlet is not alive, so there's nothing to clear */
 }
 #endif
 
@@ -803,11 +764,7 @@ static PyObject* green_switch(
 	Py_INCREF(args);
 	Py_XINCREF(kwargs);
 	current = ts_current;
-	current->switch_refs[0] = args;
-	current->switch_refs[1] = kwargs;
 	result = single_result(g_switch(self, args, kwargs));
-	current->switch_refs[0] = NULL;
-	current->switch_refs[1] = NULL;
 	return result;
 }
 
@@ -906,9 +863,7 @@ green_throw(PyGreenlet *self, PyObject *args)
 	if (!STATE_OK)
 		goto failed_throw;
 	current = ts_current;
-	current->switch_refs[0] = args;
 	result = throw_greenlet(self, typ, val, tb);
-	current->switch_refs[0] = NULL;
 	return result;
 
  failed_throw:
@@ -1076,8 +1031,6 @@ PyGreenlet_Switch(PyGreenlet *g, PyObject *args, PyObject *kwargs)
 		kwargs = NULL;
 	}
 
-	/* XXX: don't need to save switch_refs (references are
-	   held in the caller's C code, so gc won't work anyway) */
 	return single_result(g_switch(self, args, kwargs));
 }
 
@@ -1088,8 +1041,6 @@ PyGreenlet_Throw(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
 		PyErr_BadArgument();
 		return NULL;
 	}
-	/* XXX: don't need to save switch_refs (references are
-	   held in the caller's C code, so gc won't work anyway) */
 	return throw_greenlet(self, typ, val, tb);
 }
 
