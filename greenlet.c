@@ -342,6 +342,10 @@ static int g_switchstack(void)
 		PyThreadState* tstate = PyThreadState_GET();
 		current->recursion_depth = tstate->recursion_depth;
 		current->top_frame = tstate->frame;
+		current->exc_type = tstate->exc_type;
+		current->exc_value = tstate->exc_value;
+		current->exc_traceback = tstate->exc_traceback;
+
 	}
 	err = _PyGreenlet_slp_switch();
 	if (err < 0) {   /* error */
@@ -358,6 +362,13 @@ static int g_switchstack(void)
 		tstate->recursion_depth = target->recursion_depth;
 		tstate->frame = target->top_frame;
 		target->top_frame = NULL;
+		tstate->exc_type = target->exc_type;
+		target->exc_type = NULL;
+		tstate->exc_value = target->exc_value;
+		target->exc_value = NULL;
+		tstate->exc_traceback = target->exc_traceback;
+		target->exc_traceback = NULL;
+
 		ts_current = target;
 		Py_INCREF(target);
 		Py_DECREF(origin);
@@ -500,6 +511,9 @@ static void g_initialstub(void* mark)
 		ts_target->stack_prev = ts_current;
 	}
 	ts_target->top_frame = NULL;
+	ts_target->exc_type = NULL;
+	ts_target->exc_value = NULL;
+	ts_target->exc_traceback = NULL;
 	ts_target->recursion_depth = PyThreadState_GET()->recursion_depth;
 	err = _PyGreenlet_switchstack();
 	/* returns twice!
@@ -640,6 +654,9 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	   - stack_prev is not visited: holds previous stack pointer, but it's not referenced */
 	Py_VISIT((PyObject*)self->parent);
 	Py_VISIT(self->run_info);
+	Py_VISIT(self->exc_type);
+	Py_VISIT(self->exc_value);
+	Py_VISIT(self->exc_traceback);
 	/* XXX: hack: visit all greenlet's frames
 	   Even though we don't reference frames beyond the top one, we need
 	   to visit them all, otherwise those frames will mark this greenlet
@@ -691,6 +708,9 @@ static void green_dealloc(PyGreenlet* self)
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
 	Py_CLEAR(self->parent);
+	Py_CLEAR(self->exc_value);
+	Py_CLEAR(self->exc_type);
+	Py_CLEAR(self->exc_traceback);
 	if (PyGreenlet_ACTIVE(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */

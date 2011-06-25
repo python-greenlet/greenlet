@@ -26,6 +26,10 @@ typedef struct _greenlet {
 	PyObject* weakreflist;
 	PyObject* stub_refs[3]; /* objects held on stack in the stub */
 	PyObject* switch_refs[2]; /* objects held on stack in switch or throw */
+	PyObject* exc_type;
+	PyObject* exc_value;
+	PyObject* exc_traceback;
+
 } PyGreenlet;
 
 #define PyGreenlet_Check(op)      PyObject_TypeCheck(op, &PyGreenlet_Type)
