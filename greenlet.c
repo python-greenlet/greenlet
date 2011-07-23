@@ -743,7 +743,7 @@ static void green_dealloc(PyGreenlet* self)
 		}
 		if (Py_REFCNT(self) != 0) {
 			/* Resurrected! */
-			int refcnt = Py_REFCNT(self);
+			Py_ssize_t refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
 #ifdef GREENLET_USE_GC
 			PyObject_GC_Track((PyObject *)self);
