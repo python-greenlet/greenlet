@@ -219,3 +219,18 @@ class GreenletTests(unittest.TestCase):
         self.assertTrue(error != None, "greenlet.error was not raised!")
         done_event.set()
         thread.join()
+
+
+    def test_exc_state(self):
+        def f():
+            try:
+                raise ValueError('fun')
+            except:
+                exc_info = sys.exc_info()
+                greenlet(h).switch()
+                self.assertEqual(exc_info, sys.exc_info())
+
+        def h():
+            self.assertEqual(sys.exc_info(), (None, None, None))
+
+        greenlet(f).switch()

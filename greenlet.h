@@ -24,6 +24,9 @@ typedef struct _greenlet {
 	struct _frame* top_frame;
 	int recursion_depth;
 	PyObject* weakreflist;
+	PyObject* exc_type;
+	PyObject* exc_value;
+	PyObject* exc_traceback;
 } PyGreenlet;
 
 #define PyGreenlet_Check(op)      PyObject_TypeCheck(op, &PyGreenlet_Type)
