@@ -666,10 +666,6 @@ static void green_dealloc(PyGreenlet* self)
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
-	Py_CLEAR(self->parent);
-	Py_CLEAR(self->exc_value);
-	Py_CLEAR(self->exc_type);
-	Py_CLEAR(self->exc_traceback);
 	if (PyGreenlet_ACTIVE(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
@@ -715,6 +711,10 @@ static void green_dealloc(PyGreenlet* self)
 			goto green_dealloc_end;
 		}
 	}
+	Py_CLEAR(self->parent);
+	Py_CLEAR(self->exc_value);
+	Py_CLEAR(self->exc_type);
+	Py_CLEAR(self->exc_traceback);
 	if (self->weakreflist != NULL)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->run_info);

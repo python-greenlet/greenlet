@@ -78,6 +78,7 @@ class GreenletTests(unittest.TestCase):
         g = greenlet(g)
         g.switch()
         self.assertEqual(len(lst), 3)
+        self.assertEqual(sys.getrefcount(g), 2)
 
     def test_threads(self):
         success = []
