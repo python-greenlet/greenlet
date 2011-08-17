@@ -29,7 +29,7 @@
 /* the above works fine with gcc 2.96, but 2.95.3 wants this */
 #define STACK_MAGIC 0
 
-#define REGS_TO_SAVE "rdx", "rbx", "r12", "r13", "r14", "r15"
+#define REGS_TO_SAVE "rbp", "rbx", "r12", "r13", "r14", "r15"
 
 
 static int
