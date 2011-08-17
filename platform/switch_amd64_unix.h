@@ -2,6 +2,8 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 18-Aug-11  Alexey Borzenkov  <snaury@gmail.com>
+ *      Correctly save rbp and csr
  * 01-Apr-04  Hye-Shik Chang    <perky@FreeBSD.org>
  *      Ported from i386 to amd64.
  * 24-Nov-02  Christian Tismer  <tismer@tismer.com>
@@ -25,21 +27,22 @@
 
 #ifdef SLP_EVAL
 
-#include <xmmintrin.h>
-
 /* #define STACK_MAGIC 3 */
 /* the above works fine with gcc 2.96, but 2.95.3 wants this */
 #define STACK_MAGIC 0
 
-#define REGS_TO_SAVE "rbp", "rbx", "r12", "r13", "r14", "r15"
+#define REGS_TO_SAVE "rbx", "r12", "r13", "r14", "r15"
 
 
 static int
 slp_switch(void)
 {
+    void* rbp;
+    unsigned int csr;
     register long *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
-    unsigned int csr = _mm_getcsr();
+    __asm__ ("stmxcsr %0" : "=m" (csr));
+    __asm__ ("movq %%rbp, %0" : "=m" (rbp));
     __asm__ ("movq %%rsp, %0" : "=g" (stackref));
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -51,7 +54,8 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
-    _mm_setcsr(csr);
+    __asm__ ("movq %0, %%rbp" : : "m" (rbp));
+    __asm__ ("ldmxcsr %0" : "=m" (csr));
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     return 0;
 }
