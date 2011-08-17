@@ -25,6 +25,8 @@
 
 #ifdef SLP_EVAL
 
+#include <xmmintrin.h>
+
 /* #define STACK_MAGIC 3 */
 /* the above works fine with gcc 2.96, but 2.95.3 wants this */
 #define STACK_MAGIC 0
@@ -37,6 +39,7 @@ slp_switch(void)
 {
     register long *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
+    unsigned int csr = _mm_getcsr();
     __asm__ ("movq %%rsp, %0" : "=g" (stackref));
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -48,6 +51,7 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
+    _mm_setcsr(csr);
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     return 0;
 }
