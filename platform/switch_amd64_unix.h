@@ -3,7 +3,7 @@
  *
  * HISTORY
  * 18-Aug-11  Alexey Borzenkov  <snaury@gmail.com>
- *      Correctly save rbp and csr
+ *      Correctly save rbp, csr and cw
  * 01-Apr-04  Hye-Shik Chang    <perky@FreeBSD.org>
  *      Ported from i386 to amd64.
  * 24-Nov-02  Christian Tismer  <tismer@tismer.com>
@@ -39,8 +39,10 @@ slp_switch(void)
 {
     void* rbp;
     unsigned int csr;
+    unsigned short cw;
     register long *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
+    __asm__ ("fstcw %0" : "=m" (cw));
     __asm__ ("stmxcsr %0" : "=m" (csr));
     __asm__ ("movq %%rbp, %0" : "=m" (rbp));
     __asm__ ("movq %%rsp, %0" : "=g" (stackref));
@@ -55,7 +57,8 @@ slp_switch(void)
         SLP_RESTORE_STATE();
     }
     __asm__ ("movq %0, %%rbp" : : "m" (rbp));
-    __asm__ ("ldmxcsr %0" : "=m" (csr));
+    __asm__ ("ldmxcsr %0" : : "m" (csr));
+    __asm__ ("fldcw %0" : : "m" (cw));
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     return 0;
 }
