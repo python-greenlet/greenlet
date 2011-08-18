@@ -2,6 +2,8 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 19-Aug-11  Alexey Borzenkov  <snaury@gmail.com>
+ *      Correctly save ebp, ebx and cw
  * 07-Sep-05 (py-dev mailing list discussion)
  *      removed 'ebx' from the register-saved.  !!!! WARNING !!!!
  *      It means that this file can no longer be compiled statically!
@@ -34,18 +36,13 @@
 static int
 slp_switch(void)
 {
+    void *ebp, *ebx;
+    unsigned short cw;
     register int *stackref, stsizediff;
-    /* !!!!WARNING!!!! need to add "ebx" in the next line, as well as in the
-     * last line of this function, if this header file is meant to be compiled
-     * non-dynamically!
-     */
-    __asm__ volatile ("" : : :
-      "esi",
-      "edi"
-#ifdef __MINGW32__
-    , "ebx"
-#endif
-    );
+    __asm__ volatile ("" : : : "esi", "edi");
+    __asm__ volatile ("fstcw %0" : "=m" (cw));
+    __asm__ volatile ("movl %%ebp, %0" : "=m" (ebp));
+    __asm__ volatile ("movl %%ebx, %0" : "=m" (ebx));
     __asm__ ("movl %%esp, %0" : "=g" (stackref));
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -57,13 +54,10 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
-    __asm__ volatile ("" : : :
-      "esi",
-      "edi"
-#ifdef __MINGW32__
-    , "ebx"
-#endif
-    );
+    __asm__ volatile ("movl %0, %%ebx" : : "m" (ebx));
+    __asm__ volatile ("movl %0, %%ebp" : : "m" (ebp));
+    __asm__ volatile ("fldcw %0" : : "m" (cw));
+    __asm__ volatile ("" : : : "esi", "edi");
     return 0;
 }
 
