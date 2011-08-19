@@ -215,6 +215,48 @@ static PyObject* green_statedict(PyGreenlet* g)
 
 /***********************************************************/
 
+/* Some functions must not be inlined:
+   * slp_restore_state, when inlined into slp_switch might cause
+     it to restore stack over its own local variables
+   * slp_save_state, when inlined would add its own local
+     variables to the saved stack, wasting space
+   * slp_switch, cannot be inlined for obvious reasons
+   * g_initialstub, when inlined would receive a pointer into its
+     own stack frame, leading to incomplete stack save/restore
+*/
+
+#if defined(__GNUC__) && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4))
+#define GREENLET_NOINLINE_SUPPORTED
+#define GREENLET_NOINLINE(name) __attribute__((noinline)) name
+#elif defined(_MSC_VER) && (_MSC_VER >= 1300)
+#define GREENLET_NOINLINE_SUPPORTED
+#define GREENLET_NOINLINE(name) __declspec(noinline) name
+#endif
+
+#ifdef GREENLET_NOINLINE_SUPPORTED
+/* add forward declarations */
+static void GREENLET_NOINLINE(slp_restore_state)(void);
+static int GREENLET_NOINLINE(slp_save_state)(char*);
+static int GREENLET_NOINLINE(slp_switch)(void);
+static void GREENLET_NOINLINE(g_initialstub)(void*);
+#define GREENLET_NOINLINE_INIT() do {} while(0)
+#else
+/* force compiler to call functions via pointers */
+static void (*slp_restore_state)(void);
+static int (*slp_save_state)(char*);
+static int (*slp_switch)(void);
+static void (*g_initialstub)(void*);
+#define GREENLET_NOINLINE(name) cannot_inline_ ## name
+#define GREENLET_NOINLINE_INIT() do { \
+	slp_restore_state = GREENLET_NOINLINE(slp_restore_state); \
+	slp_save_state = GREENLET_NOINLINE(slp_save_state); \
+	slp_switch = GREENLET_NOINLINE(slp_switch); \
+	g_initialstub = GREENLET_NOINLINE(g_initialstub); \
+} while(0)
+#endif
+
+/***********************************************************/
+
 static int g_save(PyGreenlet* g, char* stop)
 {
 	/* Save more of g's stack into the heap -- at least up to 'stop'
@@ -245,7 +287,7 @@ static int g_save(PyGreenlet* g, char* stop)
 	return 0;
 }
 
-static void slp_restore_state(void)
+static void GREENLET_NOINLINE(slp_restore_state)(void)
 {
 	PyGreenlet* g = ts_target;
 	PyGreenlet* owner = ts_current;
@@ -264,7 +306,7 @@ static void slp_restore_state(void)
 	g->stack_prev = owner;
 }
 
-static int slp_save_state(char* stackref)
+static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
 {
 	/* must free all the C stack up to target_stop */
 	char* target_stop = ts_target->stack_stop;
@@ -305,19 +347,15 @@ static int slp_save_state(char* stackref)
 
 
 #define SLP_EVAL
+#define slp_switch GREENLET_NOINLINE(slp_switch)
 #include "slp_platformselect.h"
+#undef slp_switch
 
 #ifndef STACK_MAGIC
 #error "greenlet needs to be ported to this platform,\
  or teached how to detect your compiler properly."
 #endif /* !STACK_MAGIC */
 
-
-/* This is a trick to prevent the compiler from inlining or
-   removing the frames */
-int (*_PyGreenlet_slp_switch) (void);
-int (*_PyGreenlet_switchstack) (void);
-void (*_PyGreenlet_initialstub) (void*);
 
 static int g_switchstack(void)
 {
@@ -340,7 +378,7 @@ static int g_switchstack(void)
 		current->exc_traceback = tstate->exc_traceback;
 
 	}
-	err = _PyGreenlet_slp_switch();
+	err = slp_switch();
 	if (err < 0) {   /* error */
 		Py_XDECREF(ts_passaround_args);
 		ts_passaround_args = NULL;
@@ -397,13 +435,13 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	while (1) {
 		if (PyGreenlet_ACTIVE(target)) {
 			ts_target = target;
-			_PyGreenlet_switchstack();
+			g_switchstack();
 			break;
 		}
 		if (!PyGreenlet_STARTED(target)) {
 			void* dummymarker;
 			ts_target = target;
-			_PyGreenlet_initialstub(&dummymarker);
+			g_initialstub(&dummymarker);
 			break;
 		}
 		target = target->parent;
@@ -472,7 +510,7 @@ g_handle_exit(PyObject *result)
 	return result;
 }
 
-static void g_initialstub(void* mark)
+static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 {
 	int err;
 	PyObject* o;
@@ -508,7 +546,7 @@ static void g_initialstub(void* mark)
 	ts_target->exc_value = NULL;
 	ts_target->exc_traceback = NULL;
 	ts_target->recursion_depth = PyThreadState_GET()->recursion_depth;
-	err = _PyGreenlet_switchstack();
+	err = g_switchstack();
 	/* returns twice!
 	   The 1st time with err=1: we are in the new greenlet
 	   The 2nd time with err=0: back in the caller's greenlet
@@ -1196,9 +1234,7 @@ void initgreenlet(void)
 	PyObject *c_api_object;
 	static void *_PyGreenlet_API[PyGreenlet_API_pointers];
 
-	_PyGreenlet_switchstack = g_switchstack;
-	_PyGreenlet_slp_switch = slp_switch;
-	_PyGreenlet_initialstub = g_initialstub;
+	GREENLET_NOINLINE_INIT();
 
 #if PY_MAJOR_VERSION >= 3
 	m = PyModule_Create(&greenlet_module_def);
