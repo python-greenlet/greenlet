@@ -36,6 +36,9 @@
 static int
 slp_switch(void)
 {
+#ifdef _WIN32
+    void *seh;
+#endif
     void *ebp, *ebx;
     unsigned short cw;
     register int *stackref, stsizediff;
@@ -43,6 +46,14 @@ slp_switch(void)
     __asm__ volatile ("fstcw %0" : "=m" (cw));
     __asm__ volatile ("movl %%ebp, %0" : "=m" (ebp));
     __asm__ volatile ("movl %%ebx, %0" : "=m" (ebx));
+#ifdef _WIN32
+    __asm__ volatile (
+        "movl %%fs:0x0, %%eax\n"
+        "movl %%eax, %0\n"
+        : "=m" (seh)
+        :
+        : "eax");
+#endif
     __asm__ ("movl %%esp, %0" : "=g" (stackref));
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -54,6 +65,14 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
+#ifdef _WIN32
+    __asm__ volatile (
+        "movl %0, %%eax\n"
+        "movl %%eax, %%fs:0x0\n"
+        :
+        : "m" (seh)
+        : "eax");
+#endif
     __asm__ volatile ("movl %0, %%ebx" : : "m" (ebx));
     __asm__ volatile ("movl %0, %%ebp" : : "m" (ebp));
     __asm__ volatile ("fldcw %0" : : "m" (cw));

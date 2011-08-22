@@ -39,11 +39,14 @@
 static int
 slp_switch(void)
 {
+    void* seh;
     register int *stackref, stsizediff;
+    __asm mov eax, fs:[0]
+    __asm mov [seh], eax
     __asm mov stackref, esp;
-	/* modify EBX, ESI and EDI in order to get them preserved */
-	__asm mov ebx, ebx;
-	__asm xchg esi, edi;
+    /* modify EBX, ESI and EDI in order to get them preserved */
+    __asm mov ebx, ebx;
+    __asm xchg esi, edi;
     {
         SLP_SAVE_STATE(stackref, stsizediff);
         __asm {
@@ -52,8 +55,10 @@ slp_switch(void)
             add     ebp, eax
         }
         SLP_RESTORE_STATE();
-        return 0;
     }
+    __asm mov eax, [seh]
+    __asm mov fs:[0], eax
+    return 0;
 }
 
 /* re-enable ebp warning and global optimizations. */
