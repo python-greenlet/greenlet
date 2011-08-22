@@ -376,7 +376,6 @@ static int g_switchstack(void)
 		current->exc_type = tstate->exc_type;
 		current->exc_value = tstate->exc_value;
 		current->exc_traceback = tstate->exc_traceback;
-
 	}
 	err = slp_switch();
 	if (err < 0) {   /* error */
@@ -750,8 +749,8 @@ static void green_dealloc(PyGreenlet* self)
 		}
 	}
 	Py_CLEAR(self->parent);
-	Py_CLEAR(self->exc_value);
 	Py_CLEAR(self->exc_type);
+	Py_CLEAR(self->exc_value);
 	Py_CLEAR(self->exc_traceback);
 	if (self->weakreflist != NULL)
 		PyObject_ClearWeakRefs((PyObject *) self);
