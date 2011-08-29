@@ -25,13 +25,15 @@
 
 #ifdef SLP_EVAL
 #define STACK_MAGIC 0
-#define REGS_TO_SAVE /*"r1", "r2", "r3", "r4",*/ "r5", "r6", "fp", "ip", "lr"
+#define REGS_TO_SAVE "r4", "r5", "r6", "r7", "r8", "r9", "lr"
 
 static int
 slp_switch(void)
 {
+        void *fp;
         register int *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
+        __asm__ volatile ("str fp,%0" : "=m" (fp));
         __asm__ ("mov %0,sp" : "=g" (stackref));
         {
                 SLP_SAVE_STATE(stackref, stsizediff);
@@ -42,9 +44,10 @@ slp_switch(void)
                     : "r" (stsizediff)
                     );
                 SLP_RESTORE_STATE();
-                return 0;
         }
+        __asm__ volatile ("ldr fp,%0" : : "m" (fp));
         __asm__ volatile ("" : : : REGS_TO_SAVE);
+        return 0;
 }
 
 #endif
