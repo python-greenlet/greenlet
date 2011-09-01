@@ -1,5 +1,6 @@
 include AUTHORS
 include LICENSE
+include LICENSE.PSF
 include MANIFEST.in
 include README
 include NEWS

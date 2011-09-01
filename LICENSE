@@ -1,3 +1,11 @@
+The following files are derived from Stackless Python and are subject to the
+same license as Stackless Python:
+
+	slp_platformselect.h
+	files in platform/ directory
+
+See LICENSE.PSF and http://www.stackless.com/ for details.
+
 Unless otherwise noted, the files in greenlet have been released under the
 following MIT license:
 
