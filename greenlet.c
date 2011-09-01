@@ -818,15 +818,11 @@ static PyObject* green_switch(
 	PyObject* args,
 	PyObject* kwargs)
 {
-	PyGreenlet* current;
-	PyObject* result;
-	if (!STATE_OK)
+        if (!STATE_OK)
 		return NULL;
 	Py_INCREF(args);
 	Py_XINCREF(kwargs);
-	current = ts_current;
-	result = single_result(g_switch(self, args, kwargs));
-	return result;
+        return single_result(g_switch(self, args, kwargs));
 }
 
 /* Macros required to support Python < 2.6 for green_throw() */
@@ -860,9 +856,7 @@ PyDoc_STRVAR(green_throw_doc,
 static PyObject *
 green_throw(PyGreenlet *self, PyObject *args)
 {
-	PyGreenlet *current;
-	PyObject *result;
-	PyObject *typ = PyExc_GreenletExit;
+        PyObject *typ = PyExc_GreenletExit;
 	PyObject *val = NULL;
 	PyObject *tb = NULL;
 
@@ -923,9 +917,7 @@ green_throw(PyGreenlet *self, PyObject *args)
 
 	if (!STATE_OK)
 		goto failed_throw;
-	current = ts_current;
-	result = throw_greenlet(self, typ, val, tb);
-	return result;
+        return throw_greenlet(self, typ, val, tb);
 
  failed_throw:
 	/* Didn't use our arguments, so restore their original refcounts */
