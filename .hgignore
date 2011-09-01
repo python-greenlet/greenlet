@@ -9,3 +9,4 @@ syntax: regexp
 ^build/.*
 ^dist/.*
 ^greenlet\.egg-info/.*
+^\.tox/.*
