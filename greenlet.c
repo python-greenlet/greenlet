@@ -108,6 +108,10 @@ The running greenlet's stack_start is undefined but not NULL.
 #endif
 #endif
 
+#if PY_VERSION_HEX < 0x02050000
+typedef int Py_ssize_t;
+#endif
+
 extern PyTypeObject PyGreenlet_Type;
 
 /* The current greenlet in this thread state (holds a reference) */
