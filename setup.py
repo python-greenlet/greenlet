@@ -1,6 +1,12 @@
+#! /usr/bin/env python
+
 import os
-from setuptools import Extension
-from setuptools import setup
+try:
+    from setuptools import setup, Extension
+    setuptools_args = dict(test_suite='tests.test_collector')
+except ImportError:
+    from distutils.core import setup, Extension
+    setuptools_args = dict()
 
 def _find_platform_headers():
     return [os.path.join('platform', name)
@@ -23,7 +29,6 @@ setup(
     url="http://bitbucket.org/ambroff/greenlet",
     license="MIT License",
     platforms=['any'],
-    test_suite='tests.test_collector',
     headers=['greenlet.h'],
     ext_modules=[extension],
     classifiers=[
@@ -42,4 +47,5 @@ setup(
         'Programming Language :: Python :: 3.1',
         'Programming Language :: Python :: 3.2',
         'Operating System :: OS Independent',
-        'Topic :: Software Development :: Libraries :: Python Modules'])
+        'Topic :: Software Development :: Libraries :: Python Modules'],
+    **setuptools_args)
