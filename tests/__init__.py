@@ -2,6 +2,14 @@ import os
 import glob
 import unittest
 
+try:
+    unittest.TestCase.assertTrue
+    unittest.TestCase.assertFalse
+except AttributeError:
+    # monkey patch for Python 2.3 compatibility
+    unittest.TestCase.assertTrue = unittest.TestCase.failUnless
+    unittest.TestCase.assertFalse = unittest.TestCase.failIf
+
 from distutils.core import setup
 from distutils.core import Extension
 
@@ -21,10 +29,7 @@ def test_collector():
     test_module_list = [
         'tests.%s' % os.path.splitext(os.path.basename(t))[0]
         for t in glob.glob(os.path.join(tests_dir, 'test_*.py'))]
-    test_list = unittest.TestLoader().loadTestsFromNames(test_module_list)
-    suite = unittest.TestSuite()
-    suite.addTests(test_list)
-    return suite
+    return unittest.TestLoader().loadTestsFromNames(test_module_list)
 
 def build_test_extensions():
     """Because distutils sucks, it just copies the entire contents of the build
