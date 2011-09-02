@@ -1094,6 +1094,9 @@ PyGreenlet_Throw(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
 		PyErr_BadArgument();
 		return NULL;
 	}
+	Py_INCREF(typ);
+	Py_XINCREF(val);
+	Py_XINCREF(tb);
 	return throw_greenlet(self, typ, val, tb);
 }
 
