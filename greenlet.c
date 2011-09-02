@@ -122,6 +122,39 @@ static PyGreenlet* volatile ts_target = NULL;
 static PyObject* volatile ts_passaround_args = NULL;
 static PyObject* volatile ts_passaround_kwargs = NULL;
 
+/*
+ * Need to be careful when clearing passaround args and kwargs
+ * If deallocating args or kwargs ever causes stack switch (which
+ * currently shouldn't happen though), then args or kwargs might
+ * be borrowed or no longer valid, so better be paranoid
+ */
+#define g_passaround_clear() do { \
+	PyObject* args = ts_passaround_args; \
+	PyObject* kwargs = ts_passaround_kwargs; \
+	ts_passaround_args = NULL; \
+	ts_passaround_kwargs = NULL; \
+	Py_XDECREF(args); \
+	Py_XDECREF(kwargs); \
+} while(0)
+
+#define g_passaround_return_args() do { \
+	PyObject* args = ts_passaround_args; \
+	PyObject* kwargs = ts_passaround_kwargs; \
+	ts_passaround_args = NULL; \
+	ts_passaround_kwargs = NULL; \
+	Py_XDECREF(kwargs); \
+	return args; \
+} while(0)
+
+#define g_passaround_return_kwargs() do { \
+	PyObject* args = ts_passaround_args; \
+	PyObject* kwargs = ts_passaround_kwargs; \
+	ts_passaround_args = NULL; \
+	ts_passaround_kwargs = NULL; \
+	Py_XDECREF(args); \
+	return kwargs; \
+} while(0)
+
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
 
@@ -383,11 +416,7 @@ static int g_switchstack(void)
 	}
 	err = slp_switch();
 	if (err < 0) {   /* error */
-		Py_XDECREF(ts_passaround_args);
-		ts_passaround_args = NULL;
-
-		Py_XDECREF(ts_passaround_kwargs);
-		ts_passaround_kwargs = NULL;
+		g_passaround_clear();
 	}
 	else {
 		PyGreenlet* target = ts_target;
@@ -458,23 +487,23 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	   return both. */
 	if (ts_passaround_kwargs == NULL)
 	{
-		return ts_passaround_args;
+		g_passaround_return_args();
 	}
 	else if (PyDict_Size(ts_passaround_kwargs) == 0)
 	{
-		Py_DECREF(ts_passaround_kwargs);
-		return ts_passaround_args;
+		g_passaround_return_args();
 	}
 	else if (PySequence_Length(ts_passaround_args) == 0)
 	{
-		Py_DECREF(ts_passaround_args);
-		return ts_passaround_kwargs;
+		g_passaround_return_kwargs();
 	}
 	else
 	{
 		PyObject *tuple = PyTuple_New(2);
 		PyTuple_SetItem(tuple, 0, ts_passaround_args);
 		PyTuple_SetItem(tuple, 1, ts_passaround_kwargs);
+		ts_passaround_args = NULL;
+		ts_passaround_kwargs = NULL;
 		return tuple;
 	}
 }
@@ -521,11 +550,7 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 	/* ts_target.run is the object to call in the new greenlet */
 	PyObject* run = PyObject_GetAttrString((PyObject*) ts_target, "run");
 	if (run == NULL) {
-		Py_XDECREF(ts_passaround_args);
-		ts_passaround_args = NULL;
-
-		Py_XDECREF(ts_passaround_kwargs);
-		ts_passaround_kwargs = NULL;
+		g_passaround_clear();
 		return;
 	}
 	/* now use run_info to store the statedict */
