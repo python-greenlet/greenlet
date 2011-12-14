@@ -12,4 +12,4 @@ include tox.ini
 recursive-include benchmarks *
 recursive-include doc *
 recursive-include platform *.h
-recursive-include tests *.py
+recursive-include tests *.py *.c
