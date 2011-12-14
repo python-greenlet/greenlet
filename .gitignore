@@ -1,0 +1,8 @@
+*.so
+*.pyd
+*.pyc
+*.pyo
+build/
+dist/
+.tox/
+greenlet.egg-info/
