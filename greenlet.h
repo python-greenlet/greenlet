@@ -10,7 +10,7 @@ extern "C" {
 
 #include <Python.h>
 
-#define GREENLET_VERSION "0.3.1"
+#define GREENLET_VERSION "0.3.2"
 
 typedef struct _greenlet {
 	PyObject_HEAD

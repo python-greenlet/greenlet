@@ -20,7 +20,7 @@ extension = Extension(
 
 setup(
     name="greenlet",
-    version='0.3.1',
+    version='0.3.2',
     description='Lightweight in-process concurrent programming',
     long_description=open(
         os.path.join(os.path.dirname(__file__), 'README'), 'r').read(),
