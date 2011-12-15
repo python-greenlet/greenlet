@@ -1,3 +1,14 @@
+0.3.2
+=====
+* fix various crashes with recent gcc versions and VC90
+* Try to fix stack save/restore on arm32
+* store and restore the threadstate on exceptions like pypy/stackless do
+* Switch to using PyCapsule for Python 2.7 and 3.1
+* Port for AIX on PowerPC
+* Fix the sparc/solaris header
+* Improved build dependencies patch from flub.
+* #21 - Can't pass parent=None to greenlet.greenlet()
+
 0.3.1
 =====
 * Fix reference leak when passing keyword arguments to greenlets (mbachry)
