@@ -45,10 +45,3 @@ easy_install::
 
   pip install greenlet
   easy_install greenlet
-
-The development `tip`_ is available via these tools as well::
-
-  pip install greenlet==dev
-  easy_install greenlet==dev
-
-.. _tip: http://bitbucket.org/ambroff/greenlet/get/tip.zip#egg=greenlet-dev
