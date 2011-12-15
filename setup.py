@@ -4,7 +4,7 @@ import os, glob
 
 try:
     from setuptools import setup, Extension
-    setuptools_args = dict(test_suite='tests.test_collector')
+    setuptools_args = dict(test_suite='tests.test_collector', zip_safe=False)
 except ImportError:
     from distutils.core import setup, Extension
     setuptools_args = dict()
