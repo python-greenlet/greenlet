@@ -22,10 +22,9 @@ setup(
     name="greenlet",
     version='0.3.2',
     description='Lightweight in-process concurrent programming',
-    long_description=open(
-        os.path.join(os.path.dirname(__file__), 'README'), 'r').read(),
-    maintainer="Kyle Ambroff",
-    maintainer_email="kyle@ambroff.com",
+    long_description=open("README").read(),
+    maintainer="Ralf Schmitt",
+    maintainer_email="ralf@systemexit.de",
     url="http://bitbucket.org/ambroff/greenlet",
     license="MIT License",
     platforms=['any'],
