@@ -2,7 +2,7 @@
 
 import sys, os, subprocess
 
-executables = ["C:\\Python%s\\python.exe" % x for x in "24 25 26 27 32".split()]
+executables = ["C:\\Python%s\\python.exe" % x for x in "24 25 26 27 30 31 32".split()]
 
 
 def system(cmd):
