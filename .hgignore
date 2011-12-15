@@ -1,8 +1,8 @@
 syntax: glob
 
 *.py[co]
-greenlet.so
-_test_extension.so
+*.so
+*.pyd
 
 syntax: regexp
 
