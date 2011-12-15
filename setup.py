@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
-import os
+import os, glob
+
 try:
     from setuptools import setup, Extension
     setuptools_args = dict(test_suite='tests.test_collector')
@@ -9,9 +10,7 @@ except ImportError:
     setuptools_args = dict()
 
 def _find_platform_headers():
-    return [os.path.join('platform', name)
-            for name in os.listdir('platform')
-            if name.startswith('switch_') and name.endswith('.h')]
+    return glob.glob("platform/switch_*.h")
 
 extension = Extension(
     name='greenlet',
