@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import os, glob
+import sys, os, glob
 
 try:
     from setuptools import setup, Extension
@@ -12,9 +12,17 @@ except ImportError:
 def _find_platform_headers():
     return glob.glob("platform/switch_*.h")
 
+if sys.platform == 'win32' and '64 bit' in sys.version:
+    # this works when building with msvc, not with 64 bit gcc
+    # switch_x64_masm.obj can be created with setup_switch_x64_masm.cmd
+    extra_objects = ['platform/switch_x64_masm.obj']
+else:
+    extra_objects = []
+
 extension = Extension(
     name='greenlet',
     sources=['greenlet.c'],
+    extra_objects=extra_objects,
     depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())
 
 setup(

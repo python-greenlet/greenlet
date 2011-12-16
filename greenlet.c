@@ -274,7 +274,9 @@ static PyObject* green_statedict(PyGreenlet* g)
 /* add forward declarations */
 static void GREENLET_NOINLINE(slp_restore_state)(void);
 static int GREENLET_NOINLINE(slp_save_state)(char*);
+#if !(defined(MS_WIN64) && defined(_M_X64))
 static int GREENLET_NOINLINE(slp_switch)(void);
+#endif
 static void GREENLET_NOINLINE(g_initialstub)(void*);
 #define GREENLET_NOINLINE_INIT() do {} while(0)
 #else
@@ -308,8 +310,8 @@ static int g_save(PyGreenlet* g, char* stop)
 	  g->stack_start |        |         |_______| g->stack_copy
 
 	 */
-	long sz1 = g->stack_saved;
-	long sz2 = stop - g->stack_start;
+	intptr_t sz1 = g->stack_saved;
+	intptr_t sz2 = stop - g->stack_start;
 	assert(g->stack_start != NULL);
 	if (sz2 > sz1) {
 		char* c = PyMem_Realloc(g->stack_copy, sz2);
@@ -393,6 +395,25 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
  or teached how to detect your compiler properly."
 #endif /* !STACK_MAGIC */
 
+#ifdef EXTERNAL_ASM
+/* CCP addition: Make these functions, to be called from assembler.
+ * The token include file for the given platform should enable the
+ * EXTERNAL_ASM define so that this is included.
+ */
+
+intptr_t slp_save_state_asm(intptr_t *ref) {
+    intptr_t diff;
+    SLP_SAVE_STATE(ref, diff);
+    return diff;
+}
+
+void slp_restore_state_asm(void) {
+    SLP_RESTORE_STATE();
+}
+
+extern int slp_switch(void);
+
+#endif
 
 static int g_switchstack(void)
 {

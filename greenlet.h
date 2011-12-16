@@ -17,7 +17,7 @@ typedef struct _greenlet {
 	char* stack_start;
 	char* stack_stop;
 	char* stack_copy;
-	long stack_saved;
+	intptr_t stack_saved;
 	struct _greenlet* stack_prev;
 	struct _greenlet* parent;
 	PyObject* run_info;
