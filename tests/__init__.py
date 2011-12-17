@@ -19,6 +19,15 @@ TEST_EXTENSIONS = [
               include_dirs=[os.path.curdir]),
 ]
 
+if os.environ.get('GREENLET_TEST_CPP'):
+    TEST_EXTENSIONS_CPP = [
+        Extension('_test_extension_cpp',
+                  [os.path.join('tests', '_test_extension_cpp.cpp')],
+                  language="c++",
+                  include_dirs=[os.path.curdir]),
+    ]
+else:
+    TEST_EXTENSIONS_CPP = []
 
 def test_collector():
     """Collect all tests under the tests directory and return a
@@ -29,6 +38,8 @@ def test_collector():
     test_module_list = [
         'tests.%s' % os.path.splitext(os.path.basename(t))[0]
         for t in glob.glob(os.path.join(tests_dir, 'test_*.py'))]
+    if not TEST_EXTENSIONS_CPP:
+        test_module_list.remove('tests.test_cpp')
     return unittest.TestLoader().loadTestsFromNames(test_module_list)
 
 def build_test_extensions():
@@ -46,4 +57,4 @@ def build_test_extensions():
             'build': {'build_base': os.path.join('build', 'tests')},
         },
         script_args=['build_ext', '-i'],
-        ext_modules=TEST_EXTENSIONS)
+        ext_modules=TEST_EXTENSIONS + TEST_EXTENSIONS_CPP)
