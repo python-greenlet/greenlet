@@ -17,11 +17,8 @@ the example in tests/test_generator.py.
 Greenlets are provided as a C extension module for the regular
 unmodified interpreter.
 
-Greenlets are lightweight coroutines in-process concurrent
-programming. This package is the py.magic.greenlet module from the `py
-lib`_.
-
-.. _py lib: http://codespeak.net/py/
+Greenlets are lightweight coroutines for in-process concurrent
+programming.
 
 Who is using Greenlet?
 ======================
@@ -45,3 +42,10 @@ easy_install::
 
   pip install greenlet
   easy_install greenlet
+
+
+Source code archives and windows installers are available on the
+python package index at http://pypi.python.org/pypi/greenlet
+
+The source code repository is hosted on github:
+https://github.com/python-greenlet/greenlet
