@@ -32,7 +32,7 @@ setup(
     long_description=open("README.rst").read(),
     maintainer="Ralf Schmitt",
     maintainer_email="ralf@systemexit.de",
-    url="http://bitbucket.org/ambroff/greenlet",
+    url="https://github.com/python-greenlet/greenlet",
     license="MIT License",
     platforms=['any'],
     headers=['greenlet.h'],
