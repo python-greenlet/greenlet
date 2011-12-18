@@ -29,7 +29,7 @@ setup(
     name="greenlet",
     version='0.3.2',
     description='Lightweight in-process concurrent programming',
-    long_description=open("README").read(),
+    long_description=open("README.rst").read(),
     maintainer="Ralf Schmitt",
     maintainer_email="ralf@systemexit.de",
     url="http://bitbucket.org/ambroff/greenlet",
