@@ -314,7 +314,7 @@ static int g_save(PyGreenlet* g, char* stop)
 	intptr_t sz2 = stop - g->stack_start;
 	assert(g->stack_start != NULL);
 	if (sz2 > sz1) {
-		char* c = PyMem_Realloc(g->stack_copy, sz2);
+		char* c = (char*)PyMem_Realloc(g->stack_copy, sz2);
 		if (!c) {
 			PyErr_NoMemory();
 			return -1;
