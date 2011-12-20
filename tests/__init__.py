@@ -52,9 +52,11 @@ def build_test_extensions():
     multiple Python release and pydebug versions works and test extensions
     are not distributed.
     """
+    from my_build_ext import build_ext
     setup(
         options={
             'build': {'build_base': os.path.join('build', 'tests')},
         },
-        script_args=['build_ext', '-i'],
+        cmdclass=dict(build_ext=build_ext),
+        script_args=['-q', 'build_ext', '-q'],
         ext_modules=TEST_EXTENSIONS + TEST_EXTENSIONS_CPP)

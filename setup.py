@@ -25,6 +25,9 @@ extension = Extension(
     extra_objects=extra_objects,
     depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())
 
+from my_build_ext import build_ext
+
+
 setup(
     name="greenlet",
     version='0.3.2',
@@ -37,6 +40,7 @@ setup(
     platforms=['any'],
     headers=['greenlet.h'],
     ext_modules=[extension],
+    cmdclass=dict(build_ext=build_ext),
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',

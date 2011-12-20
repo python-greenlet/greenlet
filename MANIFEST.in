@@ -9,6 +9,8 @@ include greenlet.h
 include slp_platformselect.h
 include setup.py
 include tox.ini
+include my_build_ext.py
+include run-tests.py
 recursive-include benchmarks *
 recursive-include doc *
 recursive-include platform *.h
