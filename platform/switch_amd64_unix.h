@@ -31,13 +31,14 @@
 /* the above works fine with gcc 2.96, but 2.95.3 wants this */
 #define STACK_MAGIC 0
 
-#define REGS_TO_SAVE "rbx", "r12", "r13", "r14", "r15"
+#define REGS_TO_SAVE "r12", "r13", "r14", "r15"
 
 
 static int
 slp_switch(void)
 {
     void* rbp;
+    void* rbx;
     unsigned int csr;
     unsigned short cw;
     register long *stackref, stsizediff;
@@ -45,6 +46,7 @@ slp_switch(void)
     __asm__ volatile ("fstcw %0" : "=m" (cw));
     __asm__ volatile ("stmxcsr %0" : "=m" (csr));
     __asm__ volatile ("movq %%rbp, %0" : "=m" (rbp));
+    __asm__ volatile ("movq %%rbx, %0" : "=m" (rbx));
     __asm__ ("movq %%rsp, %0" : "=g" (stackref));
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -56,6 +58,7 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
+    __asm__ volatile ("movq %0, %%rbx" : : "m" (rbx));
     __asm__ volatile ("movq %0, %%rbp" : : "m" (rbp));
     __asm__ volatile ("ldmxcsr %0" : : "m" (csr));
     __asm__ volatile ("fldcw %0" : : "m" (cw));
