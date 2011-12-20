@@ -4,11 +4,12 @@
 
 #ifndef Py_GREENLETOBJECT_H
 #define Py_GREENLETOBJECT_H
+
+#include <Python.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <Python.h>
 
 #define GREENLET_VERSION "0.3.2"
 
