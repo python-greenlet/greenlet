@@ -168,7 +168,7 @@ static struct PyModuleDef moduledef = {
 	NULL
 };
 
-PyObject *
+PyMODINIT_FUNC
 PyInit__test_extension(void)
 #else
 #define INITERROR return

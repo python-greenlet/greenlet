@@ -1265,12 +1265,13 @@ static struct PyModuleDef greenlet_module_def = {
 	GreenMethods,
 };
 
-PyObject *
+PyMODINIT_FUNC
 PyInit_greenlet(void)
 #else
 #define INITERROR return
 
-void initgreenlet(void)
+PyMODINIT_FUNC
+initgreenlet(void)
 #endif
 {
 	PyObject* m = NULL;
