@@ -2,6 +2,11 @@
 
 import sys, os, glob
 
+# workaround segfaults on openbsd. see
+# https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
+if sys.platform == "openbsd4" and os.uname()[-1] == "i386":
+    os.environ["CFLAGS"] = "-Os"
+
 try:
     from setuptools import setup, Extension
     setuptools_args = dict(test_suite='tests.test_collector', zip_safe=False)
