@@ -1,9 +1,8 @@
 =====================================================
 greenlet: Lightweight concurrent programming
 =====================================================
-
-.. contents::
-.. sectnum::
+.. toctree::
+   :maxdepth: 2
 
 Motivation
 ==========
@@ -382,3 +381,8 @@ Reference
     Switches to greenlet ``g``, but immediately raise an exception of type
     ``typ`` with the value ``val``, and optionally, the traceback object
     ``tb``. ``tb`` can be NULL.
+
+Indices and tables
+==================
+
+* :ref:`search`
