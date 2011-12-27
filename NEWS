@@ -1,13 +1,15 @@
 0.3.2
 =====
-* fix various crashes with recent gcc versions and VC90
+* Fix various crashes with recent gcc versions and VC90
 * Try to fix stack save/restore on arm32
-* store and restore the threadstate on exceptions like pypy/stackless do
+* Store and restore the threadstate on exceptions like pypy/stackless do
+* GreenletExit is now based on BaseException on Python >= 2.5
 * Switch to using PyCapsule for Python 2.7 and 3.1
 * Port for AIX on PowerPC
 * Fix the sparc/solaris header
 * Improved build dependencies patch from flub.
-* #21 - Can't pass parent=None to greenlet.greenlet()
+* Can't pass parent=None to greenlet.greenlet() (fixes #21)
+* Rudimentary gc support (only non-live greenlets are garbage collected though)
 
 0.3.1
 =====
