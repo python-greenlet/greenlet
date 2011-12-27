@@ -14,7 +14,7 @@ def bits():
     """
 
     if sys.version_info[:2] < (2, 5):
-        if sys.maxint == (1 << 31) - 1:
+        if sys.maxint == 2147483647:  # (1 << 31) - 1
             return 32
         else:
             return 64
