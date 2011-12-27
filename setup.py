@@ -5,7 +5,7 @@ import sys, os, glob
 # workaround segfaults on openbsd. see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 if sys.platform == "openbsd4" and os.uname()[-1] == "i386":
-    os.environ["CFLAGS"] = "-Os"
+    os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
 
 try:
     from setuptools import setup, Extension
