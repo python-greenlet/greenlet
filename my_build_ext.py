@@ -3,9 +3,21 @@
 # build_ext -i"). it uses symlinks if possible and will rebuild when
 # changing the python version (unlike "setup.py build_ext -i")
 
-import sys, os, glob, shutil
+import sys, os, shutil
 
 from distutils.command.build_ext import build_ext as _build_ext
+
+
+def symlink_or_copy(src, dst):
+    if hasattr(os, 'symlink'):
+        try:
+            os.symlink(src, dst)
+            return
+        except OSError:  # symbolic link privilege not held??
+            pass
+
+    shutil.copyfile(src, dst)
+
 
 class build_ext(_build_ext):
     def build_extension(self, ext):
@@ -27,9 +39,6 @@ class build_ext(_build_ext):
             if self.verbose:
                 sys.stderr.write('Linking %s to %s\n' % (build_path, src_path))
 
-            if hasattr(os, 'symlink'):
-                os.symlink(build_path, src_path)
-            else:
-                shutil.copyfile(build_path, src_path)
+            symlink_or_copy(build_path, src_path)
 
         return result
