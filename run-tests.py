@@ -5,7 +5,8 @@ from distutils.spawn import spawn
 
 build = True
 verbosity = 2
-
+here = os.path.dirname(os.path.abspath(__file__))
+os.chdir(here)
 
 def bits():
     """determine if running on a 32 bit or 64 bit platform
@@ -55,7 +56,7 @@ if build:
 # -- find greenlet but skip the one in "."
 if not build:
     oldpath = sys.path[:]
-    sys.path.remove(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.remove(here)
 
 import greenlet
 
