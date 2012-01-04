@@ -2,16 +2,47 @@ include AUTHORS
 include LICENSE
 include LICENSE.PSF
 include MANIFEST.in
-include README.rst
 include NEWS
+include README.rst
+include benchmarks/chain.py
+include doc/Makefile
+include doc/conf.py
+include doc/greenlet.txt
+include doc/index.txt
+include doc/make.bat
 include greenlet.c
 include greenlet.h
-include slp_platformselect.h
-include setup.py
-include tox.ini
+include make-win-release
 include my_build_ext.py
+include platform/switch_amd64_unix.h
+include platform/switch_arm32_gcc.h
+include platform/switch_mips_unix.h
+include platform/switch_ppc_aix.h
+include platform/switch_ppc_linux.h
+include platform/switch_ppc_macosx.h
+include platform/switch_ppc_unix.h
+include platform/switch_s390_unix.h
+include platform/switch_sparc_sun_gcc.h
+include platform/switch_x64_masm.asm
+include platform/switch_x64_masm.obj
+include platform/switch_x64_msvc.h
+include platform/switch_x86_msvc.h
+include platform/switch_x86_unix.h
 include run-tests.py
-recursive-include benchmarks *
-recursive-include doc *
-recursive-include platform *.h
-recursive-include tests *.py *.c *.cpp
+include setup.cfg
+include setup.py
+include setup_switch_x64_masm.cmd
+include slp_platformselect.h
+include tests/__init__.py
+include tests/_test_extension.c
+include tests/_test_extension_cpp.cpp
+include tests/test_cpp.py
+include tests/test_extension_interface.py
+include tests/test_gc.py
+include tests/test_generator.py
+include tests/test_generator_nested.py
+include tests/test_greenlet.py
+include tests/test_leaks.py
+include tests/test_throw.py
+include tests/test_weakref.py
+include tox.ini
