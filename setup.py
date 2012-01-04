@@ -35,7 +35,7 @@ from my_build_ext import build_ext
 
 setup(
     name="greenlet",
-    version='0.3.2',
+    version='0.3.3',
     description='Lightweight in-process concurrent programming',
     long_description=open("README.rst").read(),
     maintainer="Ralf Schmitt",
