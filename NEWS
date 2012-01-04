@@ -1,3 +1,14 @@
+0.3.3
+=====
+* Use sphinx to build documentation and publish it on greenlet.rtfd.org
+* Prevent segfaults on openbsd 4/i386
+* Workaround gcc-4.0 not allowing to clobber rbx
+* Enhance test infrastructure
+* Fix possible compilation problems when including greenlet.h in C++ mode
+* Make the greenlet module work on x64 windows
+* Add a test for greenlet C++ exceptions
+* Fix compilation on Solaris with SunStudio
+
 0.3.2
 =====
 * Fix various crashes with recent gcc versions and VC90
