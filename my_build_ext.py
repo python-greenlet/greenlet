@@ -15,6 +15,8 @@ def symlink_or_copy(src, dst):
             return
         except OSError:  # symbolic link privilege not held??
             pass
+        except NotImplementedError:  # running on XP/'CreateSymbolicLinkW not found'
+            pass
 
     shutil.copyfile(src, dst)
 
