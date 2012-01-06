@@ -60,7 +60,7 @@ def main():
     for v, x in executables:
         if not os.path.exists(x):
             continue
-        for dist in ["bdist_egg", "bdist_wininst", "bdist_msi"]:
+        for dist in ["bdist_egg", "bdist_wininst"]:
             if (v, dist) == ("24", "bdist_msi"):
                 continue
             cmd = "%s setup.py -q %s %s" % (x, dist, upload)
