@@ -23,9 +23,8 @@ def symlink_or_copy(src, dst):
 
 class build_ext(_build_ext):
     def build_extension(self, ext):
+        self.inplace = 0
         result = _build_ext.build_extension(self, ext)
-        if self.inplace:
-            return result
         modpath = self.get_ext_fullname(ext.name).split('.')
         filename = self.get_ext_filename(ext.name)
         filename = os.path.split(filename)[-1]
