@@ -7,3 +7,4 @@ dist/
 .tox/
 greenlet.egg-info/
 /doc/_build
+__pycache__/
