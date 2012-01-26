@@ -1,6 +1,7 @@
 import unittest
 from greenlet import greenlet
 
+
 class genlet(greenlet):
 
     def __init__(self, *args, **kwds):
@@ -25,6 +26,7 @@ class genlet(greenlet):
     # Hack: Python < 2.6 compatibility
     next = __next__
 
+
 def Yield(value):
     g = greenlet.getcurrent()
     while not isinstance(g, genlet):
@@ -33,6 +35,7 @@ def Yield(value):
         g = g.parent
     g.parent.switch(value)
 
+
 def generator(func):
     class generator(genlet):
         fn = (func,)
@@ -40,9 +43,11 @@ def generator(func):
 
 # ____________________________________________________________
 
+
 class GeneratorTests(unittest.TestCase):
     def test_generator(self):
         seen = []
+
         def g(n):
             for i in range(n):
                 seen.append(i)

@@ -8,6 +8,7 @@ verbosity = 2
 here = os.path.dirname(os.path.abspath(__file__))
 os.chdir(here)
 
+
 def bits():
     """determine if running on a 32 bit or 64 bit platform
     just looking at sys.maxint isn't enough

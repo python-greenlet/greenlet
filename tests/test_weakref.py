@@ -3,10 +3,11 @@ import greenlet
 import weakref
 import unittest
 
+
 class WeakRefTests(unittest.TestCase):
     def test_dead_weakref(self):
         def _dead_greenlet():
-            g = greenlet.greenlet(lambda:None)
+            g = greenlet.greenlet(lambda: None)
             g.switch()
             return g
         o = weakref.ref(_dead_greenlet())

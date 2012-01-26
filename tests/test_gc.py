@@ -5,6 +5,7 @@ import weakref
 
 import greenlet
 
+
 class GCTests(unittest.TestCase):
     def test_circular_greenlet(self):
         class circular_greenlet(greenlet.greenlet):
@@ -29,6 +30,7 @@ class GCTests(unittest.TestCase):
             class inactive_greenlet(greenlet.greenlet):
                 def __init__(self):
                     greenlet.greenlet.__init__(self, run=self.run)
+
                 def run(self):
                     pass
             o = inactive_greenlet()

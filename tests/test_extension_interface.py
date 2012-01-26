@@ -4,6 +4,7 @@ import unittest
 import greenlet
 import _test_extension
 
+
 class CAPITests(unittest.TestCase):
     def test_switch(self):
         self.assertEqual(
@@ -49,6 +50,7 @@ class CAPITests(unittest.TestCase):
 
     def test_throw(self):
         seen = []
+
         def foo():
             try:
                 greenlet.getcurrent().parent.switch()

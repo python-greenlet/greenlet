@@ -14,6 +14,7 @@ except ImportError:
     from distutils.core import setup, Extension
     setuptools_args = dict()
 
+
 def _find_platform_headers():
     return glob.glob("platform/switch_*.h")
 

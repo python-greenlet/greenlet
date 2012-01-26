@@ -6,8 +6,10 @@ import unittest
 
 from greenlet import greenlet
 
+
 class SomeError(Exception):
     pass
+
 
 def fmain(seen):
     try:
@@ -17,6 +19,7 @@ def fmain(seen):
         raise
     raise SomeError
 
+
 def send_exception(g, exc):
     # note: send_exception(g, exc)  can be now done with  g.throw(exc).
     # the purpose of this test is to explicitely check the propagation rules.
@@ -25,9 +28,11 @@ def send_exception(g, exc):
     g1 = greenlet(crasher, parent=g)
     g1.switch(exc)
 
+
 class GreenletTests(unittest.TestCase):
     def test_simple(self):
         lst = []
+
         def f():
             lst.append(1)
             greenlet.getcurrent().parent.switch()
@@ -48,6 +53,7 @@ class GreenletTests(unittest.TestCase):
 
     def test_two_children(self):
         lst = []
+
         def f():
             lst.append(1)
             greenlet.getcurrent().parent.switch()
@@ -67,9 +73,11 @@ class GreenletTests(unittest.TestCase):
 
     def test_two_recursive_children(self):
         lst = []
+
         def f():
             lst.append(1)
             greenlet.getcurrent().parent.switch()
+
         def g():
             lst.append(1)
             g = greenlet(f)
@@ -82,6 +90,7 @@ class GreenletTests(unittest.TestCase):
 
     def test_threads(self):
         success = []
+
         def f():
             self.test_simple()
             success.append(True)
@@ -133,6 +142,7 @@ class GreenletTests(unittest.TestCase):
         lock.acquire()
         lock2 = threading.Lock()
         lock2.acquire()
+
         def f():
             g1 = greenlet(fmain)
             g1.switch(seen)
@@ -206,6 +216,7 @@ class GreenletTests(unittest.TestCase):
         error = None
         created_event = threading.Event()
         done_event = threading.Event()
+
         def foo():
             data['g'] = greenlet(lambda: None)
             created_event.set()
@@ -220,7 +231,6 @@ class GreenletTests(unittest.TestCase):
         self.assertTrue(error != None, "greenlet.error was not raised!")
         done_event.set()
         thread.join()
-
 
     def test_exc_state(self):
         def f():

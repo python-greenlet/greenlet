@@ -1,13 +1,14 @@
 import unittest
 from greenlet import greenlet
 
+
 class genlet(greenlet):
 
     def __init__(self, *args, **kwds):
         self.args = args
         self.kwds = kwds
         self.child = None
-        
+
     def run(self):
         fn, = self.fn
         fn(*self.args, **self.kwds)
@@ -28,9 +29,9 @@ class genlet(greenlet):
 
             result = child.switch()
         else:
-            self.parent = greenlet.getcurrent()            
+            self.parent = greenlet.getcurrent()
             result = self.switch()
-        
+
         if self:
             return result
         else:
@@ -39,9 +40,10 @@ class genlet(greenlet):
     # Hack: Python < 2.6 compatibility
     next = __next__
 
-def Yield(value, level = 1):
+
+def Yield(value, level=1):
     g = greenlet.getcurrent()
-    
+
     while level != 0:
         if not isinstance(g, genlet):
             raise RuntimeError('yield outside a genlet')
@@ -51,7 +53,8 @@ def Yield(value, level = 1):
         level -= 1
 
     g.switch(value)
-    
+
+
 def Genlet(func):
     class Genlet(genlet):
         fn = (func,)
@@ -59,43 +62,50 @@ def Genlet(func):
 
 # ____________________________________________________________
 
+
 def g1(n, seen):
     for i in range(n):
-        seen.append(i+1)
+        seen.append(i + 1)
         yield i
+
 
 def g2(n, seen):
     for i in range(n):
-        seen.append(i+1)
+        seen.append(i + 1)
         Yield(i)
 
 g2 = Genlet(g2)
 
+
 def nested(i):
     Yield(i)
 
+
 def g3(n, seen):
     for i in range(n):
-        seen.append(i+1)
+        seen.append(i + 1)
         nested(i)
 g3 = Genlet(g3)
+
 
 def a(n):
     if n == 0:
         return
-    for ii in ax(n-1):
+    for ii in ax(n - 1):
         Yield(ii)
     Yield(n)
 ax = Genlet(a)
+
 
 def perms(l):
     if len(l) > 1:
         for e in l:
             # No syntactical sugar for generator expressions
-            [Yield([e] + p) for p in perms([x for x in l if x!=e])]
+            [Yield([e] + p) for p in perms([x for x in l if x != e])]
     else:
         Yield(l)
 perms = Genlet(perms)
+
 
 def gr1(n):
     for ii in range(1, n):
@@ -104,11 +114,13 @@ def gr1(n):
 
 gr1 = Genlet(gr1)
 
+
 def gr2(n, seen):
     for ii in gr1(n):
         seen.append(ii)
 
 gr2 = Genlet(gr2)
+
 
 class NestedGeneratorTests(unittest.TestCase):
     def test_layered_genlets(self):
@@ -120,9 +132,9 @@ class NestedGeneratorTests(unittest.TestCase):
     def test_permutations(self):
         gen_perms = perms(list(range(4)))
         permutations = list(gen_perms)
-        self.assertEqual(len(permutations), 4*3*2*1)
-        self.assertTrue([0,1,2,3] in permutations)
-        self.assertTrue([3,2,1,0] in permutations)
+        self.assertEqual(len(permutations), 4 * 3 * 2 * 1)
+        self.assertTrue([0, 1, 2, 3] in permutations)
+        self.assertTrue([3, 2, 1, 0] in permutations)
         res = []
         for ii in zip(perms(list(range(4))), perms(list(range(3)))):
             res.append(ii)

@@ -3,8 +3,10 @@ import unittest
 
 from greenlet import greenlet
 
+
 def switch(*args):
     return greenlet.getcurrent().parent.switch(*args)
+
 
 class ThrowTests(unittest.TestCase):
     def test_class(self):
@@ -59,6 +61,7 @@ class ThrowTests(unittest.TestCase):
 
     def test_throw_goes_to_original_parent(self):
         main = greenlet.getcurrent()
+
         def f1():
             try:
                 main.switch("f1 ready to catch")
@@ -66,6 +69,7 @@ class ThrowTests(unittest.TestCase):
                 return "caught"
             else:
                 return "normal exit"
+
         def f2():
             main.switch("from f2")
 

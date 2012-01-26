@@ -29,6 +29,7 @@ if os.environ.get('GREENLET_TEST_CPP', 'yes').lower() not in ('0', 'no', 'false'
 else:
     TEST_EXTENSIONS_CPP = []
 
+
 def test_collector():
     """Collect all tests under the tests directory and return a
     unittest.TestSuite
@@ -41,6 +42,7 @@ def test_collector():
     if not TEST_EXTENSIONS_CPP:
         test_module_list.remove('tests.test_cpp')
     return unittest.TestLoader().loadTestsFromNames(test_module_list)
+
 
 def build_test_extensions():
     """Because distutils sucks, it just copies the entire contents of the build

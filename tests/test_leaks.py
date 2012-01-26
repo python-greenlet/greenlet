@@ -3,6 +3,7 @@ import sys
 
 import greenlet
 
+
 class ArgRefcountTests(unittest.TestCase):
     def test_arg_refs(self):
         args = ('a', 'b', 'c')
