@@ -8,6 +8,11 @@ if sys.platform == "openbsd4" and os.uname()[-1] == "i386":
     os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
 
 try:
+    if not (sys.modules.get("setuptools")
+            or "develop" in sys.argv
+            or "bdist_egg" in sys.argv
+            or "test"):
+        raise ImportError()
     from setuptools import setup, Extension
     setuptools_args = dict(test_suite='tests.test_collector', zip_safe=False)
 except ImportError:
