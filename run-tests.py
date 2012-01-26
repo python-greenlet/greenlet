@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import sys, os, getopt, unittest
+import sys, os, getopt, struct, unittest
 from distutils.spawn import spawn
 
 build = True
@@ -11,24 +11,8 @@ os.chdir(here)
 
 def bits():
     """determine if running on a 32 bit or 64 bit platform
-    just looking at sys.maxint isn't enough
-    x64 windows has sys.maxint == (1<<31) - 1
     """
-
-    if sys.version_info[:2] < (2, 5):
-        if sys.maxint == 2147483647:  # (1 << 31) - 1
-            return 32
-        else:
-            return 64
-
-    class X(object):
-        def __len__(self):
-            return 1 << 31
-    try:
-        len(X())
-        return 64
-    except OverflowError:
-        return 32
+    return struct.calcsize("P") * 8
 
 # -- parse options
 try:
