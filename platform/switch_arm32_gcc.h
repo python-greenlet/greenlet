@@ -34,7 +34,7 @@ slp_switch(void)
         register int *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
         __asm__ volatile ("str fp,%0" : "=m" (fp));
-        __asm__ ("mov %0,sp" : "=g" (stackref));
+        __asm__ ("mov %0,sp" : "=r" (stackref));
         {
                 SLP_SAVE_STATE(stackref, stsizediff);
                 __asm__ volatile (
