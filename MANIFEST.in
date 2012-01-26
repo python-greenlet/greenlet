@@ -5,6 +5,7 @@ include MANIFEST.in
 include NEWS
 include README.rst
 include benchmarks/chain.py
+include conftest.py
 include doc/Makefile
 include doc/conf.py
 include doc/greenlet.txt
