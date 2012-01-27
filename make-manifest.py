@@ -14,8 +14,6 @@ def main():
 
     remove("make-manifest.py")
     remove(".gitignore")
-    remove(".hgignore")
-    remove(".hgtags")
 
     files.sort()
 
