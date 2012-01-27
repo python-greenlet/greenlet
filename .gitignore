@@ -8,3 +8,5 @@ dist/
 greenlet.egg-info/
 /doc/_build
 __pycache__/
+/.ropeproject/
+/MANIFEST
