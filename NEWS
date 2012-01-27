@@ -1,3 +1,10 @@
+0.3.4
+=====
+* Use plain distutils for install command, this fixes installation of
+  the greenlet.h header.
+* Fix register constraint for arm32
+* Fix support for Linux/S390 zSeries
+
 0.3.3
 =====
 * Use sphinx to build documentation and publish it on greenlet.rtfd.org
