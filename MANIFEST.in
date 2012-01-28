@@ -45,5 +45,6 @@ include tests/test_generator_nested.py
 include tests/test_greenlet.py
 include tests/test_leaks.py
 include tests/test_throw.py
+include tests/test_version.py
 include tests/test_weakref.py
 include tox.ini
