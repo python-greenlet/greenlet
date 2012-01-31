@@ -1,10 +1,12 @@
 #! /usr/bin/env python
 
-import sys, os, glob
+import sys, os, glob, platform
 
-# workaround segfaults on openbsd. see
+# workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
-if sys.platform == "openbsd4" and os.uname()[-1] == "i386":
+# https://github.com/python-greenlet/greenlet/issues/4
+if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
+    or ".EL-i686-with-redhat-3." in platform.platform()):
     os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
 
 try:
