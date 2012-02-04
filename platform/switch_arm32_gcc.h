@@ -26,8 +26,9 @@
 #ifdef SLP_EVAL
 #define STACK_MAGIC 0
 #define REGS_TO_SAVE_GENERAL "r4", "r5", "r6", "r7", "r8", "r9", "lr"
-#if !defined(__SOFTFP__)
-#if defined(__VFP_FP__)
+#if defined(__SOFTFP__)
+#define REGS_TO_SAVE REGS_TO_SAVE_GENERAL
+#elif defined(__VFP_FP__)
 #define REGS_TO_SAVE REGS_TO_SAVE_GENERAL, "d8", "d9", "d10", "d11", \
                                            "d12", "d13", "d14", "d15"
 #elif defined(__MAVERICK__)
@@ -36,9 +37,6 @@
                                            "mvf12", "mvf13", "mvf14", "mvf15"
 #else
 #define REGS_TO_SAVE REGS_TO_SAVE_GENERAL, "f4", "f5", "f6", "f7"
-#endif
-#else
-#define REGS_TO_SAVE REGS_TO_SAVE_GENERAL
 #endif
 
 static int
