@@ -2,8 +2,9 @@
 =====
 * Use plain distutils for install command, this fixes installation of
   the greenlet.h header.
-* Fix register constraint for arm32
+* Enhanced arm32 support
 * Fix support for Linux/S390 zSeries
+* Workaround compiler bug on RHEL 3 / CentOS 3
 
 0.3.3
 =====
