@@ -16,7 +16,7 @@
 #include "platform/switch_ppc_macosx.h" /* Apple MacOS X on PowerPC */
 #elif defined(__GNUC__) && defined(_ARCH_PPC) && defined(_AIX)
 #include "platform/switch_ppc_aix.h" /* gcc on AIX/PowerPC */
-#elif defined(__GNUC__) && defined(sparc) && defined(sun)
+#elif defined(__GNUC__) && defined(sparc)
 #include "platform/switch_sparc_sun_gcc.h" /* SunOS sparc with gcc */
 #elif defined(__SUNPRO_C) && defined(sparc) && defined(sun)
 #include "platform/switch_sparc_sun_gcc.h" /* SunStudio on amd64 */
