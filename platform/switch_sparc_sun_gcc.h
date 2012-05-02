@@ -26,9 +26,9 @@
 
 #ifdef SLP_EVAL
 
-#include <sys/trap.h>
 
 #define STACK_MAGIC 0
+#define ST_FLUSH_WINDOWS 3
 
 static int
 slp_switch(void)
