@@ -10,6 +10,8 @@
 #include "platform/switch_amd64_unix.h" /* gcc on amd64 */
 #elif defined(__GNUC__) && defined(__i386__)
 #include "platform/switch_x86_unix.h" /* gcc on X86 */
+#elif defined(__GNUC__) && defined(__powerpc64__) && defined(__linux__)
+#include "platform/switch_ppc64_linux.h" /* gcc on PowerPC 64-bit */
 #elif defined(__GNUC__) && defined(__PPC__) && defined(__linux__)
 #include "platform/switch_ppc_linux.h" /* gcc on PowerPC */
 #elif defined(__GNUC__) && defined(__ppc__) && defined(__APPLE__)
