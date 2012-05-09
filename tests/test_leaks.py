@@ -1,7 +1,10 @@
 import unittest
 import sys
+import gc
 
+import weakref
 import greenlet
+import threading
 
 
 class ArgRefcountTests(unittest.TestCase):
@@ -21,3 +24,37 @@ class ArgRefcountTests(unittest.TestCase):
         for i in range(100):
             g.switch(**kwargs)
         self.assertEqual(sys.getrefcount(kwargs), 2)
+
+    def test_threaded_leak(self):
+        gg = []
+        def worker():
+            # only main greenlet present
+            gg.append(weakref.ref(greenlet.getcurrent()))
+        for i in xrange(2):
+            t = threading.Thread(target=worker)
+            t.start()
+            t.join()
+        greenlet.getcurrent()
+        gc.collect()
+        for g in gg:
+            self.assertTrue(g() is None)
+
+    def test_threaded_adv_leak(self):
+        gg = []
+        ll = []
+        def worker():
+            # main and additional *finished* greenlets
+            def additional():
+                ll.append(greenlet.getcurrent())
+            for i in xrange(2):
+                greenlet.greenlet(additional).switch()
+            gg.append(weakref.ref(greenlet.getcurrent()))
+        for i in xrange(3):
+            t = threading.Thread(target=worker)
+            t.start()
+            t.join()
+            del ll[:]
+        greenlet.getcurrent()
+        gc.collect()
+        for g in gg:
+            self.assertTrue(g() is None)

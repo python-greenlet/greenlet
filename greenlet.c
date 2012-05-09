@@ -174,14 +174,12 @@ static PyObject* PyExc_GreenletExit;
 #define GREENLET_tp_free PyObject_GC_Del
 #define GREENLET_tp_traverse green_traverse
 #define GREENLET_tp_clear green_clear
-#define GREENLET_tp_is_gc green_is_gc
 #else /* GREENLET_USE_GC */
 #define GREENLET_GC_FLAGS 0
 #define GREENLET_tp_alloc 0
 #define GREENLET_tp_free 0
 #define GREENLET_tp_traverse 0
 #define GREENLET_tp_clear 0
-#define GREENLET_tp_is_gc 0
 #endif /* !GREENLET_USE_GC */
 
 static PyGreenlet* green_create_main(void)
@@ -731,17 +729,16 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	return 0;
 }
 
-static int green_is_gc(PyGreenlet* self)
-{
-	int rval;
-	/* Main and alive greenlets are not garbage collectable */
-	rval = (self->stack_stop == (char *)-1 || self->stack_start != NULL) ? 0 : 1;
-	return rval;
-}
-
 static int green_clear(PyGreenlet* self)
 {
-	return 0; /* greenlet is not alive, so there's nothing to clear */
+	/* If we're clearing, we have to clear the run info so that we break up the
+	   cyclic dependency between the thread local storage and the current greenlet. */
+	Py_CLEAR(self->parent);
+	Py_CLEAR(self->run_info);
+	Py_CLEAR(self->exc_type);
+	Py_CLEAR(self->exc_value);
+	Py_CLEAR(self->exc_traceback);
+	return 0;
 }
 #endif
 
@@ -753,7 +750,7 @@ static void green_dealloc(PyGreenlet* self)
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
-	if (PyGreenlet_ACTIVE(self)) {
+	if (PyGreenlet_ACTIVE(self) && self->run_info != NULL) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
 		assert(Py_REFCNT(self) == 0);
@@ -1234,7 +1231,7 @@ PyTypeObject PyGreenlet_Type = {
 	GREENLET_tp_alloc,			/* tp_alloc */
 	green_new,				/* tp_new */
 	GREENLET_tp_free,			/* tp_free */        
-	(inquiry)GREENLET_tp_is_gc,		/* tp_is_gc */
+	0,					/* tp_is_gc */
 };
 
 static PyObject* mod_getcurrent(PyObject* self)
