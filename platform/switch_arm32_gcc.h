@@ -25,7 +25,17 @@
 
 #ifdef SLP_EVAL
 #define STACK_MAGIC 0
+#define REG_SP "sp"
+#define REG_SPSP "sp,sp"
+#ifdef __thumb__
+#define REG_FP "r7"
+#define REG_FPFP "r7,r7"
+#define REGS_TO_SAVE_GENERAL "r4", "r5", "r6", "r8", "r9", "r10", "r11", "lr"
+#else
+#define REG_FP "fp"
+#define REG_FPFP "fp,fp"
 #define REGS_TO_SAVE_GENERAL "r4", "r5", "r6", "r7", "r8", "r9", "lr"
+#endif
 #if defined(__SOFTFP__)
 #define REGS_TO_SAVE REGS_TO_SAVE_GENERAL
 #elif defined(__VFP_FP__)
@@ -45,19 +55,19 @@ slp_switch(void)
         void *fp;
         register int *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
-        __asm__ volatile ("mov r0, fp\n\tstr r0, %0" : "=m" (fp) : : "r0");
-        __asm__ ("mov %0,sp" : "=r" (stackref));
+        __asm__ volatile ("mov r0," REG_FP "\n\tstr r0,%0" : "=m" (fp) : : "r0");
+        __asm__ ("mov %0," REG_SP : "=r" (stackref));
         {
                 SLP_SAVE_STATE(stackref, stsizediff);
                 __asm__ volatile (
-                    "add sp,sp,%0\n"
-                    "add fp,fp,%0\n"
+                    "add " REG_SPSP ",%0\n"
+                    "add " REG_FPFP ",%0\n"
                     :
                     : "r" (stsizediff)
                     );
                 SLP_RESTORE_STATE();
         }
-        __asm__ volatile ("ldr r0, %0\n\tmov fp, r0" : : "m" (fp) : "r0");
+        __asm__ volatile ("ldr r0,%0\n\tmov " REG_FP ",r0" : : "m" (fp) : "r0");
         __asm__ volatile ("" : : : REGS_TO_SAVE);
         return 0;
 }
