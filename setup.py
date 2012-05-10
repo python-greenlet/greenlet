@@ -21,6 +21,12 @@ except ImportError:
     from distutils.core import setup, Extension
     setuptools_args = dict()
 
+def readfile(filename):
+    f = open(filename)
+    try:
+        return f.read()
+    finally:
+        f.close()
 
 def _find_platform_headers():
     return glob.glob("platform/switch_*.h")
@@ -45,7 +51,7 @@ setup(
     name="greenlet",
     version='0.3.4',
     description='Lightweight in-process concurrent programming',
-    long_description=open("README.rst").read(),
+    long_description=readfile("README.rst"),
     maintainer="Ralf Schmitt",
     maintainer_email="ralf@systemexit.de",
     url="https://github.com/python-greenlet/greenlet",
