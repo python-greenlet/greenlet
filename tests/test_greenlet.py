@@ -245,3 +245,20 @@ class GreenletTests(unittest.TestCase):
             self.assertEqual(sys.exc_info(), (None, None, None))
 
         greenlet(f).switch()
+
+    def test_instance_dict(self):
+        def f():
+            greenlet.getcurrent().test = 42
+        def deldict(g):
+            del g.__dict__
+        def setdict(g, value):
+            g.__dict__ = value
+        g = greenlet(f)
+        self.assertEqual(g.__dict__, {})
+        g.switch()
+        self.assertEqual(g.test, 42)
+        self.assertEqual(g.__dict__, {'test': 42})
+        g.__dict__ = g.__dict__
+        self.assertEqual(g.__dict__, {'test': 42})
+        self.assertRaises(TypeError, deldict, g)
+        self.assertRaises(TypeError, setdict, g, 42)

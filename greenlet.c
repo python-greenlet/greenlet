@@ -728,6 +728,7 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	Py_VISIT(self->exc_type);
 	Py_VISIT(self->exc_value);
 	Py_VISIT(self->exc_traceback);
+	Py_VISIT(self->dict);
 	return 0;
 }
 
@@ -802,6 +803,7 @@ static void green_dealloc(PyGreenlet* self)
 	Py_CLEAR(self->exc_type);
 	Py_CLEAR(self->exc_value);
 	Py_CLEAR(self->exc_traceback);
+	Py_CLEAR(self->dict);
 	if (self->weakreflist != NULL)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->run_info);
@@ -976,6 +978,36 @@ green_throw(PyGreenlet *self, PyObject *args)
 static int green_bool(PyGreenlet* self)
 {
 	return PyGreenlet_ACTIVE(self);
+}
+
+static PyObject* green_getdict(PyGreenlet* self, void* c)
+{
+	if (self->dict == NULL) {
+		self->dict = PyDict_New();
+		if (self->dict == NULL)
+			return NULL;
+	}
+	Py_INCREF(self->dict);
+	return self->dict;
+}
+
+static int green_setdict(PyGreenlet* self, PyObject* val, void* c)
+{
+	PyObject* tmp;
+
+	if (val == NULL) {
+		PyErr_SetString(PyExc_TypeError, "__dict__ may not be deleted");
+		return -1;
+	}
+	if (!PyDict_Check(val)) {
+		PyErr_SetString(PyExc_TypeError, "__dict__ must be a dictionary");
+		return -1;
+	}
+	tmp = self->dict;
+	Py_INCREF(val);
+	self->dict = val;
+	Py_XDECREF(tmp);
+	return 0;
 }
 
 static PyObject* green_getdead(PyGreenlet* self, void* c)
@@ -1156,6 +1188,8 @@ static PyMethodDef green_methods[] = {
 };
 
 static PyGetSetDef green_getsets[] = {
+	{"__dict__", (getter)green_getdict,
+		     (setter)green_setdict, /*XXX*/ NULL},
 	{"run",    (getter)green_getrun,
 		   (setter)green_setrun, /*XXX*/ NULL},
 	{"parent", (getter)green_getparent,
@@ -1229,7 +1263,7 @@ PyTypeObject PyGreenlet_Type = {
 	0,					/* tp_dict */
 	0,					/* tp_descr_get */
 	0,					/* tp_descr_set */
-	0,					/* tp_dictoffset */
+	offsetof(PyGreenlet, dict),		/* tp_dictoffset */
 	(initproc)green_init,			/* tp_init */
 	GREENLET_tp_alloc,			/* tp_alloc */
 	green_new,				/* tp_new */
