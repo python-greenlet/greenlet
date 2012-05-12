@@ -1116,6 +1116,13 @@ static PyObject* green_getframe(PyGreenlet* self, void* c)
 	return result;
 }
 
+static PyObject* green_getstate(PyGreenlet* self)
+{
+	PyErr_Format(PyExc_TypeError,
+		"cannot serialize '%s' object", Py_TYPE(self)->tp_name);
+	return NULL;
+}
+
 
 /*****************************************************************************
  * C interface
@@ -1215,6 +1222,7 @@ static PyMethodDef green_methods[] = {
     {"switch", (PyCFunction)green_switch,
      METH_VARARGS | METH_KEYWORDS, green_switch_doc},
     {"throw",  (PyCFunction)green_throw,  METH_VARARGS, green_throw_doc},
+    {"__getstate__", (PyCFunction)green_getstate, METH_NOARGS, NULL},
     {NULL,     NULL}		/* sentinel */
 };
 

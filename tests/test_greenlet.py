@@ -287,3 +287,8 @@ class GreenletTests(unittest.TestCase):
         self.assertRaises(ValueError, setparent, g, data['g'])
         done_event.set()
         thread.join()
+
+    def test_deepcopy(self):
+        import copy
+        self.assertRaises(TypeError, copy.copy, greenlet())
+        self.assertRaises(TypeError, copy.deepcopy, greenlet())
