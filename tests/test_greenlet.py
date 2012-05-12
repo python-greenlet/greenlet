@@ -262,3 +262,28 @@ class GreenletTests(unittest.TestCase):
         self.assertEqual(g.__dict__, {'test': 42})
         self.assertRaises(TypeError, deldict, g)
         self.assertRaises(TypeError, setdict, g, 42)
+
+    def test_threaded_reparent(self):
+        data = {}
+        created_event = threading.Event()
+        done_event = threading.Event()
+
+        def foo():
+            data['g'] = greenlet(lambda: None)
+            created_event.set()
+            done_event.wait()
+
+        def blank():
+            greenlet.getcurrent().parent.switch()
+
+        def setparent(g, value):
+            g.parent = value
+
+        thread = threading.Thread(target=foo)
+        thread.start()
+        created_event.wait()
+        g = greenlet(blank)
+        g.switch()
+        self.assertRaises(ValueError, setparent, g, data['g'])
+        done_event.set()
+        thread.join()

@@ -245,8 +245,13 @@ static int green_updatecurrent(void)
 
 static PyObject* green_statedict(PyGreenlet* g)
 {
-	while (!PyGreenlet_STARTED(g))
+	while (!PyGreenlet_STARTED(g)) {
 		g = g->parent;
+		if (g == NULL) {
+			/* garbage collected greenlet in chain */
+			return NULL;
+		}
+	}
 	return g->run_info;
 }
 
@@ -465,6 +470,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 {
 	/* _consumes_ a reference to the args tuple and kwargs dict,
 	   and return a new tuple reference */
+	PyObject* run_info;
 
 	/* check ts_current */
 	if (!STATE_OK) {
@@ -472,9 +478,11 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 		Py_XDECREF(kwargs);
 		return NULL;
 	}
-	if (green_statedict(target) != ts_current->run_info) {
-		PyErr_SetString(PyExc_GreenletError,
-				"cannot switch to a different thread");
+	run_info = green_statedict(target);
+	if (run_info == NULL || run_info != ts_current->run_info) {
+		PyErr_SetString(PyExc_GreenletError, run_info
+				? "cannot switch to a different thread"
+				: "cannot switch to a garbage collected greenlet");
 		Py_DECREF(args);
 		Py_XDECREF(kwargs);
 		return NULL;
@@ -734,15 +742,28 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 
 static int green_is_gc(PyGreenlet* self)
 {
-	int rval;
-	/* Main and alive greenlets are not garbage collectable */
-	rval = (self->stack_stop == (char *)-1 || self->stack_start != NULL) ? 0 : 1;
-	return rval;
+	/* Main greenlet can be garbage collected since it can only
+	   become unreachable if the underlying thread exited.
+	   Active greenlet cannot be garbage collected, however. */
+	if (PyGreenlet_MAIN(self) || !PyGreenlet_ACTIVE(self))
+		return 1;
+	return 0;
 }
 
 static int green_clear(PyGreenlet* self)
 {
-	return 0; /* greenlet is not alive, so there's nothing to clear */
+	/* Greenlet is only cleared if it is about to be collected.
+	   Since active greenlets are not garbage collectable, we can
+	   be sure that, even if they are deallocated during clear,
+	   nothing they reference is in unreachable or finalizers,
+	   so even if it switches we are relatively safe. */
+	Py_CLEAR(self->parent);
+	Py_CLEAR(self->run_info);
+	Py_CLEAR(self->exc_type);
+	Py_CLEAR(self->exc_value);
+	Py_CLEAR(self->exc_traceback);
+	Py_CLEAR(self->dict);
+	return 0;
 }
 #endif
 
@@ -754,7 +775,7 @@ static void green_dealloc(PyGreenlet* self)
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
-	if (PyGreenlet_ACTIVE(self)) {
+	if (PyGreenlet_ACTIVE(self) && self->run_info != NULL) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
 		assert(Py_REFCNT(self) == 0);
@@ -1057,6 +1078,7 @@ static PyObject* green_getparent(PyGreenlet* self, void* c)
 static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 {
 	PyGreenlet* p;
+	PyObject* run_info = NULL;
 	if (nparent == NULL) {
 		PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
 		return -1;
@@ -1070,6 +1092,15 @@ static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 			PyErr_SetString(PyExc_ValueError, "cyclic parent chain");
 			return -1;
 		}
+		run_info = PyGreenlet_ACTIVE(p) ? p->run_info : NULL;
+	}
+	if (run_info == NULL) {
+		PyErr_SetString(PyExc_ValueError, "parent must not be garbage collected");
+		return -1;
+	}
+	if (PyGreenlet_STARTED(self) && self->run_info != run_info) {
+		PyErr_SetString(PyExc_ValueError, "parent cannot be on a different thread");
+		return -1;
 	}
 	p = self->parent;
 	self->parent = (PyGreenlet*) nparent;

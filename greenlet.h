@@ -32,6 +32,7 @@ typedef struct _greenlet {
 } PyGreenlet;
 
 #define PyGreenlet_Check(op)      PyObject_TypeCheck(op, &PyGreenlet_Type)
+#define PyGreenlet_MAIN(op)       (((PyGreenlet*)(op))->stack_stop == (char*) -1)
 #define PyGreenlet_STARTED(op)    (((PyGreenlet*)(op))->stack_stop != NULL)
 #define PyGreenlet_ACTIVE(op)     (((PyGreenlet*)(op))->stack_start != NULL)
 #define PyGreenlet_GET_PARENT(op) (((PyGreenlet*)(op))->parent)
