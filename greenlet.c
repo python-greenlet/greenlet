@@ -775,7 +775,7 @@ static void green_dealloc(PyGreenlet* self)
 	PyObject_GC_UnTrack((PyObject *)self);
 	Py_TRASHCAN_SAFE_BEGIN(self);
 #endif /* GREENLET_USE_GC */
-	if (PyGreenlet_ACTIVE(self) && self->run_info != NULL) {
+	if (PyGreenlet_ACTIVE(self) && self->run_info != NULL && !PyGreenlet_MAIN(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
 		assert(Py_REFCNT(self) == 0);
