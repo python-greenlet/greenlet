@@ -18,3 +18,17 @@ class WeakRefTests(unittest.TestCase):
         o = weakref.ref(greenlet.greenlet())
         gc.collect()
         self.assertEqual(o(), None)
+
+    def test_dealloc_weakref(self):
+        seen = []
+        def worker():
+            try:
+                greenlet.getcurrent().parent.switch()
+            finally:
+                seen.append(g())
+        g = greenlet.greenlet(worker)
+        g.switch()
+        g2 = greenlet.greenlet(lambda: None, g)
+        g = weakref.ref(g2)
+        g2 = None
+        self.assertEqual(seen, [None])

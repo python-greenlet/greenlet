@@ -820,14 +820,14 @@ static void green_dealloc(PyGreenlet* self)
 			goto green_dealloc_end;
 		}
 	}
+	if (self->weakreflist != NULL)
+		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->parent);
+	Py_CLEAR(self->run_info);
 	Py_CLEAR(self->exc_type);
 	Py_CLEAR(self->exc_value);
 	Py_CLEAR(self->exc_traceback);
 	Py_CLEAR(self->dict);
-	if (self->weakreflist != NULL)
-		PyObject_ClearWeakRefs((PyObject *) self);
-	Py_CLEAR(self->run_info);
 	Py_TYPE(self)->tp_free((PyObject*) self);
 green_dealloc_end:
 #ifdef GREENLET_USE_GC
