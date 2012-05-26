@@ -689,16 +689,19 @@ static int kill_greenlet(PyGreenlet* self)
 		   reference */
 		PyObject* result;
 		PyGreenlet* oldparent;
+		PyGreenlet* tmp;
 		if (!STATE_OK) {
 			return -1;
 		}
 		oldparent = self->parent;
 		self->parent = ts_current;
-		Py_INCREF(ts_current);
-		Py_XDECREF(oldparent);
+		Py_INCREF(self->parent);
 		/* Send the greenlet a GreenletExit exception. */
 		PyErr_SetNone(PyExc_GreenletExit);
 		result = g_switch(self, NULL, NULL);
+		tmp = self->parent;
+		self->parent = oldparent;
+		Py_XDECREF(tmp);
 		if (result == NULL)
 			return -1;
 		Py_DECREF(result);

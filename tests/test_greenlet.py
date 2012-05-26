@@ -292,3 +292,23 @@ class GreenletTests(unittest.TestCase):
         import copy
         self.assertRaises(TypeError, copy.copy, greenlet())
         self.assertRaises(TypeError, copy.deepcopy, greenlet())
+
+    def test_parent_restored_on_kill(self):
+        hub = greenlet(lambda: None)
+        main = greenlet.getcurrent()
+        result = []
+        def worker():
+            try:
+                # Wait to be killed
+                main.switch()
+            except greenlet.GreenletExit:
+                # Resurrect and switch to parent
+                result.append(greenlet.getcurrent().parent)
+                result.append(greenlet.getcurrent())
+                hub.switch()
+        g = greenlet(worker, parent=hub)
+        g.switch()
+        del g
+        self.assertTrue(result)
+        self.assertEqual(result[0], main)
+        self.assertEqual(result[1].parent, hub)
