@@ -791,23 +791,27 @@ static void green_dealloc(PyGreenlet* self)
 		}
 		/* Restore the saved exception. */
 		PyErr_Restore(error_type, error_value, error_traceback);
-		/* Undo the temporary resurrection; can't use DECREF here,
-		 * it would cause a recursive call.
+		/* Check for no resurrection must be done while we keep
+		 * our internal reference, otherwise PyFile_WriteObject
+		 * causes recursion if using Py_INCREF/Py_DECREF
 		 */
-		assert(Py_REFCNT(self) > 0);
-		--Py_REFCNT(self);
-		if (Py_REFCNT(self) == 0 && PyGreenlet_ACTIVE(self)) {
+		if (Py_REFCNT(self) == 1 && PyGreenlet_ACTIVE(self)) {
 			/* Not resurrected, but still not dead!
 			   XXX what else should we do? we complain. */
 			PyObject* f = PySys_GetObject("stderr");
+			Py_INCREF(self); /* leak! */
 			if (f != NULL) {
 				PyFile_WriteString("GreenletExit did not kill ",
 						   f);
 				PyFile_WriteObject((PyObject*) self, f, 0);
 				PyFile_WriteString("\n", f);
 			}
-			Py_INCREF(self);   /* leak! */
 		}
+		/* Undo the temporary resurrection; can't use DECREF here,
+		 * it would cause a recursive call.
+		 */
+		assert(Py_REFCNT(self) > 0);
+		--Py_REFCNT(self);
 		if (Py_REFCNT(self) != 0) {
 			/* Resurrected! */
 			Py_ssize_t refcnt = Py_REFCNT(self);
