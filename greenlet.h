@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define GREENLET_VERSION "0.3.4"
+#define GREENLET_VERSION "0.4.0"
 
 typedef struct _greenlet {
 	PyObject_HEAD
