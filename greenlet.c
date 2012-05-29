@@ -129,12 +129,15 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
  * be borrowed or no longer valid, so better be paranoid
  */
 #define g_passaround_clear() do { \
+	PyObject *exc, *val, *tb; \
 	PyObject* args = ts_passaround_args; \
 	PyObject* kwargs = ts_passaround_kwargs; \
 	ts_passaround_args = NULL; \
 	ts_passaround_kwargs = NULL; \
+	PyErr_Fetch(&exc, &val, &tb); \
 	Py_XDECREF(args); \
 	Py_XDECREF(kwargs); \
+	PyErr_Restore(exc, val, tb); \
 } while(0)
 
 #define g_passaround_return_args() do { \
@@ -613,6 +616,7 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 		PyObject* args;
 		PyObject* kwargs;
 		PyObject* result;
+		PyGreenlet* parent;
 		PyGreenlet* ts_self = ts_current;
 		ts_self->stack_start = (char*) 1;  /* running */
 
@@ -632,8 +636,14 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 
 		/* jump back to parent */
 		ts_self->stack_start = NULL;  /* dead */
-		g_switch(ts_self->parent, result, NULL);
-		/* must not return from here! */
+		for (parent = ts_self->parent; parent != NULL; parent = parent->parent) {
+			result = g_switch(parent, result, NULL);
+			/* Return here means switch to parent failed,
+			 * in which case we throw *current* exception
+			 * to the next parent in chain.
+			 */
+		}
+		/* We ran out of parents, cannot continue */
 		PyErr_WriteUnraisable((PyObject *) ts_self);
 		Py_FatalError("greenlets cannot continue");
 	}

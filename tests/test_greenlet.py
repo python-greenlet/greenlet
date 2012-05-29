@@ -312,3 +312,11 @@ class GreenletTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(result[0], main)
         self.assertEqual(result[1].parent, hub)
+
+    def test_parent_return_failure(self):
+        # No run causes AttributeError on switch
+        g1 = greenlet()
+        # Greenlet that implicitly switches to parent
+        g2 = greenlet(lambda: None, parent=g1)
+        # AttributeError should propagate to us, no fatal errors
+        self.assertRaises(AttributeError, g2.switch)
