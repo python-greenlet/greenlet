@@ -445,6 +445,11 @@ static int g_switchstack(void)
 	}
 	err = slp_switch();
 	if (err < 0) {   /* error */
+		PyGreenlet* current = ts_current;
+		current->top_frame = NULL;
+		current->exc_type = NULL;
+		current->exc_value = NULL;
+		current->exc_traceback = NULL;
 		g_passaround_clear();
 	}
 	else {
