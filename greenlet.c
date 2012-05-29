@@ -488,11 +488,11 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	}
 	run_info = green_statedict(target);
 	if (run_info == NULL || run_info != ts_current->run_info) {
+		Py_DECREF(args);
+		Py_XDECREF(kwargs);
 		PyErr_SetString(PyExc_GreenletError, run_info
 				? "cannot switch to a different thread"
 				: "cannot switch to a garbage collected greenlet");
-		Py_DECREF(args);
-		Py_XDECREF(kwargs);
 		return NULL;
 	}
 
@@ -501,7 +501,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 
 	/* find the real target by ignoring dead greenlets,
 	   and if necessary starting a greenlet. */
-	while (1) {
+	while (target) {
 		if (PyGreenlet_ACTIVE(target)) {
 			ts_target = target;
 			g_switchstack();
@@ -537,6 +537,10 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	else
 	{
 		PyObject *tuple = PyTuple_New(2);
+		if (tuple == NULL) {
+			g_passaround_clear();
+			return NULL;
+		}
 		PyTuple_SetItem(tuple, 0, ts_passaround_args);
 		PyTuple_SetItem(tuple, 1, ts_passaround_kwargs);
 		ts_passaround_args = NULL;
@@ -573,7 +577,10 @@ g_handle_exit(PyObject *result)
 		}
 		else
 		{
+			PyObject *exc, *val, *tb;
+			PyErr_Fetch(&exc, &val, &tb);
 			Py_DECREF(r);
+			PyErr_Restore(exc, val, tb);
 		}
 	}
 	return result;
@@ -621,22 +628,29 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 		PyObject* args;
 		PyObject* kwargs;
 		PyObject* result;
+		PyObject *exc = NULL, *val = NULL, *tb = NULL;
 		PyGreenlet* parent;
 		PyGreenlet* ts_self = ts_current;
 		ts_self->stack_start = (char*) 1;  /* running */
 
 		args = ts_passaround_args;
 		kwargs = ts_passaround_kwargs;
-		if (args == NULL)    /* pending exception */
+		if (args == NULL) {
+			/* pending exception */
 			result = NULL;
-		else {
+			PyErr_Fetch(&exc, &val, &tb);
+		} else {
 			/* call g.run(*args, **kwargs) */
 			result = PyEval_CallObjectWithKeywords(
 				run, args, kwargs);
+			if (result == NULL)
+				PyErr_Fetch(&exc, &val, &tb);
 			Py_DECREF(args);
 			Py_XDECREF(kwargs);
 		}
 		Py_DECREF(run);
+		if (result == NULL)
+			PyErr_Restore(exc, val, tb);
 		result = g_handle_exit(result);
 
 		/* jump back to parent */
