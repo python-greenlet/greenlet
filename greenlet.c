@@ -806,8 +806,6 @@ static void green_dealloc(PyGreenlet* self)
 			PyErr_WriteUnraisable((PyObject*) self);
 			/* XXX what else should we do? */
 		}
-		/* Restore the saved exception. */
-		PyErr_Restore(error_type, error_value, error_traceback);
 		/* Check for no resurrection must be done while we keep
 		 * our internal reference, otherwise PyFile_WriteObject
 		 * causes recursion if using Py_INCREF/Py_DECREF
@@ -824,6 +822,8 @@ static void green_dealloc(PyGreenlet* self)
 				PyFile_WriteString("\n", f);
 			}
 		}
+		/* Restore the saved exception. */
+		PyErr_Restore(error_type, error_value, error_traceback);
 		/* Undo the temporary resurrection; can't use DECREF here,
 		 * it would cause a recursive call.
 		 */
