@@ -129,15 +129,12 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
  * be borrowed or no longer valid, so better be paranoid
  */
 #define g_passaround_clear() do { \
-	PyObject *exc, *val, *tb; \
 	PyObject* args = ts_passaround_args; \
 	PyObject* kwargs = ts_passaround_kwargs; \
 	ts_passaround_args = NULL; \
 	ts_passaround_kwargs = NULL; \
-	PyErr_Fetch(&exc, &val, &tb); \
 	Py_XDECREF(args); \
 	Py_XDECREF(kwargs); \
-	PyErr_Restore(exc, val, tb); \
 } while(0)
 
 #define g_passaround_return_args() do { \
@@ -577,10 +574,7 @@ g_handle_exit(PyObject *result)
 		}
 		else
 		{
-			PyObject *exc, *val, *tb;
-			PyErr_Fetch(&exc, &val, &tb);
 			Py_DECREF(r);
-			PyErr_Restore(exc, val, tb);
 		}
 	}
 	return result;
@@ -628,7 +622,6 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 		PyObject* args;
 		PyObject* kwargs;
 		PyObject* result;
-		PyObject *exc = NULL, *val = NULL, *tb = NULL;
 		PyGreenlet* parent;
 		PyGreenlet* ts_self = ts_current;
 		ts_self->stack_start = (char*) 1;  /* running */
@@ -638,19 +631,14 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 		if (args == NULL) {
 			/* pending exception */
 			result = NULL;
-			PyErr_Fetch(&exc, &val, &tb);
 		} else {
 			/* call g.run(*args, **kwargs) */
 			result = PyEval_CallObjectWithKeywords(
 				run, args, kwargs);
-			if (result == NULL)
-				PyErr_Fetch(&exc, &val, &tb);
 			Py_DECREF(args);
 			Py_XDECREF(kwargs);
 		}
 		Py_DECREF(run);
-		if (result == NULL)
-			PyErr_Restore(exc, val, tb);
 		result = g_handle_exit(result);
 
 		/* jump back to parent */
