@@ -223,8 +223,8 @@ static int green_updatecurrent(void)
 	    (PyGreenlet*) PyDict_GetItem(tstate->dict, ts_curkey))) {
 		/* found -- remove it, to avoid keeping a ref */
 		Py_INCREF(next);
-		if (PyDict_DelItem(tstate->dict, ts_curkey))
-			PyErr_Clear();
+		if (PyDict_DelItem(tstate->dict, ts_curkey) < 0)
+			PyErr_WriteUnraisable(ts_curkey);
 	}
 	else {
 		/* first time we see this tstate */
