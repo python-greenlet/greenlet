@@ -833,10 +833,10 @@ static void green_dealloc(PyGreenlet* self)
 			/* Resurrected! */
 			Py_ssize_t refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
+			Py_REFCNT(self) = refcnt;
 #ifdef GREENLET_USE_GC
 			PyObject_GC_Track((PyObject *)self);
 #endif
-			Py_REFCNT(self) = refcnt;
 #ifdef COUNT_ALLOCS
 			--Py_TYPE(self)->tp_frees;
 			--Py_TYPE(self)->tp_allocs;
