@@ -344,3 +344,19 @@ class GreenletTests(unittest.TestCase):
         t.start()
         t.join()
         self.assertRaises(greenlet.error, result[0].throw, SomeError())
+
+    def test_recursive_startup(self):
+        class convoluted(greenlet):
+            def __init__(self):
+                greenlet.__init__(self)
+                self.count = 0
+            def __getattribute__(self, name):
+                if name == 'run' and self.count == 0:
+                    self.count = 1
+                    self.switch(43)
+                return greenlet.__getattribute__(self, name)
+            def run(self, value):
+                while True:
+                    self.parent.switch(value)
+        g = convoluted()
+        self.assertEqual(g.switch(42), 43)
