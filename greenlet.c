@@ -282,14 +282,14 @@ static int GREENLET_NOINLINE(slp_save_state)(char*);
 #if !(defined(MS_WIN64) && defined(_M_X64))
 static int GREENLET_NOINLINE(slp_switch)(void);
 #endif
-static void GREENLET_NOINLINE(g_initialstub)(void*);
+static int GREENLET_NOINLINE(g_initialstub)(void*);
 #define GREENLET_NOINLINE_INIT() do {} while(0)
 #else
 /* force compiler to call functions via pointers */
 static void (*slp_restore_state)(void);
 static int (*slp_save_state)(char*);
 static int (*slp_switch)(void);
-static void (*g_initialstub)(void*);
+static int (*g_initialstub)(void*);
 #define GREENLET_NOINLINE(name) cannot_inline_ ## name
 #define GREENLET_NOINLINE_INIT() do { \
 	slp_restore_state = GREENLET_NOINLINE(slp_restore_state); \
@@ -447,7 +447,6 @@ static int g_switchstack(void)
 		current->exc_type = NULL;
 		current->exc_value = NULL;
 		current->exc_traceback = NULL;
-		g_passaround_clear();
 	}
 	else {
 		PyGreenlet* target = ts_target;
@@ -501,13 +500,19 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	while (target) {
 		if (PyGreenlet_ACTIVE(target)) {
 			ts_target = target;
-			g_switchstack();
+			if (g_switchstack() < 0) {
+				g_passaround_clear();
+				return NULL;
+			}
 			break;
 		}
 		if (!PyGreenlet_STARTED(target)) {
 			void* dummymarker;
 			ts_target = target;
-			g_initialstub(&dummymarker);
+			if (g_initialstub(&dummymarker) < 0) {
+				g_passaround_clear();
+				return NULL;
+			}
 			break;
 		}
 		target = target->parent;
@@ -580,7 +585,7 @@ g_handle_exit(PyObject *result)
 	return result;
 }
 
-static void GREENLET_NOINLINE(g_initialstub)(void* mark)
+static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 {
 	int err;
 	PyObject* o;
@@ -591,11 +596,10 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 	/* ts_target.run is the object to call in the new greenlet */
 	PyObject* run = PyObject_GetAttrString((PyObject*) ts_target, "run");
 	if (run == NULL) {
-		g_passaround_clear();
 		Py_XDECREF(exc);
 		Py_XDECREF(val);
 		Py_XDECREF(tb);
-		return;
+		return -1;
 	}
 	/* restore saved exception */
 	PyErr_Restore(exc, val, tb);
@@ -663,6 +667,7 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 		Py_FatalError("greenlets cannot continue");
 	}
 	/* back in the parent */
+	return err;
 }
 
 
