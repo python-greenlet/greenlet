@@ -538,8 +538,8 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 			g_passaround_clear();
 			return NULL;
 		}
-		PyTuple_SetItem(tuple, 0, ts_passaround_args);
-		PyTuple_SetItem(tuple, 1, ts_passaround_kwargs);
+		PyTuple_SET_ITEM(tuple, 0, ts_passaround_args);
+		PyTuple_SET_ITEM(tuple, 1, ts_passaround_kwargs);
 		ts_passaround_args = NULL;
 		ts_passaround_kwargs = NULL;
 		return tuple;
