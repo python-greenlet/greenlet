@@ -331,3 +331,16 @@ class GreenletTests(unittest.TestCase):
                 return greenlet.__getattribute__(self, name)
         g = mygreenlet(lambda: None)
         self.assertRaises(SomeError, g.throw, SomeError())
+
+    def test_throw_doesnt_crash(self):
+        result = []
+        def worker():
+            greenlet.getcurrent().parent.switch()
+        def creator():
+            g = greenlet(worker)
+            g.switch()
+            result.append(g)
+        t = threading.Thread(target=creator)
+        t.start()
+        t.join()
+        self.assertRaises(greenlet.error, result[0].throw, SomeError())

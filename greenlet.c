@@ -479,13 +479,13 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 
 	/* check ts_current */
 	if (!STATE_OK) {
-		Py_DECREF(args);
+		Py_XDECREF(args);
 		Py_XDECREF(kwargs);
 		return NULL;
 	}
 	run_info = green_statedict(target);
 	if (run_info == NULL || run_info != ts_current->run_info) {
-		Py_DECREF(args);
+		Py_XDECREF(args);
 		Py_XDECREF(kwargs);
 		PyErr_SetString(PyExc_GreenletError, run_info
 				? "cannot switch to a different thread"
