@@ -584,13 +584,21 @@ static void GREENLET_NOINLINE(g_initialstub)(void* mark)
 {
 	int err;
 	PyObject* o;
+	PyObject *exc, *val, *tb;
 
+	/* save exception in case getattr clears it */
+	PyErr_Fetch(&exc, &val, &tb);
 	/* ts_target.run is the object to call in the new greenlet */
 	PyObject* run = PyObject_GetAttrString((PyObject*) ts_target, "run");
 	if (run == NULL) {
 		g_passaround_clear();
+		Py_XDECREF(exc);
+		Py_XDECREF(val);
+		Py_XDECREF(tb);
 		return;
 	}
+	/* restore saved exception */
+	PyErr_Restore(exc, val, tb);
 	/* now use run_info to store the statedict */
 	o = ts_target->run_info;
 	ts_target->run_info = green_statedict(ts_target->parent);

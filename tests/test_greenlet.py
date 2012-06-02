@@ -320,3 +320,14 @@ class GreenletTests(unittest.TestCase):
         g2 = greenlet(lambda: None, parent=g1)
         # AttributeError should propagate to us, no fatal errors
         self.assertRaises(AttributeError, g2.switch)
+
+    def test_throw_exception_not_lost(self):
+        class mygreenlet(greenlet):
+            def __getattribute__(self, name):
+                try:
+                    raise Exception()
+                except:
+                    pass
+                return greenlet.__getattribute__(self, name)
+        g = mygreenlet(lambda: None)
+        self.assertRaises(SomeError, g.throw, SomeError())
