@@ -207,15 +207,23 @@ static PyGreenlet* green_create_main(void)
 
 static int green_updatecurrent(void)
 {
+	PyObject *exc, *val, *tb;
 	PyThreadState* tstate;
 	PyGreenlet* next;
 	PyGreenlet* previous;
 	PyObject* deleteme;
 
+	/* save current exception */
+	PyErr_Fetch(&exc, &val, &tb);
+
 	/* save ts_current as the current greenlet of its own thread */
 	previous = ts_current;
-	if (PyDict_SetItem(previous->run_info, ts_curkey, (PyObject*) previous))
+	if (PyDict_SetItem(previous->run_info, ts_curkey, (PyObject*) previous)) {
+		Py_XDECREF(exc);
+		Py_XDECREF(val);
+		Py_XDECREF(tb);
 		return -1;
+	}
 
 	/* get ts_current from the active tstate */
 	tstate = PyThreadState_GET();
@@ -223,23 +231,31 @@ static int green_updatecurrent(void)
 	    (PyGreenlet*) PyDict_GetItem(tstate->dict, ts_curkey))) {
 		/* found -- remove it, to avoid keeping a ref */
 		Py_INCREF(next);
-		if (PyDict_DelItem(tstate->dict, ts_curkey) < 0)
-			PyErr_WriteUnraisable(ts_curkey);
+		PyDict_DelItem(tstate->dict, ts_curkey);
 	}
 	else {
 		/* first time we see this tstate */
 		next = green_create_main();
-		if (next == NULL)
+		if (next == NULL) {
+			Py_XDECREF(exc);
+			Py_XDECREF(val);
+			Py_XDECREF(tb);
 			return -1;
+		}
 	}
 	ts_current = next;
 	Py_DECREF(previous);
+
 	/* green_dealloc() cannot delete greenlets from other threads, so
 	   it stores them in the thread dict; delete them now. */
 	deleteme = PyDict_GetItem(tstate->dict, ts_delkey);
 	if (deleteme != NULL) {
 		PyList_SetSlice(deleteme, 0, INT_MAX, NULL);
 	}
+
+	/* restore current exception */
+	PyErr_Restore(exc, val, tb);
+
 	return 0;
 }
 
