@@ -209,41 +209,46 @@ static int green_updatecurrent(void)
 {
 	PyObject *exc, *val, *tb;
 	PyThreadState* tstate;
-	PyGreenlet* next;
+	PyGreenlet* current;
 	PyGreenlet* previous;
 	PyObject* deleteme;
 
 	/* save current exception */
 	PyErr_Fetch(&exc, &val, &tb);
 
-	/* save ts_current as the current greenlet of its own thread */
-	previous = ts_current;
-	if (PyDict_SetItem(previous->run_info, ts_curkey, (PyObject*) previous)) {
-		Py_XDECREF(exc);
-		Py_XDECREF(val);
-		Py_XDECREF(tb);
-		return -1;
-	}
-
 	/* get ts_current from the active tstate */
 	tstate = PyThreadState_GET();
-	if (tstate->dict && (next =
+	if (tstate->dict && (current =
 	    (PyGreenlet*) PyDict_GetItem(tstate->dict, ts_curkey))) {
 		/* found -- remove it, to avoid keeping a ref */
-		Py_INCREF(next);
+		Py_INCREF(current);
 		PyDict_DelItem(tstate->dict, ts_curkey);
 	}
 	else {
 		/* first time we see this tstate */
-		next = green_create_main();
-		if (next == NULL) {
+		current = green_create_main();
+		if (current == NULL) {
 			Py_XDECREF(exc);
 			Py_XDECREF(val);
 			Py_XDECREF(tb);
 			return -1;
 		}
 	}
-	ts_current = next;
+
+green_updatecurrent_retry:
+	/* update ts_current as soon as possible, in case of nested switches */
+	Py_INCREF(current);
+	previous = ts_current;
+	ts_current = current;
+
+	/* save ts_current as the current greenlet of its own thread */
+	if (PyDict_SetItem(previous->run_info, ts_curkey, (PyObject*) previous)) {
+		Py_DECREF(current);
+		Py_XDECREF(exc);
+		Py_XDECREF(val);
+		Py_XDECREF(tb);
+		return -1;
+	}
 	Py_DECREF(previous);
 
 	/* green_dealloc() cannot delete greenlets from other threads, so
@@ -252,6 +257,17 @@ static int green_updatecurrent(void)
 	if (deleteme != NULL) {
 		PyList_SetSlice(deleteme, 0, INT_MAX, NULL);
 	}
+
+	if (ts_current != current) {
+		/* some Python code executed above and there was a thread switch,
+		 * so ts_current points to some other thread again. We need to
+		 * delete ts_curkey (it's likely there) and retry. */
+		PyDict_DelItem(tstate->dict, ts_curkey);
+		goto green_updatecurrent_retry;
+	}
+
+	/* release an extra reference */
+	Py_DECREF(current);
 
 	/* restore current exception */
 	PyErr_Restore(exc, val, tb);

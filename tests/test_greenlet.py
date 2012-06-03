@@ -360,3 +360,50 @@ class GreenletTests(unittest.TestCase):
                     self.parent.switch(value)
         g = convoluted()
         self.assertEqual(g.switch(42), 43)
+
+    def test_threaded_updatecurrent(self):
+        # released when main thread should execute
+        lock1 = threading.Lock()
+        lock1.acquire()
+        # released when another thread should execute
+        lock2 = threading.Lock()
+        lock2.acquire()
+        class finalized(object):
+            def __del__(self):
+                # happens while in green_updatecurrent() in main greenlet
+                # should be very careful not to accidentally call it again
+                # at the same time we must make sure another thread executes
+                lock2.release()
+                lock1.acquire()
+                # now ts_current belongs to another thread
+        def deallocator():
+            greenlet.getcurrent().parent.switch()
+        def fthread():
+            lock2.acquire()
+            greenlet.getcurrent()
+            del g[0]
+            lock1.release()
+            lock2.acquire()
+            greenlet.getcurrent()
+            lock1.release()
+        main = greenlet.getcurrent()
+        g = [greenlet(deallocator)]
+        g[0].bomb = finalized()
+        g[0].switch()
+        t = threading.Thread(target=fthread)
+        t.start()
+        # let another thread grab ts_current and deallocate g[0]
+        lock2.release()
+        lock1.acquire()
+        # this is the corner stone
+        # getcurrent() will notice that ts_current belongs to another thread
+        # and start the update process, which would notice that g[0] should
+        # be deallocated, and that will execute an object's finalizer. Now,
+        # that object will let another thread run so it can grab ts_current
+        # again, which would likely crash the interpreter if there's no
+        # check for this case at the end of green_updatecurrent(). This test
+        # passes if getcurrent() returns correct result, but it's likely
+        # to randomly crash if it's not anyway.
+        self.assertEqual(greenlet.getcurrent(), main)
+        # wait for another thread to complete, just in case
+        t.join()
