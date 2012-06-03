@@ -881,8 +881,7 @@ static void green_dealloc(PyGreenlet* self)
 		 * it would cause a recursive call.
 		 */
 		assert(Py_REFCNT(self) > 0);
-		--Py_REFCNT(self);
-		if (Py_REFCNT(self) != 0) {
+		if (--Py_REFCNT(self) != 0) {
 			/* Resurrected! */
 			Py_ssize_t refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
@@ -890,6 +889,7 @@ static void green_dealloc(PyGreenlet* self)
 #ifdef GREENLET_USE_GC
 			PyObject_GC_Track((PyObject *)self);
 #endif
+			_Py_DEC_REFTOTAL;
 #ifdef COUNT_ALLOCS
 			--Py_TYPE(self)->tp_frees;
 			--Py_TYPE(self)->tp_allocs;
