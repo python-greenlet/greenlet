@@ -964,8 +964,6 @@ static PyObject* green_switch(
 	PyObject* args,
 	PyObject* kwargs)
 {
-	if (!STATE_OK)
-		return NULL;
 	Py_INCREF(args);
 	Py_XINCREF(kwargs);
 	return single_result(g_switch(self, args, kwargs));
@@ -1061,8 +1059,6 @@ green_throw(PyGreenlet *self, PyObject *args)
 		goto failed_throw;
 	}
 
-	if (!STATE_OK)
-		goto failed_throw;
 	return throw_greenlet(self, typ, val, tb);
 
  failed_throw:
@@ -1220,10 +1216,6 @@ PyGreenlet_GetCurrent(void)
 static int
 PyGreenlet_SetParent(PyGreenlet *g, PyGreenlet *nparent)
 {
-	if (!STATE_OK) {
-		return -1;
-	}
-
 	if (!PyGreenlet_Check(g)) {
 		PyErr_SetString(PyExc_TypeError, "parent must be a greenlet");
 		return -1;
