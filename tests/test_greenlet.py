@@ -407,3 +407,27 @@ class GreenletTests(unittest.TestCase):
         self.assertEqual(greenlet.getcurrent(), main)
         # wait for another thread to complete, just in case
         t.join()
+
+    def test_dealloc_switch_args_not_lost(self):
+        seen = []
+        def worker():
+            # wait for the value
+            value = greenlet.getcurrent().parent.switch()
+            # delete all references to ourself
+            del worker[0]
+            initiator.parent = greenlet.getcurrent().parent
+            # switch to main with the value, but because
+            # ts_current is the last reference to us we
+            # return immediately
+            try:
+                greenlet.getcurrent().parent.switch(value)
+            finally:
+                seen.append(greenlet.getcurrent())
+        def initiator():
+            return 42 # implicitly falls thru to parent
+        worker = [greenlet(worker)]
+        worker[0].switch() # prime worker
+        initiator = greenlet(initiator, worker[0])
+        value = initiator.switch()
+        self.assertTrue(seen)
+        self.assertEqual(value, 42)

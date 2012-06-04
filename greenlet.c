@@ -481,6 +481,8 @@ static int g_switchstack(void)
 		current->exc_traceback = NULL;
 	}
 	else {
+		PyObject* args = ts_passaround_args;
+		PyObject* kwargs = ts_passaround_kwargs;
 		PyGreenlet* target = ts_target;
 		PyGreenlet* origin = ts_current;
 		PyThreadState* tstate = PyThreadState_GET();
@@ -497,6 +499,8 @@ static int g_switchstack(void)
 		ts_current = target;
 		Py_INCREF(target);
 		Py_DECREF(origin);
+		ts_passaround_args = args;
+		ts_passaround_kwargs = kwargs;
 	}
 	return err;
 }
