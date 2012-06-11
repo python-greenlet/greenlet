@@ -31,18 +31,24 @@ def readfile(filename):
 def _find_platform_headers():
     return glob.glob("platform/switch_*.h")
 
-if sys.platform == 'win32' and '64 bit' in sys.version:
-    # this works when building with msvc, not with 64 bit gcc
-    # switch_x64_masm.obj can be created with setup_switch_x64_masm.cmd
-    extra_objects = ['platform/switch_x64_masm.obj']
+if hasattr(sys, "pypy_version_info"):
+    ext_modules = []
+    headers = []
 else:
-    extra_objects = []
+    headers = ['greenlet.h']
 
-extension = Extension(
-    name='greenlet',
-    sources=['greenlet.c'],
-    extra_objects=extra_objects,
-    depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())
+    if sys.platform == 'win32' and '64 bit' in sys.version:
+        # this works when building with msvc, not with 64 bit gcc
+        # switch_x64_masm.obj can be created with setup_switch_x64_masm.cmd
+        extra_objects = ['platform/switch_x64_masm.obj']
+    else:
+        extra_objects = []
+
+    ext_modules = [Extension(
+        name='greenlet',
+        sources=['greenlet.c'],
+        extra_objects=extra_objects,
+        depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())]
 
 from my_build_ext import build_ext
 
@@ -57,8 +63,8 @@ setup(
     url="https://github.com/python-greenlet/greenlet",
     license="MIT License",
     platforms=['any'],
-    headers=['greenlet.h'],
-    ext_modules=[extension],
+    headers=headers,
+    ext_modules=ext_modules,
     cmdclass=dict(build_ext=build_ext),
     classifiers=[
         'Intended Audience :: Developers',
