@@ -629,7 +629,7 @@ g_handle_exit(PyObject *result)
 static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 {
 	int err;
-	PyObject* o;
+	PyObject *o, *run;
 	PyObject *exc, *val, *tb;
 	PyGreenlet* self = ts_target;
 	PyObject* args = ts_passaround_args;
@@ -638,7 +638,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 	/* save exception in case getattr clears it */
 	PyErr_Fetch(&exc, &val, &tb);
 	/* self.run is the object to call in the new greenlet */
-	PyObject* run = PyObject_GetAttrString((PyObject*) self, "run");
+	run = PyObject_GetAttrString((PyObject*) self, "run");
 	if (run == NULL) {
 		Py_XDECREF(exc);
 		Py_XDECREF(val);
