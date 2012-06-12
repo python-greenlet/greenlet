@@ -243,6 +243,7 @@ green_updatecurrent_retry:
 
 	/* save ts_current as the current greenlet of its own thread */
 	if (PyDict_SetItem(previous->run_info, ts_curkey, (PyObject*) previous)) {
+		Py_DECREF(previous);
 		Py_DECREF(current);
 		Py_XDECREF(exc);
 		Py_XDECREF(val);
