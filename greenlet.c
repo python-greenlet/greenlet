@@ -137,24 +137,6 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
 	Py_XDECREF(kwargs); \
 } while(0)
 
-#define g_passaround_return_args() do { \
-	PyObject* args = ts_passaround_args; \
-	PyObject* kwargs = ts_passaround_kwargs; \
-	ts_passaround_args = NULL; \
-	ts_passaround_kwargs = NULL; \
-	Py_XDECREF(kwargs); \
-	return args; \
-} while(0)
-
-#define g_passaround_return_kwargs() do { \
-	PyObject* args = ts_passaround_args; \
-	PyObject* kwargs = ts_passaround_kwargs; \
-	ts_passaround_args = NULL; \
-	ts_passaround_kwargs = NULL; \
-	Py_XDECREF(args); \
-	return kwargs; \
-} while(0)
-
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
 
@@ -566,29 +548,34 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 	   If only keyword arguments were passed, then we'll pass the keyword
 	   argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
 	   return both. */
-	if (ts_passaround_kwargs == NULL)
+	args = ts_passaround_args;
+	ts_passaround_args = NULL;
+	kwargs = ts_passaround_kwargs;
+	ts_passaround_kwargs = NULL;
+	if (kwargs == NULL)
 	{
-		g_passaround_return_args();
+		return args;
 	}
-	else if (PyDict_Size(ts_passaround_kwargs) == 0)
+	else if (PyDict_Size(kwargs) == 0)
 	{
-		g_passaround_return_args();
+		Py_DECREF(kwargs);
+		return args;
 	}
-	else if (PySequence_Length(ts_passaround_args) == 0)
+	else if (PySequence_Length(args) == 0)
 	{
-		g_passaround_return_kwargs();
+		Py_DECREF(args);
+		return kwargs;
 	}
 	else
 	{
 		PyObject *tuple = PyTuple_New(2);
 		if (tuple == NULL) {
-			g_passaround_clear();
+			Py_DECREF(args);
+			Py_DECREF(kwargs);
 			return NULL;
 		}
-		PyTuple_SET_ITEM(tuple, 0, ts_passaround_args);
-		PyTuple_SET_ITEM(tuple, 1, ts_passaround_kwargs);
-		ts_passaround_args = NULL;
-		ts_passaround_kwargs = NULL;
+		PyTuple_SET_ITEM(tuple, 0, args);
+		PyTuple_SET_ITEM(tuple, 1, kwargs);
 		return tuple;
 	}
 }
