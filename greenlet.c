@@ -664,16 +664,6 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 		ts_passaround_kwargs = kwargs;
 		return 1;
 	}
-	/* restore arguments in case they are clobbered */
-	ts_target = self;
-	ts_passaround_args = args;
-	ts_passaround_kwargs = kwargs;
-
-	/* now use run_info to store the statedict */
-	o = self->run_info;
-	self->run_info = green_statedict(self->parent);
-	Py_INCREF(self->run_info);
-	Py_XDECREF(o);
 
 	/* start the greenlet */
 	self->stack_start = NULL;
@@ -690,7 +680,15 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 	self->exc_value = NULL;
 	self->exc_traceback = NULL;
 	self->recursion_depth = PyThreadState_GET()->recursion_depth;
+
+	/* restore arguments in case they are clobbered */
+	ts_target = self;
+	ts_passaround_args = args;
+	ts_passaround_kwargs = kwargs;
+
+	/* perform the initial switch */
 	err = g_switchstack();
+
 	/* returns twice!
 	   The 1st time with err=1: we are in the new greenlet
 	   The 2nd time with err=0: back in the caller's greenlet
@@ -700,6 +698,12 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 		PyObject* result;
 		PyGreenlet* parent;
 		self->stack_start = (char*) 1;  /* running */
+
+		/* now use run_info to store the statedict */
+		o = self->run_info;
+		self->run_info = green_statedict(self->parent);
+		Py_INCREF(self->run_info);
+		Py_XDECREF(o);
 
 		if (args == NULL) {
 			/* pending exception */
@@ -728,6 +732,12 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 		Py_FatalError("greenlets cannot continue");
 	}
 	/* back in the parent */
+	if (err < 0) {
+		/* start failed badly, restore greenlet state */
+		self->stack_start = NULL;
+		self->stack_stop = NULL;
+		self->stack_prev = NULL;
+	}
 	return err;
 }
 
