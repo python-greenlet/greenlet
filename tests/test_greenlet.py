@@ -431,3 +431,17 @@ class GreenletTests(unittest.TestCase):
         value = initiator.switch()
         self.assertTrue(seen)
         self.assertEqual(value, 42)
+
+    if sys.version_info[0] == 2:
+        # There's no apply in Python 3.x
+        def test_tuple_subclass(self):
+            class mytuple(tuple):
+                def __len__(self):
+                    greenlet.getcurrent().switch()
+                    return tuple.__len__(self)
+            args = mytuple()
+            kwargs = dict(a=42)
+            def switchapply():
+                apply(greenlet.getcurrent().parent.switch, args, kwargs)
+            g = greenlet(switchapply)
+            self.assertEqual(g.switch(), kwargs)
