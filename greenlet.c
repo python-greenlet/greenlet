@@ -684,6 +684,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 	int err;
 	PyObject *o, *run;
 	PyObject *exc, *val, *tb;
+	PyObject *run_info;
 	PyGreenlet* self = ts_target;
 	PyObject* args = ts_passaround_args;
 	PyObject* kwargs = ts_passaround_kwargs;
@@ -704,6 +705,16 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 	/* recheck the state in case getattr caused thread switches */
 	if (!STATE_OK) {
 		Py_DECREF(run);
+		return -1;
+	}
+
+	/* recheck run_info in case greenlet reparented anywhere above */
+	run_info = green_statedict(self);
+	if (run_info == NULL || run_info != ts_current->run_info) {
+		Py_DECREF(run);
+		PyErr_SetString(PyExc_GreenletError, run_info
+				? "cannot switch to a different thread"
+				: "cannot switch to a garbage collected greenlet");
 		return -1;
 	}
 

@@ -361,6 +361,23 @@ class GreenletTests(unittest.TestCase):
         g = convoluted()
         self.assertEqual(g.switch(42), 43)
 
+    def test_unexpected_reparenting(self):
+        another = []
+        def worker():
+            g = greenlet(lambda: None)
+            another.append(g)
+            g.switch()
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join()
+        class convoluted(greenlet):
+            def __getattribute__(self, name):
+                if name == 'run':
+                    self.parent = another[0]
+                return greenlet.__getattribute__(self, name)
+        g = convoluted(lambda: None)
+        self.assertRaises(greenlet.error, g.switch)
+
     def test_threaded_updatecurrent(self):
         # released when main thread should execute
         lock1 = threading.Lock()
