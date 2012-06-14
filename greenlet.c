@@ -713,6 +713,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 			 * in which case we throw *current* exception
 			 * to the next parent in chain.
 			 */
+			assert(result == NULL);
 		}
 		/* We ran out of parents, cannot continue */
 		PyErr_WriteUnraisable((PyObject *) self);
