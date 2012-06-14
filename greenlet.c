@@ -194,6 +194,7 @@ static int green_updatecurrent(void)
 	PyGreenlet* previous;
 	PyObject* deleteme;
 
+green_updatecurrent_restart:
 	/* save current exception */
 	PyErr_Fetch(&exc, &val, &tb);
 
@@ -215,6 +216,7 @@ static int green_updatecurrent(void)
 			return -1;
 		}
 	}
+	assert(current->run_info == tstate->dict);
 
 green_updatecurrent_retry:
 	/* update ts_current as soon as possible, in case of nested switches */
@@ -253,6 +255,11 @@ green_updatecurrent_retry:
 
 	/* restore current exception */
 	PyErr_Restore(exc, val, tb);
+
+	/* thread switch could happen during PyErr_Restore, in that
+	   case there's nothing to do except restart from scratch. */
+	if (ts_current->run_info != tstate->dict)
+		goto green_updatecurrent_restart;
 
 	return 0;
 }
