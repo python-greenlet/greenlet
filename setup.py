@@ -13,6 +13,7 @@ try:
     if not (sys.modules.get("setuptools")
             or "develop" in sys.argv
             or "upload" in sys.argv
+            or "fixup" in sys.argv
             or "bdist_egg" in sys.argv
             or "test" in sys.argv):
         raise ImportError()
