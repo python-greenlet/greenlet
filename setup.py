@@ -12,6 +12,7 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
 try:
     if not (sys.modules.get("setuptools")
             or "develop" in sys.argv
+            or "upload" in sys.argv
             or "bdist_egg" in sys.argv
             or "test" in sys.argv):
         raise ImportError()
@@ -52,6 +53,20 @@ else:
 
 from my_build_ext import build_ext
 
+from distutils.core import Command
+
+class fixup(Command):
+    user_options = []
+    description = "prevent duplicate uploads and upload for the wrong architecture"
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        del self.distribution.dist_files[:-1]
 
 setup(
     name="greenlet",
@@ -65,7 +80,7 @@ setup(
     platforms=['any'],
     headers=headers,
     ext_modules=ext_modules,
-    cmdclass=dict(build_ext=build_ext),
+    cmdclass=dict(build_ext=build_ext, fixup=fixup),
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
