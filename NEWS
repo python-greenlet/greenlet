@@ -12,6 +12,7 @@
 * Don't allow greenlets to be copied with copy.copy/deepcopy
 * Fix arm32/thumb support
 * Restore greenlet's parent after kill
+* Add experimental greenlet tracing
 
 0.3.4
 =====
