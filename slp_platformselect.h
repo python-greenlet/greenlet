@@ -6,6 +6,8 @@
 #include "platform/switch_x86_msvc.h" /* MS Visual Studio on X86 */
 #elif defined(MS_WIN64) && defined(_M_X64)
 #include "platform/switch_x64_msvc.h" /* MS Visual Studio on X64 */
+#elif defined(__GNUC__) && defined(__amd64__) && defined(__ILP32__)
+#include "platform/switch_x32_unix.h" /* gcc on amd64 with x32 ABI */
 #elif defined(__GNUC__) && defined(__amd64__)
 #include "platform/switch_amd64_unix.h" /* gcc on amd64 */
 #elif defined(__GNUC__) && defined(__i386__)
