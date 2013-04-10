@@ -34,4 +34,6 @@
 #include "platform/switch_arm32_gcc.h" /* gcc using arm32 */
 #elif defined(__GNUC__) && defined(__mips__) && defined(__linux__)
 #include "platform/switch_mips_unix.h" /* Linux/MIPS */
+#elif defined(__GNUC__) && defined(__aarch64__)
+#include "platform/switch_aarch64_gcc.h" /* Aarch64 ABI */
 #endif
