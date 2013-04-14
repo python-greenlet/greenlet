@@ -2,6 +2,7 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 13-Apr-13 Add support for strange GCC caller-save decisions
  * 08-Apr-13 File creation. Michael Matz
  *
  * NOTES
@@ -19,13 +20,22 @@
                      "v8", "v9", "v10", "v11", \
                      "v12", "v13", "v14", "v15"
 
+/* See below for the purpose of this function.  */
+__attribute__((noinline, noclone)) int fancy_return_zero(void);
+__attribute__((noinline, noclone)) int
+fancy_return_zero(void)
+{
+  return 0;
+}
+
 static int
 slp_switch(void)
 {
+	int err = 0;
 	void *fp;
-        register int *stackref, stsizediff;
+        register long *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
-	__asm__ volatile ("str x29, %0" : "=m"(fp) : :);
+	__asm__ volatile ("str x29, %0" : "=m"(fp) : : );
         __asm__ ("mov %0, sp" : "=r" (stackref));
         {
                 SLP_SAVE_STATE(stackref, stsizediff);
@@ -35,11 +45,32 @@ slp_switch(void)
                     :
                     : "r" (stsizediff)
                     );
-                SLP_RESTORE_STATE();
+		SLP_RESTORE_STATE();
+		/* SLP_SAVE_STATE macro contains some return statements
+		   (of -1 and 1).  It falls through only when
+		   the return value of slp_save_state() is zero, which
+		   is placed in x0.
+		   In that case we (slp_switch) also want to return zero
+		   (also in x0 of course).
+		   Now, some GCC versions (seen with 4.8) think it's a
+		   good idea to save/restore x0 around the call to
+		   slp_restore_state(), instead of simply zeroing it
+		   at the return below.  But slp_restore_state
+		   writes random values to the stack slot used for this
+		   save/restore (from when it once was saved above in
+		   SLP_SAVE_STATE, when it was still uninitialized), so
+		   "restoring" that precious zero actually makes us
+		   return random values.  There are some ways to make
+		   GCC not use that zero value in the normal return path
+		   (e.g. making err volatile, but that costs a little
+		   stack space), and the simplest is to call a function
+		   that returns an unknown value (which happens to be zero),
+		   so the saved/restored value is unused.  */
+		err = fancy_return_zero();
         }
 	__asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
         __asm__ volatile ("" : : : REGS_TO_SAVE);
-        return 0;
+        return err;
 }
 
 #endif
