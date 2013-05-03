@@ -2,6 +2,9 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 3-May-13   Ralf Schmitt  <ralf@systemexit.de>
+ *     Add support for strange GCC caller-save decisions
+ *     (ported from switch_aarch64_gcc.h)
  * 19-Aug-11  Alexey Borzenkov  <snaury@gmail.com>
  *      Correctly save ebp, ebx and cw
  * 07-Sep-05 (py-dev mailing list discussion)
@@ -33,9 +36,18 @@
 /* the above works fine with gcc 2.96, but 2.95.3 wants this */
 #define STACK_MAGIC 0
 
+/* See below for the purpose of this function.  */
+__attribute__((noinline, noclone)) int fancy_return_zero(void);
+__attribute__((noinline, noclone)) int
+fancy_return_zero(void)
+{
+  return 0;
+}
+
 static int
 slp_switch(void)
 {
+    int err = 0;
 #ifdef _WIN32
     void *seh;
 #endif
@@ -64,6 +76,7 @@ slp_switch(void)
             : "r" (stsizediff)
             );
         SLP_RESTORE_STATE();
+        err = fancy_return_zero();
     }
 #ifdef _WIN32
     __asm__ volatile (
@@ -77,7 +90,7 @@ slp_switch(void)
     __asm__ volatile ("movl %0, %%ebp" : : "m" (ebp));
     __asm__ volatile ("fldcw %0" : : "m" (cw));
     __asm__ volatile ("" : : : "esi", "edi");
-    return 0;
+    return err;
 }
 
 #endif

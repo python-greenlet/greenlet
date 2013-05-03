@@ -2,6 +2,9 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 3-May-13   Ralf Schmitt  <ralf@systemexit.de>
+ *     Add support for strange GCC caller-save decisions
+ *     (ported from switch_aarch64_gcc.h)
  * 18-Aug-11  Alexey Borzenkov  <snaury@gmail.com>
  *      Correctly save rbp, csr and cw
  * 01-Apr-04  Hye-Shik Chang    <perky@FreeBSD.org>
@@ -33,10 +36,18 @@
 
 #define REGS_TO_SAVE "r12", "r13", "r14", "r15"
 
+/* See switch_aarch64_gcc.h for the purpose of this function  */
+__attribute__((noinline, noclone)) int fancy_return_zero(void);
+__attribute__((noinline, noclone)) int
+fancy_return_zero(void)
+{
+  return 0;
+}
 
 static int
 slp_switch(void)
 {
+    int err = 0;
     void* rbp;
     void* rbx;
     unsigned int csr;
@@ -57,13 +68,14 @@ slp_switch(void)
             : "r" (stsizediff)
             );
         SLP_RESTORE_STATE();
+        err = fancy_return_zero();
     }
     __asm__ volatile ("movq %0, %%rbx" : : "m" (rbx));
     __asm__ volatile ("movq %0, %%rbp" : : "m" (rbp));
     __asm__ volatile ("ldmxcsr %0" : : "m" (csr));
     __asm__ volatile ("fldcw %0" : : "m" (cw));
     __asm__ volatile ("" : : : REGS_TO_SAVE);
-    return 0;
+    return err;
 }
 
 #endif
