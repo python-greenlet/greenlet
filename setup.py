@@ -72,7 +72,6 @@ class build_ext(_build_ext):
             open(simple_c, "w").write("void foo(){}")
             compiler.compile([simple_c], output_dir=tmpdir)
         except Exception:
-            print "please ignore the above error message"
             del compiler.compiler_so[-1]
 
         shutil.rmtree(tmpdir)
