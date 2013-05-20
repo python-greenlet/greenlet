@@ -97,7 +97,7 @@ class fixup(Command):
 
 setup(
     name="greenlet",
-    version='0.4.0',
+    version='0.4.1',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
     maintainer="Ralf Schmitt",

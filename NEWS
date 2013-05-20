@@ -1,3 +1,15 @@
+0.4.1
+=====
+* fix segfaults when using gcc 4.8 on amd64/x86 unix
+* try to disable certain gcc 4.8 optimizations that make greenlet
+  crash
+* Fix greenlet on aarch64 with gcc 4.8
+* workaround segfault on SunOS/sun4v
+* Add support for Aarch64
+* Add support for x32 psABI on x86_64
+* Changed memory constraints for assembly macro for PPC Linux
+  platforms.
+
 0.4.0
 =====
 * Greenlet has an instance dictionary now, which means it can be
