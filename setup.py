@@ -63,8 +63,8 @@ class build_ext(_build_ext):
         compiler = self.compiler
         if compiler.__class__.__name__ != "UnixCCompiler":
             return
-        import ipdb; ipdb.set_trace()
-        compiler.compiler_so += ["-fno-tree-dominator-opts"]
+
+        compiler.compiler_so += "-fno-tree-dominator-opts"
         tmpdir = tempfile.mkdtemp()
 
         try:
