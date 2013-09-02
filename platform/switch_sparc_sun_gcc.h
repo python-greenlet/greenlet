@@ -2,6 +2,11 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 30-Aug-13  Floris Bruynooghe <flub@devork.be>
+        Clean the register windows again before returning.
+        This does not clobber the PIC register as it leaves
+        the current window intact and is required for multi-
+        threaded code to work correctly.
  * 08-Mar-11  Floris Bruynooghe <flub@devork.be>
  *      No need to set return value register explicitly
  *      before the stack and framepointer are adjusted
@@ -28,7 +33,8 @@
 
 
 #define STACK_MAGIC 0
-#define ST_FLUSH_WINDOWS 3
+#define ST_FLUSH_WINDOWS 0x03
+#define ST_CLEAN_WINDOWS 0x04
 
 static int
 slp_switch(void)
@@ -37,7 +43,17 @@ slp_switch(void)
 
     /* Flush SPARC register windows onto the stack, so they can be used to
      * restore the registers after the stack has been switched out and
-     * restored.  Then put the stack pointer into stackref. */
+     * restored.  This also ensures the current window (pointed at by
+     * the CWP register) is the only window left in the registers
+     * (CANSAVE=0, CANRESTORE=0), that means the registers of our
+     * caller are no longer there and when we return they will always
+     * be loaded from the stack by a window underflow/fill trap.
+     *
+     * On SPARC v9 and above it might be more efficient to use the
+     * FLUSHW instruction instead of TA ST_FLUSH_WINDOWS.  But that
+     * requires the correct -mcpu flag to gcc.
+     *
+     * Then put the stack pointer into stackref. */
     __asm__ volatile (
         "ta %1\n\t"
         "mov %%sp, %0"
@@ -57,11 +73,13 @@ slp_switch(void)
         /* Copy new stack from it's save store on the heap */
         SLP_RESTORE_STATE();
 
-        /* No need to restore any registers from the stack nor clear them: the
-         * frame pointer has just been set and the return value register is
-         * also being set by the return statement below.  After returning a
-         * restore instruction is given and the frame below us will load all
-         * it's registers using a fill_trap if required. */
+        /* No need to set the return value register, the return
+         * statement below does this just fine.  After returning a restore
+         * instruction is given and a fill-trap will load all the registers
+         * from the stack if needed.  However in a multi-threaded environment
+         * we can't guarantee the other register windows are fine to use by
+         * their threads anymore, so tell the CPU to clean them. */
+        __asm__ volatile ("ta %0" : : "i" (ST_CLEAN_WINDOWS));
 
         return 0;
     }
