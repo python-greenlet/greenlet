@@ -106,6 +106,10 @@ The running greenlet's stack_start is undefined but not NULL.
 #ifndef Py_TYPE
 #  define Py_TYPE(ob)   (((PyObject *) (ob))->ob_type)
 #endif
+#ifndef PyVarObject_HEAD_INIT
+#  define PyVarObject_HEAD_INIT(type, size) \
+    PyObject_HEAD_INIT(type) size,
+#endif
 #endif
 
 #if PY_VERSION_HEX < 0x02050000
@@ -1450,12 +1454,7 @@ static PyNumberMethods green_as_number = {
 
 
 PyTypeObject PyGreenlet_Type = {
-#if PY_MAJOR_VERSION >= 3
 	PyVarObject_HEAD_INIT(NULL, 0)
-#else
-	PyObject_HEAD_INIT(NULL)
-	0,					/* ob_size */
-#endif
 	"greenlet.greenlet",			/* tp_name */
 	sizeof(PyGreenlet),			/* tp_basicsize */
 	0,					/* tp_itemsize */
