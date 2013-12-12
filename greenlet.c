@@ -540,7 +540,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 {
 	/* _consumes_ a reference to the args tuple and kwargs dict,
 	   and return a new tuple reference */
-	int err;
+	int err = 0;
 	PyObject* run_info;
 
 	/* check ts_current */
