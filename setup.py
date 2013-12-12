@@ -17,6 +17,7 @@ try:
             or "upload" in sys.argv
             or "fixup" in sys.argv
             or "bdist_egg" in sys.argv
+            or "bdist_wheel" in sys.argv
             or "test" in sys.argv):
         raise ImportError()
     from setuptools import setup, Extension
