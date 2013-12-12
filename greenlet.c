@@ -130,6 +130,8 @@ static PyObject* ts_event_throw;
 #endif
 static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
+static PyObject* ts_empty_tuple;
+static PyObject* ts_empty_dict;
 
 #if GREENLET_USE_GC
 #define GREENLET_GC_FLAGS Py_TPFLAGS_HAVE_GC
@@ -825,7 +827,7 @@ static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	if (!STATE_OK)
 		return NULL;
 	
-	o = type->tp_alloc(type, 0);
+	o = PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
 	if (o != NULL) {
 		Py_INCREF(ts_current);
 		((PyGreenlet*) o)->parent = ts_current;
@@ -1630,6 +1632,18 @@ initgreenlet(void)
 						NULL, NULL);
 #endif
 	if (PyExc_GreenletExit == NULL)
+	{
+		INITERROR;
+	}
+
+	ts_empty_tuple = PyTuple_New(0);
+	if (ts_empty_tuple == NULL)
+	{
+		INITERROR;
+	}
+
+	ts_empty_dict = PyDict_New();
+	if (ts_empty_dict == NULL)
 	{
 		INITERROR;
 	}

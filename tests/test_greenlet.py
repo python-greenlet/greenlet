@@ -6,6 +6,12 @@ import unittest
 
 from greenlet import greenlet
 
+try:
+    from abc import ABCMeta, abstractmethod
+except ImportError:
+    ABCMeta = None
+    abstractmethod = None
+
 
 class SomeError(Exception):
     pass
@@ -462,3 +468,20 @@ class GreenletTests(unittest.TestCase):
                 apply(greenlet.getcurrent().parent.switch, args, kwargs)
             g = greenlet(switchapply)
             self.assertEqual(g.switch(), kwargs)
+
+    if ABCMeta is not None and abstractmethod is not None:
+        def test_abstract_subclasses(self):
+            AbstractSubclass = ABCMeta(
+                'AbstractSubclass',
+                (greenlet,),
+                {'run': abstractmethod(lambda self: None)})
+
+            class BadSubclass(AbstractSubclass):
+                pass
+
+            class GoodSubclass(AbstractSubclass):
+                def run(self):
+                    pass
+
+            GoodSubclass() # should not raise
+            self.assertRaises(TypeError, BadSubclass)
