@@ -1,3 +1,6 @@
+.. image:: https://secure.travis-ci.org/python-greenlet/greenlet.png
+   :target: http://travis-ci.org/python-greenlet/greenlet
+
 The greenlet package is a spin-off of Stackless, a version of CPython
 that supports micro-threads called "tasklets". Tasklets run
 pseudo-concurrently (typically in a single or a few OS-level threads)
