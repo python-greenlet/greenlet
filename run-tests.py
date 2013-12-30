@@ -50,6 +50,7 @@ if not build:
 
 sys.stdout.write("python %s (%s bit) using greenlet %s from %s\n" %
                  (sys.version.split()[0], bits(), greenlet.__version__, greenlet.__file__))
+sys.stdout.flush()
 
 
 # -- run tests
