@@ -1,3 +1,10 @@
+0.4.2
+=====
+- Add .travis.yml
+- Fix 'err' may be used uninitialized in this function
+- Check _MSC_VER for msvc specific code
+- Fix slp_switch on SPARC for multi-threaded environments
+
 0.4.1
 =====
 * fix segfaults when using gcc 4.8 on amd64/x86 unix
