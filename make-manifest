@@ -1,0 +1,21 @@
+#! /usr/bin/env python
+
+# this file can be used as pre-commit hook with the following command:
+#
+#    ln -sf ../../make-manifest .git/hooks/pre-commit
+#
+
+import os
+
+
+def main():
+    files = sorted(set([x.strip() for x in os.popen("git ls-files")]) -
+                   set(("make-manifest", ".gitignore")))
+    with open("MANIFEST.in", "w") as f:
+        for x in files:
+            f.write("include %s\n" % x)
+
+    os.system("git add MANIFEST.in; git diff --cached MANIFEST.in | cat")
+
+if __name__ == '__main__':
+    main()
