@@ -2,21 +2,14 @@
 
 import sys, os, subprocess, struct, re
 
-
-def find_executables():
-    rx = re.compile("python([23][0-9])(-x64)?", re.I)
-
-    search_path = os.path.dirname(os.path.dirname(sys.executable))
-    entries = os.listdir(search_path)
-    res = []
-    for x in entries:
-        m = rx.match(x)
-        if not m:
-            continue
-        exepath = os.path.join(search_path, x, "python.exe")
-        if os.path.isfile(exepath):
-            res.append((m.group(1), exepath))
-    return res
+pyver2dist = {
+    "py24": ("bdist_wininst",),
+    "py25": ("bdist_wininst", "bdist_msi"),
+    "py26": ("bdist_wininst", "bdist_msi"),
+    "py27": ("bdist_wininst", "bdist_msi", "bdist_wheel"),
+    "py27-x64": ("bdist_wininst", "bdist_msi", "bdist_wheel"),
+    "py33": ("bdist_wininst", "bdist_msi", "bdist_wheel"),
+    "py33-x64": ("bdist_wininst", "bdist_msi", "bdist_wheel")}
 
 
 def system(cmd):
@@ -41,13 +34,11 @@ def system(cmd):
 
 
 def main():
-    upload = ""
-    if "upload" in sys.argv:
-        upload = "upload"
-
-    for v, x in find_executables():
-        for dist in ['bdist_egg', 'bdist_wininst']:
-            cmd = "%s setup.py -q %s fixup %s" % (x, dist, upload)
+    here = os.path.dirname(os.path.dirname(sys.executable))
+    for pyver, dists in sorted(pyver2dist.items()):
+        exe = os.path.join(here, pyver, "python.exe")
+        for d in dists:
+            cmd = "%s setup.py -q %s" % (exe, d)
             system(cmd)
 
 if __name__ == "__main__":
