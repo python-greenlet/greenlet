@@ -55,5 +55,5 @@ sys.stdout.flush()
 
 # -- run tests
 from tests import test_collector
-suite = test_collector()
-unittest.TextTestRunner(verbosity=verbosity).run(suite)
+if unittest.TextTestRunner(verbosity=verbosity).run(test_collector()).failures:
+    sys.exit(1)
