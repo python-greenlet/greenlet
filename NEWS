@@ -4,6 +4,7 @@
 - Fix 'err' may be used uninitialized in this function
 - Check _MSC_VER for msvc specific code
 - Fix slp_switch on SPARC for multi-threaded environments
+- Add support for m68k
 
 0.4.1
 =====
