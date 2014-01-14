@@ -36,9 +36,15 @@
 /* the above works fine with gcc 2.96, but 2.95.3 wants this */
 #define STACK_MAGIC 0
 
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
+# define ATTR_NOCLONE __attribute__((noclone))
+#else
+# define ATTR_NOCLONE
+#endif
+
 /* See below for the purpose of this function.  */
-__attribute__((noinline, noclone)) int fancy_return_zero(void);
-__attribute__((noinline, noclone)) int
+__attribute__((noinline)) ATTR_NOCLONE int fancy_return_zero(void);
+__attribute__((noinline)) ATTR_NOCLONE int
 fancy_return_zero(void)
 {
   return 0;
