@@ -98,6 +98,16 @@ The running greenlet's stack_start is undefined but not NULL.
 	} while (0)
 #endif /* !Py_CLEAR */
 
+/* Python < 2.4 support */
+#if PY_VERSION_HEX < 0x02040000
+#ifndef Py_RETURN_TRUE
+#  define Py_RETURN_TRUE return Py_INCREF(Py_True), Py_True
+#endif
+#ifndef Py_RETURN_FALSE
+#  define Py_RETURN_FALSE return Py_INCREF(Py_False), Py_False
+#endif
+#endif
+
 /* Python <= 2.5 support */
 #if PY_MAJOR_VERSION < 3
 #ifndef Py_REFCNT
