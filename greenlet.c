@@ -1229,13 +1229,10 @@ static int green_setdict(PyGreenlet* self, PyObject* val, void* c)
 
 static PyObject* green_getdead(PyGreenlet* self, void* c)
 {
-	PyObject* res;
 	if (PyGreenlet_ACTIVE(self) || !PyGreenlet_STARTED(self))
-		res = Py_False;
+		Py_RETURN_FALSE;
 	else
-		res = Py_True;
-	Py_INCREF(res);
-	return res;
+		Py_RETURN_TRUE;
 }
 
 static PyObject* green_getrun(PyGreenlet* self, void* c)
