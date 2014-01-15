@@ -1,17 +1,7 @@
 import os
 import glob
 import unittest
-
-try:
-    unittest.TestCase.assertTrue
-    unittest.TestCase.assertFalse
-except AttributeError:
-    # monkey patch for Python 2.3 compatibility
-    unittest.TestCase.assertTrue = unittest.TestCase.failUnless
-    unittest.TestCase.assertFalse = unittest.TestCase.failIf
-
-from distutils.core import setup
-from distutils.core import Extension
+from distutils.core import setup, Extension
 
 TEST_EXTENSIONS = [
     Extension('_test_extension',

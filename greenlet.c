@@ -76,28 +76,6 @@ The running greenlet's stack_start is undefined but not NULL.
      using the dictionary key 'ts_curkey'.
 */
 
-/* Python 2.3 support */
-#ifndef Py_VISIT
-#define Py_VISIT(o) \
-	if (o) { \
-		int err; \
-		if ((err = visit((PyObject *)(o), arg))) { \
-			return err; \
-		} \
-	}
-#endif /* !Py_VISIT */
-
-#ifndef Py_CLEAR
-#define Py_CLEAR(op) \
-	do { \
-		if (op) { \
-			PyObject *tmp = (PyObject *)(op); \
-			(op) = NULL; \
-			Py_DECREF(tmp); \
-		} \
-	} while (0)
-#endif /* !Py_CLEAR */
-
 /* Python <= 2.5 support */
 #if PY_MAJOR_VERSION < 3
 #ifndef Py_REFCNT
