@@ -48,15 +48,10 @@ easy_install::
 
 
 Source code archives and windows installers are available on the
-python package index at http://pypi.python.org/pypi/greenlet
+python package index at https://pypi.python.org/pypi/greenlet
 
 The source code repository is hosted on github:
 https://github.com/python-greenlet/greenlet
 
-The master branch - i.e. the `development version`_ - can be installed
-directly by running one of the following::
-
-  pip install greenlet==dev
-  easy_install greenlet==dev
-
-.. _`development version`: https://github.com/python-greenlet/greenlet/zipball/master#egg=greenlet-dev
+Documentation is available on readthedocs.org:
+https://greenlet.readthedocs.org
