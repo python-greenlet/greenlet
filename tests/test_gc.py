@@ -7,16 +7,6 @@ import greenlet
 
 
 class GCTests(unittest.TestCase):
-    def test_circular_greenlet(self):
-        class circular_greenlet(greenlet.greenlet):
-            pass
-        o = circular_greenlet()
-        o.self = o
-        o = weakref.ref(o)
-        gc.collect()
-        self.assertTrue(o() is None)
-        self.assertFalse(gc.garbage, gc.garbage)
-
     def test_dead_circular_ref(self):
         o = weakref.ref(greenlet.greenlet(greenlet.getcurrent).switch())
         gc.collect()
@@ -25,6 +15,16 @@ class GCTests(unittest.TestCase):
 
     if greenlet.GREENLET_USE_GC:
         # These only work with greenlet gc support
+
+        def test_circular_greenlet(self):
+            class circular_greenlet(greenlet.greenlet):
+                pass
+            o = circular_greenlet()
+            o.self = o
+            o = weakref.ref(o)
+            gc.collect()
+            self.assertTrue(o() is None)
+            self.assertFalse(gc.garbage, gc.garbage)
 
         def test_inactive_ref(self):
             class inactive_greenlet(greenlet.greenlet):
