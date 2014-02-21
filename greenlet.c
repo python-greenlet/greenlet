@@ -1009,7 +1009,7 @@ static void green_dealloc_safe(PyGreenlet* self)
 static void green_dealloc(PyGreenlet* self)
 {
 	PyObject_GC_UnTrack((PyObject *)self);
-	if (PyObject_IS_GC(self)) {
+	if (PyObject_IS_GC((PyObject *)self)) {
 		Py_TRASHCAN_SAFE_BEGIN(self);
 		green_dealloc_safe(self);
 		Py_TRASHCAN_SAFE_END(self);
