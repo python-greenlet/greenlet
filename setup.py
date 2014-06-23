@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import sys, os, glob, platform, tempfile, shutil
+import sys, os, glob, platform
 
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
@@ -54,32 +54,9 @@ else:
         extra_objects=extra_objects,
         depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())]
 
-from my_build_ext import build_ext as _build_ext
+from my_build_ext import build_ext
+
 from distutils.core import Command
-
-
-class build_ext(_build_ext):
-    def configure_compiler(self):
-        compiler = self.compiler
-        if compiler.__class__.__name__ != "UnixCCompiler":
-            return
-
-        compiler.compiler_so += ["-fno-tree-dominator-opts"]
-        tmpdir = tempfile.mkdtemp()
-
-        try:
-            simple_c = os.path.join(tmpdir, "simple.c")
-            open(simple_c, "w").write("void foo(){}")
-            compiler.compile([simple_c], output_dir=tmpdir)
-        except Exception:
-            del compiler.compiler_so[-1]
-
-        shutil.rmtree(tmpdir)
-
-    def build_extensions(self):
-        self.configure_compiler()
-        _build_ext.build_extensions(self)
-
 
 setup(
     name="greenlet",
