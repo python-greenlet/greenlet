@@ -26,6 +26,8 @@
 #include "platform/switch_sparc_sun_gcc.h" /* SunStudio on amd64 */
 #elif defined(__SUNPRO_C) && defined(__amd64__) && defined(sun)
 #include "platform/switch_amd64_unix.h" /* SunStudio on amd64 */
+#elif defined(__SUNPRO_C) && defined(__i386__) && defined(sun)
+#include "platform/switch_x86_unix.h" /* SunStudio on x86 */
 #elif defined(__GNUC__) && defined(__s390__) && defined(__linux__)
 #include "platform/switch_s390_unix.h"	/* Linux/S390 */
 #elif defined(__GNUC__) && defined(__s390x__) && defined(__linux__)
