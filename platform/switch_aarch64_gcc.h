@@ -20,18 +20,10 @@
                      "v8", "v9", "v10", "v11", \
                      "v12", "v13", "v14", "v15"
 
-/* See below for the purpose of this function.  */
-__attribute__((noinline, noclone)) int fancy_return_zero(void);
-__attribute__((noinline, noclone)) int
-fancy_return_zero(void)
-{
-  return 0;
-}
-
 static int
 slp_switch(void)
 {
-	int err = 0;
+	int err;
 	void *fp;
         register long *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
@@ -41,7 +33,7 @@ slp_switch(void)
                 SLP_SAVE_STATE(stackref, stsizediff);
                 __asm__ volatile (
                     "add sp,sp,%0\n"
-		    "add x29,x29,%0\n"
+                    "add x29,x29,%0\n"
                     :
                     : "r" (stsizediff)
                     );
@@ -66,9 +58,9 @@ slp_switch(void)
 		   stack space), and the simplest is to call a function
 		   that returns an unknown value (which happens to be zero),
 		   so the saved/restored value is unused.  */
-		err = fancy_return_zero();
+           __asm__ volatile ("mov x0, #0" : "=x0" (err));
         }
-	__asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
+        __asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
         __asm__ volatile ("" : : : REGS_TO_SAVE);
         return err;
 }

@@ -42,18 +42,10 @@
 # define ATTR_NOCLONE
 #endif
 
-/* See below for the purpose of this function.  */
-__attribute__((noinline)) ATTR_NOCLONE int fancy_return_zero(void);
-__attribute__((noinline)) ATTR_NOCLONE int
-fancy_return_zero(void)
-{
-  return 0;
-}
-
 static int
 slp_switch(void)
 {
-    int err = 0;
+    int err;
 #ifdef _WIN32
     void *seh;
 #endif
@@ -82,7 +74,7 @@ slp_switch(void)
             : "r" (stsizediff)
             );
         SLP_RESTORE_STATE();
-        err = fancy_return_zero();
+        __asm__ volatile ("xorl %%eax, %%eax" : "=a" (err));
     }
 #ifdef _WIN32
     __asm__ volatile (

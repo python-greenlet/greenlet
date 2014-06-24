@@ -36,18 +36,10 @@
 
 #define REGS_TO_SAVE "r12", "r13", "r14", "r15"
 
-/* See switch_aarch64_gcc.h for the purpose of this function  */
-__attribute__((noinline, noclone)) int fancy_return_zero(void);
-__attribute__((noinline, noclone)) int
-fancy_return_zero(void)
-{
-  return 0;
-}
-
 static int
 slp_switch(void)
 {
-    int err = 0;
+    int err;
     void* rbp;
     void* rbx;
     unsigned int csr;
@@ -68,7 +60,7 @@ slp_switch(void)
             : "r" (stsizediff)
             );
         SLP_RESTORE_STATE();
-        err = fancy_return_zero();
+        __asm__ volatile ("xorq %%rax, %%rax" : "=a" (err));
     }
     __asm__ volatile ("movq %0, %%rbx" : : "m" (rbx));
     __asm__ volatile ("movq %0, %%rbp" : : "m" (rbp));
