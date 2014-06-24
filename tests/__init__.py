@@ -20,11 +20,11 @@ else:
     TEST_EXTENSIONS_CPP = []
 
 
-def test_collector():
+def test_collector(build_base=None):
     """Collect all tests under the tests directory and return a
     unittest.TestSuite
     """
-    build_test_extensions()
+    build_test_extensions(build_base)
     tests_dir = os.path.realpath(os.path.dirname(__file__))
     test_module_list = [
         'tests.%s' % os.path.splitext(os.path.basename(t))[0]
@@ -34,7 +34,7 @@ def test_collector():
     return unittest.TestLoader().loadTestsFromNames(test_module_list)
 
 
-def build_test_extensions():
+def build_test_extensions(build_base=None):
     """Because distutils sucks, it just copies the entire contents of the build
     results dir (e.g. build/lib.linux-i686-2.6) during installation. That means
     that we can't put any files there that we don't want to distribute.
@@ -44,11 +44,13 @@ def build_test_extensions():
     multiple Python release and pydebug versions works and test extensions
     are not distributed.
     """
-    from my_build_ext import build_ext
+    from build_test_ext import build_test_ext
+    if build_base is None:
+        build_base = os.path.join('build', 'tests')
     setup(
         options={
-            'build': {'build_base': os.path.join('build', 'tests')},
+            'build': {'build_base': build_base},
         },
-        cmdclass=dict(build_ext=build_ext),
+        cmdclass=dict(build_ext=build_test_ext),
         script_args=['-q', 'build_ext', '-q'],
         ext_modules=TEST_EXTENSIONS + TEST_EXTENSIONS_CPP)

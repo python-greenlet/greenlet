@@ -6,6 +6,7 @@ include MANIFEST.in
 include NEWS
 include README.rst
 include benchmarks/chain.py
+include build_test_ext.py
 include conftest.py
 include doc/Makefile
 include doc/conf.py
@@ -15,7 +16,6 @@ include doc/make.bat
 include greenlet.c
 include greenlet.h
 include make-win-release
-include my_build_ext.py
 include platform/switch_aarch64_gcc.h
 include platform/switch_amd64_unix.h
 include platform/switch_arm32_gcc.h
