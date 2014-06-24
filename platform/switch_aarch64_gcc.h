@@ -58,7 +58,7 @@ slp_switch(void)
 		   stack space), and the simplest is to call a function
 		   that returns an unknown value (which happens to be zero),
 		   so the saved/restored value is unused.  */
-           __asm__ volatile ("mov x0, #0" : "=x0" (err));
+           __asm__ volatile ("mov %0, #0" : "=r" (err));
         }
         __asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
         __asm__ volatile ("" : : : REGS_TO_SAVE);
