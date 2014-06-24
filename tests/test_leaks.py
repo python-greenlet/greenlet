@@ -37,7 +37,9 @@ class ArgRefcountTests(unittest.TestCase):
                 t = threading.Thread(target=worker)
                 t.start()
                 t.join()
+                del t
             greenlet.getcurrent() # update ts_current
+            gc.collect()
             gc.collect()
             for g in gg:
                 self.assertTrue(g() is None)
@@ -56,7 +58,9 @@ class ArgRefcountTests(unittest.TestCase):
                 t = threading.Thread(target=worker)
                 t.start()
                 t.join()
+                del t
             greenlet.getcurrent() # update ts_current
+            gc.collect()
             gc.collect()
             for g in gg:
                 self.assertTrue(g() is None)
