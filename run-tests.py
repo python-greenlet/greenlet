@@ -5,6 +5,7 @@ from distutils.spawn import spawn
 
 build = True
 verbosity = 2
+build_base = None
 here = os.path.dirname(os.path.abspath(__file__))
 os.chdir(here)
 
@@ -16,7 +17,7 @@ def bits():
 
 # -- parse options
 try:
-    opts, args = getopt.getopt(sys.argv[1:], "nq")
+    opts, args = getopt.getopt(sys.argv[1:], "nqb:")
     if args:
         raise getopt.GetoptError("too many arguments")
 except getopt.GetoptError:
@@ -27,6 +28,8 @@ for o, a in opts:
         verbosity = 0
     elif o == "-n":
         build = False
+    elif o == "-b":
+        build_base = a
 
 # -- build greenlet
 if build:
@@ -55,5 +58,5 @@ sys.stdout.flush()
 
 # -- run tests
 from tests import test_collector
-if unittest.TextTestRunner(verbosity=verbosity).run(test_collector()).failures:
+if unittest.TextTestRunner(verbosity=verbosity).run(test_collector(build_base)).failures:
     sys.exit(1)
