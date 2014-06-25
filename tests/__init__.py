@@ -1,7 +1,9 @@
 import os
+import sys
 import glob
 import unittest
 from distutils.core import setup, Extension
+from distutils.command.build_ext import build_ext
 
 TEST_EXTENSIONS = [
     Extension('_test_extension',
@@ -34,17 +36,31 @@ def test_collector(build_base=None):
     return unittest.TestLoader().loadTestsFromNames(test_module_list)
 
 
+class build_test_ext(build_ext):
+    """Command for building test extensions
+
+    Forces a non-inplace build and prepends library directory to sys.path.
+    """
+    def build_extension(self, ext):
+        self.inplace = 0
+        build_ext.build_extension(self, ext)
+        build_lib = os.path.abspath(self.build_lib)
+        if build_lib not in sys.path:
+            if self.verbose:
+                sys.stderr.write('Adding %s to sys.path\n' % (build_lib,))
+            sys.path.insert(0, build_lib)
+
+
 def build_test_extensions(build_base=None):
     """Because distutils sucks, it just copies the entire contents of the build
     results dir (e.g. build/lib.linux-i686-2.6) during installation. That means
     that we can't put any files there that we don't want to distribute.
 
-    To deal with it, this code will compile test extensions inplace, but
-    will use a separate directory for build files. This way testing with
+    To deal with it, this code will compile test extensions in a separate
+    directory, prepending it to sys.path afterwards. This way testing with
     multiple Python release and pydebug versions works and test extensions
     are not distributed.
     """
-    from build_test_ext import build_test_ext
     if build_base is None:
         build_base = os.path.join('build', 'tests')
     setup(
