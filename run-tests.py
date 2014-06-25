@@ -31,9 +31,9 @@ for o, a in opts:
 # -- build greenlet
 if build:
     if verbosity == 0:
-        cmd = [sys.executable, "setup.py", "-q", "build_ext", "-q"]
+        cmd = [sys.executable, "setup.py", "-q", "build_ext", "-q", "-i"]
     else:
-        cmd = [sys.executable, "setup.py", "build_ext"]
+        cmd = [sys.executable, "setup.py", "build_ext", "-i"]
 
     spawn(cmd, search_path=0)
 

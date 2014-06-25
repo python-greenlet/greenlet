@@ -39,8 +39,8 @@ def build_test_extensions():
     results dir (e.g. build/lib.linux-i686-2.6) during installation. That means
     that we can't put any files there that we don't want to distribute.
 
-    To deal with it, this code will compile test extensions inplace, but
-    will use a separate directory for build files. This way testing with
+    To deal with it, this code will compile test extensions in a separate
+    directory, prepending it to sys.path afterwards. This way testing with
     multiple Python release and pydebug versions works and test extensions
     are not distributed.
     """

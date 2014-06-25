@@ -22,9 +22,29 @@ def symlink_or_copy(src, dst):
 
 
 class build_ext(_build_ext):
+    """Command for building extensions
+
+    Prepends library directory to sys.path on normal builds (for tests).
+    Otherwise it forces a non-inplace build and symlinks libraries instead.
+    """
+
+    def initialize_options(self):
+        self.my_inplace = None
+        _build_ext.initialize_options(self)
+
+    def finalize_options(self):
+        if self.my_inplace is None:
+            self.my_inplace = self.inplace
+            self.inplace = 0
+        _build_ext.finalize_options(self)
+
     def build_extension(self, ext):
-        self.inplace = 0
         _build_ext.build_extension(self, ext)
+        if not self.my_inplace:
+            build_lib = os.path.abspath(self.build_lib)
+            if build_lib not in sys.path:
+                sys.path.insert(0, build_lib)
+            return
         filename = self.get_ext_filename(ext.name)
         build_path = os.path.abspath(os.path.join(self.build_lib, filename))
         src_path = os.path.abspath(filename)
