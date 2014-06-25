@@ -55,6 +55,7 @@ else:
         depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())]
 
 from distutils.core import Command
+from my_build_ext import build_ext
 
 
 setup(
@@ -69,6 +70,7 @@ setup(
     platforms=['any'],
     headers=headers,
     ext_modules=ext_modules,
+    cmdclass=dict(build_ext=build_ext),
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
