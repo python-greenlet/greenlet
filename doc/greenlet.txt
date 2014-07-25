@@ -370,7 +370,7 @@ Reference
     greenlet will be created, but will fail if switched in. If ``parent`` is
     NULL, the parent is automatically set to the current greenlet.
 
-``PyGreenlet *PyGreenlet_Switch(PyGreenlet *g, PyObject *args, PyObject *kwargs)``
+``PyObject *PyGreenlet_Switch(PyGreenlet *g, PyObject *args, PyObject *kwargs)``
     Switches to the greenlet ``g``. ``args`` and ``kwargs`` are optional and
     can be NULL. If ``args`` is NULL, an empty tuple is passed to the target
     greenlet. If kwargs is NULL, no keyword arguments are passed to the target
