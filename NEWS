@@ -1,3 +1,13 @@
+0.4.3
+=====
+- Better slp_switch performance on SPARC
+- Drop support for Python 2.3
+- Fix trashcan assertions on debug builds of Python
+- Remove deprecated -fno-tree-dominator-opts compiler switch
+- Enable switch code for SunStudio on 32-bit SunOS
+- Support for abc abstract methods in greenlet subclasses
+- Support custom directories for tests
+
 0.4.2
 =====
 - Add .travis.yml
