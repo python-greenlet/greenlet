@@ -312,6 +312,44 @@ Greenlets do not participate in garbage collection; cycles involving data
 that is present in a greenlet's frames will not be detected.  Storing
 references to other greenlets cyclically may lead to leaks.
 
+Tracing support
+---------------
+
+Standard Python tracing and profiling doesn't work as expected when used with
+greenlet since stack and frame switching happens on the same Python thread.
+It is difficult to detect greenlet switching reliably with conventional
+methods, so to improve support for debugging, tracing and profiling greenlet
+based code there are new functions in the greenlet module:
+
+``greenlet.gettrace()``
+    Returns a previously set tracing function, or None.
+
+``greenlet.settrace(callback)``
+    Sets a new tracing function and returns a previous tracing function, or
+    None. The callback is called on various events and is expected to have
+    the following signature::
+
+        def callback(event, args):
+            if event == 'switch':
+                origin, target = args
+                # Handle a switch from origin to target.
+                # Note that callback is running in the context of target
+                # greenlet and any exceptions will be passed as if
+                # target.throw() was used instead of a switch.
+                return
+            if event == 'throw':
+                origin, target = args
+                # Handle a throw from origin to target.
+                # Note that callback is running in the context of target
+                # greenlet and any exceptions will replace the original, as
+                # if target.throw() was used with the replacing exception.
+                return
+
+    For compatibility it is very important to unpack args tuple only when
+    event is either ``'switch'`` or ``'throw'`` and not when ``event`` is
+    potentially something else. This way API can be extended to new events
+    similar to ``sys.settrace()``.
+
 C API Reference
 ===============
 
