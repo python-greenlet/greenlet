@@ -114,7 +114,7 @@ static void **_PyGreenlet_API = NULL;
  * g.parent = new_parent
  */
 #define PyGreenlet_SetParent \
-	(* (PyObject * (*)(PyGreenlet *greenlet, PyGreenlet *nparent)) \
+	(* (int (*)(PyGreenlet *greenlet, PyGreenlet *nparent)) \
 	 _PyGreenlet_API[PyGreenlet_SetParent_NUM])
 
 /* Macro that imports greenlet and initializes C API */
