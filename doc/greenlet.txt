@@ -394,7 +394,7 @@ Reference
 ``PyGreenlet *PyGreenlet_GET_PARENT(PyGreenlet *g)``
     Macro that returns the parent greenlet of ``g``.
 
-``PyGreenlet *PyGreenlet_SetParent(PyGreenlet *g)``
+``int PyGreenlet_SetParent(PyGreenlet *g)``
     Set the parent greenlet of ``g``. Returns 0 for success. If -1 is returned,
     then ``g`` is not a pointer to a PyGreenlet, and an AttributeError will
     be raised.
