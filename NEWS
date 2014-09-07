@@ -1,3 +1,8 @@
+0.4.4
+=====
+- Fixed PyGreenlet_SetParent signature, thanks to BoonsNaibot
+- Fixed 64-bit Windows builds depending on wrong runtime dll
+
 0.4.3
 =====
 - Better slp_switch performance on SPARC

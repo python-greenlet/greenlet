@@ -48,10 +48,16 @@ else:
     else:
         extra_objects = []
 
+    if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
+        extra_compile_args = ['/MT']
+    else:
+        extra_compile_args = []
+
     ext_modules = [Extension(
         name='greenlet',
         sources=['greenlet.c'],
         extra_objects=extra_objects,
+        extra_compile_args=extra_compile_args,
         depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())]
 
 from distutils.core import Command
@@ -60,7 +66,7 @@ from my_build_ext import build_ext
 
 setup(
     name="greenlet",
-    version='0.4.3',
+    version='0.4.4',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
     maintainer="Alexey Borzenkov",
