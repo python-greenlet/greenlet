@@ -6,6 +6,7 @@
  *      Ported from ppc.
  */
 
+#include <sgidefs.h>
 #define STACK_REFPLUS 1
 
 #ifdef SLP_EVAL
@@ -18,11 +19,15 @@ static int
 slp_switch(void)
 {
     register int *stackref, stsizediff;
-#ifdef __mips64
-    volatile register void *gp __asm__("$28");
-    volatile void *gpsave = gp;
+#if _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
+    void *gpsave;
 #endif
     __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
+#if _MIPS_SIM == _ABI64
+    __asm__ __volatile__ ("sd $28,%0" : "=m" (gpsave) : : );
+#elif _MIPS_SIM == _ABIN32
+    __asm__ __volatile__ ("sw $28,%0" : "=m" (gpsave) : : );
+#endif
     __asm__ ("move %0, $29" : "=r" (stackref) : );
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -37,10 +42,12 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
-    __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
-#ifdef __mips64
-    gp = gpsave;
+#if _MIPS_SIM == _ABI64
+    __asm__ __volatile__ ("ld $28,%0" : : "m" (gpsave) : );
+#elif _MIPS_SIM == _ABIN32
+    __asm__ __volatile__ ("lw $28,%0" : : "m" (gpsave) : );
 #endif
+    __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
     return 0;
 }
 
