@@ -25,8 +25,9 @@ class ArgRefcountTests(unittest.TestCase):
             g.switch(**kwargs)
         self.assertEqual(sys.getrefcount(kwargs), 2)
 
-    if greenlet.GREENLET_USE_GC:
+    if greenlet.GREENLET_USE_GC and sys.version_info[:2] != (2, 6):
         # These only work with greenlet gc support
+        # Disabled on Python 2.6 as too unstable
 
         def test_threaded_leak(self):
             gg = []
