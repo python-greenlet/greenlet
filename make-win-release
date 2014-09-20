@@ -2,7 +2,7 @@
 
 import sys, os, subprocess, re
 
-common_dist = ("bdist_wininst", "bdist_msi", "bdist_wheel", "test")
+common_dist = ("bdist_wininst", "bdist_msi", "bdist_wheel", "bdist_egg", "test")
 pyver2dist = {
     "Python26": common_dist,
     "Python26x64": common_dist,
