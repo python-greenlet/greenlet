@@ -67,14 +67,17 @@ test_getcurrent(PyObject *self)
 		PyErr_SetString(
 			PyExc_AssertionError,
 			"getcurrent() returned an invalid greenlet");
+		Py_XDECREF(g);
 		return NULL;
 	}
+	Py_DECREF(g);
 	Py_RETURN_NONE;
 }
 
 static PyObject *
 test_setparent(PyObject *self, PyObject *arg)
 {
+	PyGreenlet *current;
 	PyGreenlet *greenlet = NULL;
 
 	if (arg == NULL || !PyGreenlet_Check(arg))
@@ -82,9 +85,18 @@ test_setparent(PyObject *self, PyObject *arg)
 		PyErr_BadArgument();
 		return NULL;
 	}
+	if ((current = PyGreenlet_GetCurrent()) == NULL) {
+		return NULL;
+	}
 	greenlet = (PyGreenlet *) arg;
-	PyGreenlet_SetParent(greenlet, PyGreenlet_GetCurrent());
-	PyGreenlet_Switch(greenlet, NULL, NULL);
+	if (PyGreenlet_SetParent(greenlet, current)) {
+		Py_DECREF(current);
+		return NULL;
+	}
+	Py_DECREF(current);
+	if (PyGreenlet_Switch(greenlet, NULL, NULL) == NULL) {
+		return NULL;
+	}
 	Py_RETURN_NONE;
 }
 
