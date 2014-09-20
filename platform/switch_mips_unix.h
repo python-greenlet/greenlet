@@ -2,6 +2,8 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 20-Sep-14 Matt Madison <madison@bliss-m.org>
+ *      Re-code the saving of the gp register for MIPS64.
  * 05-Jan-08 Thiemo Seufer  <ths@debian.org>
  *      Ported from ppc.
  */
