@@ -6,7 +6,6 @@
  *      Ported from ppc.
  */
 
-#include <sgidefs.h>
 #define STACK_REFPLUS 1
 
 #ifdef SLP_EVAL
