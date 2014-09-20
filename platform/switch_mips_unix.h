@@ -12,18 +12,19 @@
 
 #define STACK_MAGIC 0
 
-#ifdef __mips64
-#define REGS_TO_SAVE "$16", "$17", "$18", "$19", "$20", "$21", "$22", \
-       "$23", "$28", "$30"
-#else
 #define REGS_TO_SAVE "$16", "$17", "$18", "$19", "$20", "$21", "$22", \
        "$23", "$30"
-#endif
 static int
 slp_switch(void)
 {
     register int *stackref, stsizediff;
+#ifdef __mips64
+    uint64_t gpsave;
+#endif
     __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
+#ifdef __mips64
+    __asm__ __volatile__ ("sd $28,%0" : "=m" (gpsave) : : );
+#endif
     __asm__ ("move %0, $29" : "=r" (stackref) : );
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -38,6 +39,9 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
+#ifdef __mips64
+    __asm__ __volatile__ ("ld $28,%0" : : "m" (gpsave) : );
+#endif
     __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
     return 0;
 }
