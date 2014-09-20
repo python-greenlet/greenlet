@@ -1350,10 +1350,19 @@ PyGreenlet_New(PyObject *run, PyGreenlet *parent)
 		Py_INCREF(run);
 		g->run_info = run;
 	}
-	if (parent == NULL) {
-		parent = PyGreenlet_GetCurrent();
+
+	if (parent != NULL) {
+		if (PyGreenlet_SetParent(g, parent)) {
+			Py_DECREF(g);
+			return NULL;
+		}
+	} else {
+		if ((g->parent = PyGreenlet_GetCurrent()) == NULL) {
+			Py_DECREF(g);
+			return NULL;
+		}
 	}
-	PyGreenlet_SetParent(g, parent);
+
 	return g;
 }
 
