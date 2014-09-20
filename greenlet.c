@@ -1323,6 +1323,7 @@ PyGreenlet_GetCurrent(void)
 	}
 	Py_INCREF(ts_current);
 	return ts_current;
+	/* Shouldn't this return a borrowed reference instead? See comments in `PyGreenlet_New` */
 }
 
 static int
@@ -1351,9 +1352,9 @@ PyGreenlet_New(PyObject *run, PyGreenlet *parent)
 		g->run_info = run;
 	}
 	if (parent == NULL) {
-		parent = PyGreenlet_GetCurrent();
+		parent = PyGreenlet_GetCurrent(); // `parent` ref += 1
 	}
-	PyGreenlet_SetParent(g, parent);
+	PyGreenlet_SetParent(g, parent); // `parent` ref += 1
 	return g;
 }
 
