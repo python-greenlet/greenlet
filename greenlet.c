@@ -829,6 +829,10 @@ static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	
 	o = PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
 	if (o != NULL) {
+		if (!STATE_OK) {
+			Py_DECREF(o);
+			return NULL;
+		}
 		Py_INCREF(ts_current);
 		((PyGreenlet*) o)->parent = ts_current;
 	}
