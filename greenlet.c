@@ -401,8 +401,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
 #undef slp_switch
 
 #ifndef STACK_MAGIC
-#error "greenlet needs to be ported to this platform,\
- or teached how to detect your compiler properly."
+#error "greenlet needs to be ported to this platform, or teached how to detect your compiler properly."
 #endif /* !STACK_MAGIC */
 
 #ifdef EXTERNAL_ASM
