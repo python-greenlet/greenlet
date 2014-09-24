@@ -485,3 +485,58 @@ class GreenletTests(unittest.TestCase):
 
             GoodSubclass() # should not raise
             self.assertRaises(TypeError, BadSubclass)
+
+    def test_implicit_parent_with_threads(self):
+        if not gc.isenabled():
+            return # cannot test with disabled gc
+        N = gc.get_threshold()[0]
+        if N < 50:
+            return # cannot test with such a small N
+        def attempt():
+            lock1 = threading.Lock()
+            lock1.acquire()
+            lock2 = threading.Lock()
+            lock2.acquire()
+            recycled = [False]
+            def another_thread():
+                lock1.acquire() # wait for gc
+                greenlet.getcurrent() # update ts_current
+                lock2.release() # release gc
+            t = threading.Thread(target=another_thread)
+            t.start()
+            class gc_callback(object):
+                def __del__(self):
+                    lock1.release()
+                    lock2.acquire()
+                    recycled[0] = True
+            class garbage(object):
+                def __init__(self):
+                    self.cycle = self
+                    self.callback = gc_callback()
+            l = []
+            g = garbage()
+            x = range(N*2)
+            current = greenlet.getcurrent()
+            for i in x:
+                g = None # lose reference to garbage
+                if recycled[0]:
+                    # gc callback called prematurely
+                    t.join()
+                    return False
+                last = greenlet()
+                if recycled[0]:
+                    break # yes! gc called in green_new
+                l.append(last) # increase allocation counter
+            else:
+                # gc callback not called when expected
+                gc.collect()
+                if recycled[0]:
+                    t.join()
+                return False
+            self.assertEqual(last.parent, current)
+            for g in l:
+                self.assertEqual(g.parent, current)
+            return True
+        for i in xrange(5):
+            if attempt():
+                break
