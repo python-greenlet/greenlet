@@ -822,11 +822,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 
 static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-	PyObject* o;
-	if (!STATE_OK)
-		return NULL;
-	
-	o = PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
+	PyObject* o = PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
 	if (o != NULL) {
 		if (!STATE_OK) {
 			Py_DECREF(o);
