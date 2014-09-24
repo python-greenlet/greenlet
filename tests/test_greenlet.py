@@ -514,9 +514,9 @@ class GreenletTests(unittest.TestCase):
                     self.cycle = self
                     self.callback = gc_callback()
             l = []
-            g = garbage()
             x = range(N*2)
             current = greenlet.getcurrent()
+            g = garbage()
             for i in x:
                 g = None # lose reference to garbage
                 if recycled[0]:
