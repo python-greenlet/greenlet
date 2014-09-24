@@ -537,6 +537,6 @@ class GreenletTests(unittest.TestCase):
             for g in l:
                 self.assertEqual(g.parent, current)
             return True
-        for i in xrange(5):
+        for i in range(5):
             if attempt():
                 break
