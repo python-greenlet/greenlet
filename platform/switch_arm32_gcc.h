@@ -57,6 +57,7 @@ slp_switch(void)
 {
         void *fp;
         register int *stackref, stsizediff;
+        int result;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
         __asm__ volatile ("mov r0," REG_FP "\n\tstr r0,%0" : "=m" (fp) : : "r0");
         __asm__ ("mov %0," REG_SP : "=r" (stackref));
@@ -70,9 +71,9 @@ slp_switch(void)
                     );
                 SLP_RESTORE_STATE();
         }
-        __asm__ volatile ("ldr r0,%0\n\tmov " REG_FP ",r0" : : "m" (fp) : "r0");
+        __asm__ volatile ("ldr r0,%1\n\tmov " REG_FP ",r0\n\tmov %0, #0" : "=r" (result) : "m" (fp) : "r0");
         __asm__ volatile ("" : : : REGS_TO_SAVE);
-        return 0;
+        return result;
 }
 
 #endif
