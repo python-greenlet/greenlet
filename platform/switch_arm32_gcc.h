@@ -50,6 +50,9 @@
 #endif
 
 static int
+#ifdef __GNUC__
+__attribute__((optimize("no-omit-frame-pointer")))
+#endif
 slp_switch(void)
 {
         void *fp;
