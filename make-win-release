@@ -2,7 +2,7 @@
 
 import sys, os, subprocess, re
 
-common_dist = ("bdist_wininst", "bdist_msi", "bdist_wheel", "bdist_egg", "test")
+common_dist = ("bdist_wheel", "bdist_egg", "test")
 pyver2dist = {
     "Python26": common_dist,
     "Python26x64": common_dist,
@@ -40,8 +40,6 @@ def main():
     here = os.path.dirname(os.path.dirname(sys.executable))
     for pyver, dists in sorted(pyver2dist.items()):
         exe = os.path.join(here, pyver, "python.exe")
-        if pyver.endswith('x64'):
-            exe = "run_vs2010_x64.cmd " + exe
         for d in dists:
             cmd = "%s setup.py -q %s" % (exe, d)
             system(cmd)
