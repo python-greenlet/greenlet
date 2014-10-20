@@ -16,6 +16,7 @@
 static int
 slp_switch(void)
 {
+  int err;
   int *stackref, stsizediff;
   void *fp, *a5;
   __asm__ volatile ("" : : : REGS_TO_SAVE);
@@ -26,11 +27,12 @@ slp_switch(void)
     SLP_SAVE_STATE(stackref, stsizediff);
     __asm__ volatile ("add.l %0, %%sp; add.l %0, %%fp" : : "r"(stsizediff));
     SLP_RESTORE_STATE();
+    __asm__ volatile ("clr.l %0" : "=g" (err));
   }
   __asm__ volatile ("move.l %0, %%a5" : : "m"(a5));
   __asm__ volatile ("move.l %0, %%fp" : : "m"(fp));
   __asm__ volatile ("" : : : REGS_TO_SAVE);
-  return 0;
+  return err;
 }
 
 #endif
