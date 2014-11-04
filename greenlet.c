@@ -1226,6 +1226,13 @@ static PyObject* green_getdead(PyGreenlet* self, void* c)
 		Py_RETURN_TRUE;
 }
 
+
+static PyObject* green_get_stack_saved(PyGreenlet* self, void* c)
+{
+    return PyLong_FromSsize_t(self->stack_saved);
+}
+
+
 static PyObject* green_getrun(PyGreenlet* self, void* c)
 {
 	if (PyGreenlet_STARTED(self) || self->run_info == NULL) {
@@ -1425,6 +1432,8 @@ static PyGetSetDef green_getsets[] = {
 	{"gr_frame", (getter)green_getframe,
 	             NULL, /*XXX*/ NULL},
 	{"dead",   (getter)green_getdead,
+	             NULL, /*XXX*/ NULL},
+	{"_stack_saved", (getter)green_get_stack_saved,
 	             NULL, /*XXX*/ NULL},
 	{NULL}
 };
