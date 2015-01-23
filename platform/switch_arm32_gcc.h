@@ -34,7 +34,7 @@
 #else
 #define REG_FP "fp"
 #define REG_FPFP "fp,fp"
-#define REGS_TO_SAVE_GENERAL "r4", "r5", "r6", "r7", "r8", "r9", "lr"
+#define REGS_TO_SAVE_GENERAL "r4", "r5", "r6", "r7", "r8", "r9", "r10", "lr"
 #endif
 #if defined(__SOFTFP__)
 #define REGS_TO_SAVE REGS_TO_SAVE_GENERAL
