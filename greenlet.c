@@ -834,7 +834,7 @@ static PyObject* green_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	return o;
 }
 
-static int green_setrun(PyGreenlet* self, PyObject* nparent, void* c);
+static int green_setrun(PyGreenlet* self, PyObject* nrun, void* c);
 static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c);
 
 static int green_init(PyGreenlet *self, PyObject *args, PyObject *kwargs)
