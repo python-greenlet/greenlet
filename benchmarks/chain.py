@@ -12,8 +12,7 @@ import greenlet
 
 def link(next_greenlet):
     value = greenlet.getcurrent().parent.switch()
-    while True:
-        next_greenlet.switch(value + 1)
+    next_greenlet.switch(value + 1)
 
 
 def chain(n):
