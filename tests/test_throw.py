@@ -43,8 +43,8 @@ class ThrowTests(unittest.TestCase):
         g = greenlet(f)
         res = g.switch()
         self.assertEqual(res, "ok")
-        res = g.throw(RuntimeError, "ciao")
-        self.assertEqual(res, "ok")
+        res = g.throw(RuntimeError, "non-ciao")
+        self.assertEqual(res, "fail")
 
     def test_kill(self):
         def f():
