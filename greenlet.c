@@ -86,7 +86,7 @@ The running greenlet's stack_start is undefined but not NULL.
 #endif
 #ifndef PyVarObject_HEAD_INIT
 #  define PyVarObject_HEAD_INIT(type, size) \
-    PyObject_HEAD_INIT(type) size,
+	PyObject_HEAD_INIT(type) size,
 #endif
 #endif
 
@@ -119,7 +119,7 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
 /* Thread-aware routines, switching global variables when needed */
 
 #define STATE_OK    (ts_current->run_info == PyThreadState_GET()->dict \
-			|| !green_updatecurrent())
+                     || !green_updatecurrent())
 
 static PyObject* ts_curkey;
 static PyObject* ts_delkey;
@@ -312,11 +312,11 @@ static int g_save(PyGreenlet* g, char* stop)
 
 	   g->stack_stop |________|
 	                 |        |
-			 |    __ stop       . . . . .
+	                 |    __ stop       . . . . .
 	                 |        |    ==>  .       .
-			 |________|          _______
-			 |        |         |       |
-			 |        |         |       |
+	                 |________|          _______
+	                 |        |         |       |
+	                 |        |         |       |
 	  g->stack_start |        |         |_______| g->stack_copy
 
 	 */
@@ -385,14 +385,14 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
  * specific code, in order to simplify maintenance.
  */
 
-#define SLP_SAVE_STATE(stackref, stsizediff)		\
-  stackref += STACK_MAGIC;				\
-  if (slp_save_state((char*)stackref)) return -1;	\
-  if (!PyGreenlet_ACTIVE(ts_target)) return 1;		\
-  stsizediff = ts_target->stack_start - (char*)stackref
+#define SLP_SAVE_STATE(stackref, stsizediff)            \
+	stackref += STACK_MAGIC;                        \
+	if (slp_save_state((char*)stackref)) return -1; \
+	if (!PyGreenlet_ACTIVE(ts_target)) return 1;    \
+	stsizediff = ts_target->stack_start - (char*)stackref
 
-#define SLP_RESTORE_STATE()			\
-  slp_restore_state()
+#define SLP_RESTORE_STATE()                             \
+	slp_restore_state()
 
 
 #define SLP_EVAL
@@ -411,13 +411,13 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
  */
 
 intptr_t slp_save_state_asm(intptr_t *ref) {
-    intptr_t diff;
-    SLP_SAVE_STATE(ref, diff);
-    return diff;
+	intptr_t diff;
+	SLP_SAVE_STATE(ref, diff);
+	return diff;
 }
 
 void slp_restore_state_asm(void) {
-    SLP_RESTORE_STATE();
+	SLP_RESTORE_STATE();
 }
 
 extern int slp_switch(void);
@@ -501,8 +501,8 @@ g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin, PyGreenlet
 	retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
 	tstate->tracing--;
 	tstate->use_tracing = (tstate->tracing <= 0 &&
-		((tstate->c_tracefunc != NULL) ||
-		(tstate->c_profilefunc != NULL)));
+	                       ((tstate->c_tracefunc != NULL) ||
+	                        (tstate->c_profilefunc != NULL)));
 	if (retval == NULL) {
 		/* In case of exceptions trace function is removed */
 		if (PyDict_GetItem(tstate->dict, ts_tracekey))
@@ -537,8 +537,8 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 		Py_XDECREF(args);
 		Py_XDECREF(kwargs);
 		PyErr_SetString(PyExc_GreenletError, run_info
-				? "cannot switch to a different thread"
-				: "cannot switch to a garbage collected greenlet");
+		                ? "cannot switch to a different thread"
+		                : "cannot switch to a garbage collected greenlet");
 		return NULL;
 	}
 
@@ -703,8 +703,8 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 	if (run_info == NULL || run_info != ts_current->run_info) {
 		Py_DECREF(run);
 		PyErr_SetString(PyExc_GreenletError, run_info
-				? "cannot switch to a different thread"
-				: "cannot switch to a garbage collected greenlet");
+		                ? "cannot switch to a different thread"
+		                : "cannot switch to a garbage collected greenlet");
 		return -1;
 	}
 
@@ -843,7 +843,7 @@ static int green_init(PyGreenlet *self, PyObject *args, PyObject *kwargs)
 	PyObject* nparent = NULL;
 	static char *kwlist[] = {"run", "parent", 0};
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|OO:green", kwlist,
-					 &run, &nparent))
+	                                 &run, &nparent))
 		return -1;
 
 	if (run != NULL) {
@@ -891,7 +891,7 @@ static int kill_greenlet(PyGreenlet* self)
 		if (lst == NULL) {
 			lst = PyList_New(0);
 			if (lst == NULL || PyDict_SetItem(self->run_info,
-							  ts_delkey, lst) < 0)
+			                                  ts_delkey, lst) < 0)
 				return -1;
 		}
 		if (PyList_Append(lst, (PyObject*) self) < 0)
@@ -972,7 +972,7 @@ static void green_dealloc_safe(PyGreenlet* self)
 			Py_INCREF(self); /* leak! */
 			if (f != NULL) {
 				PyFile_WriteString("GreenletExit did not kill ",
-						   f);
+				                   f);
 				PyFile_WriteObject((PyObject*) self, f, 0);
 				PyFile_WriteString("\n", f);
 			}
@@ -1175,7 +1175,7 @@ green_throw(PyGreenlet *self, PyObject *args)
 
 	return throw_greenlet(self, typ, val, tb);
 
- failed_throw:
+failed_throw:
 	/* Didn't use our arguments, so restore their original refcounts */
 	Py_DECREF(typ);
 	Py_XDECREF(val);
@@ -1229,7 +1229,7 @@ static PyObject* green_getdead(PyGreenlet* self, void* c)
 
 static PyObject* green_get_stack_saved(PyGreenlet* self, void* c)
 {
-    return PyLong_FromSsize_t(self->stack_saved);
+	return PyLong_FromSsize_t(self->stack_saved);
 }
 
 
@@ -1248,8 +1248,8 @@ static int green_setrun(PyGreenlet* self, PyObject* nrun, void* c)
 	PyObject* o;
 	if (PyGreenlet_STARTED(self)) {
 		PyErr_SetString(PyExc_AttributeError,
-				"run cannot be set "
-				"after the start of the greenlet");
+		                "run cannot be set "
+		                "after the start of the greenlet");
 		return -1;
 	}
 	o = self->run_info;
@@ -1310,7 +1310,8 @@ static PyObject* green_getframe(PyGreenlet* self, void* c)
 static PyObject* green_getstate(PyGreenlet* self)
 {
 	PyErr_Format(PyExc_TypeError,
-		"cannot serialize '%s' object", Py_TYPE(self)->tp_name);
+	             "cannot serialize '%s' object",
+	             Py_TYPE(self)->tp_name);
 	return NULL;
 }
 
@@ -1415,23 +1416,23 @@ PyGreenlet_Throw(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
 /** End C API ****************************************************************/
 
 static PyMethodDef green_methods[] = {
-    {"switch", (PyCFunction)green_switch,
-     METH_VARARGS | METH_KEYWORDS, green_switch_doc},
-    {"throw",  (PyCFunction)green_throw,  METH_VARARGS, green_throw_doc},
-    {"__getstate__", (PyCFunction)green_getstate, METH_NOARGS, NULL},
-    {NULL,     NULL}		/* sentinel */
+	{"switch", (PyCFunction)green_switch,
+	 METH_VARARGS | METH_KEYWORDS, green_switch_doc},
+	{"throw",  (PyCFunction)green_throw,  METH_VARARGS, green_throw_doc},
+	{"__getstate__", (PyCFunction)green_getstate, METH_NOARGS, NULL},
+	{NULL,     NULL} /* sentinel */
 };
 
 static PyGetSetDef green_getsets[] = {
 	{"__dict__", (getter)green_getdict,
-		     (setter)green_setdict, /*XXX*/ NULL},
-	{"run",    (getter)green_getrun,
-		   (setter)green_setrun, /*XXX*/ NULL},
-	{"parent", (getter)green_getparent,
-		   (setter)green_setparent, /*XXX*/ NULL},
+	             (setter)green_setdict, /*XXX*/ NULL},
+	{"run",      (getter)green_getrun,
+	             (setter)green_setrun, /*XXX*/ NULL},
+	{"parent",   (getter)green_getparent,
+	             (setter)green_setparent, /*XXX*/ NULL},
 	{"gr_frame", (getter)green_getframe,
 	             NULL, /*XXX*/ NULL},
-	{"dead",   (getter)green_getdead,
+	{"dead",     (getter)green_getdead,
 	             NULL, /*XXX*/ NULL},
 	{"_stack_saved", (getter)green_get_stack_saved,
 	             NULL, /*XXX*/ NULL},
@@ -1439,68 +1440,68 @@ static PyGetSetDef green_getsets[] = {
 };
 
 static PyNumberMethods green_as_number = {
-	NULL,		/* nb_add */
-	NULL,		/* nb_subtract */
-	NULL,		/* nb_multiply */
+	NULL,                /* nb_add */
+	NULL,                /* nb_subtract */
+	NULL,                /* nb_multiply */
 #if PY_MAJOR_VERSION < 3
-	NULL,		/* nb_divide */
+	NULL,                /* nb_divide */
 #endif
-	NULL,		/* nb_remainder */
-	NULL,		/* nb_divmod */
-	NULL,		/* nb_power */
-	NULL,		/* nb_negative */
-	NULL,		/* nb_positive */
-	NULL,		/* nb_absolute */
-	(inquiry)green_bool,	/* nb_bool */
+	NULL,                /* nb_remainder */
+	NULL,                /* nb_divmod */
+	NULL,                /* nb_power */
+	NULL,                /* nb_negative */
+	NULL,                /* nb_positive */
+	NULL,                /* nb_absolute */
+	(inquiry)green_bool, /* nb_bool */
 };
 
 
 PyTypeObject PyGreenlet_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
-	"greenlet.greenlet",			/* tp_name */
-	sizeof(PyGreenlet),			/* tp_basicsize */
-	0,					/* tp_itemsize */
+	"greenlet.greenlet",                    /* tp_name */
+	sizeof(PyGreenlet),                     /* tp_basicsize */
+	0,                                      /* tp_itemsize */
 	/* methods */
-	(destructor)green_dealloc,		/* tp_dealloc */
-	0,					/* tp_print */
-	0,					/* tp_getattr */
-	0,					/* tp_setattr */
-	0,					/* tp_compare */
-	0,					/* tp_repr */
-	&green_as_number,			/* tp_as _number*/
-	0,					/* tp_as _sequence*/
-	0,					/* tp_as _mapping*/
-	0, 					/* tp_hash */
-	0,					/* tp_call */
-	0,					/* tp_str */
-	0,					/* tp_getattro */
-	0,					/* tp_setattro */
-	0,					/* tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS,	/* tp_flags */
+	(destructor)green_dealloc,              /* tp_dealloc */
+	0,                                      /* tp_print */
+	0,                                      /* tp_getattr */
+	0,                                      /* tp_setattr */
+	0,                                      /* tp_compare */
+	0,                                      /* tp_repr */
+	&green_as_number,                       /* tp_as _number*/
+	0,                                      /* tp_as _sequence*/
+	0,                                      /* tp_as _mapping*/
+	0,                                      /* tp_hash */
+	0,                                      /* tp_call */
+	0,                                      /* tp_str */
+	0,                                      /* tp_getattro */
+	0,                                      /* tp_setattro */
+	0,                                      /* tp_as_buffer*/
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS, /* tp_flags */
 	"greenlet(run=None, parent=None) -> greenlet\n\n"
 	"Creates a new greenlet object (without running it).\n\n"
 	" - *run* -- The callable to invoke.\n"
 	" - *parent* -- The parent greenlet. The default is the current "
 	"greenlet.",                            /* tp_doc */
-	(traverseproc)GREENLET_tp_traverse,	/* tp_traverse */
-	(inquiry)GREENLET_tp_clear,		/* tp_clear */
-	0,					/* tp_richcompare */
-	offsetof(PyGreenlet, weakreflist),	/* tp_weaklistoffset */
-	0,					/* tp_iter */
-	0,					/* tp_iternext */
-	green_methods,				/* tp_methods */
-	0,					/* tp_members */
-	green_getsets,				/* tp_getset */
-	0,					/* tp_base */
-	0,					/* tp_dict */
-	0,					/* tp_descr_get */
-	0,					/* tp_descr_set */
-	offsetof(PyGreenlet, dict),		/* tp_dictoffset */
-	(initproc)green_init,			/* tp_init */
-	GREENLET_tp_alloc,			/* tp_alloc */
-	green_new,				/* tp_new */
-	GREENLET_tp_free,			/* tp_free */
-	(inquiry)GREENLET_tp_is_gc,		/* tp_is_gc */
+	(traverseproc)GREENLET_tp_traverse,     /* tp_traverse */
+	(inquiry)GREENLET_tp_clear,             /* tp_clear */
+	0,                                      /* tp_richcompare */
+	offsetof(PyGreenlet, weakreflist),      /* tp_weaklistoffset */
+	0,                                      /* tp_iter */
+	0,                                      /* tp_iternext */
+	green_methods,                          /* tp_methods */
+	0,                                      /* tp_members */
+	green_getsets,                          /* tp_getset */
+	0,                                      /* tp_base */
+	0,                                      /* tp_dict */
+	0,                                      /* tp_descr_get */
+	0,                                      /* tp_descr_set */
+	offsetof(PyGreenlet, dict),             /* tp_dictoffset */
+	(initproc)green_init,                   /* tp_init */
+	GREENLET_tp_alloc,                      /* tp_alloc */
+	green_new,                              /* tp_new */
+	GREENLET_tp_free,                       /* tp_free */
+	(inquiry)GREENLET_tp_is_gc,             /* tp_is_gc */
 };
 
 static PyObject* mod_getcurrent(PyObject* self)
@@ -1643,10 +1644,10 @@ initgreenlet(void)
 	}
 #if PY_MAJOR_VERSION >= 3 || (PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION >= 5)
 	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
-						PyExc_BaseException, NULL);
+	                                        PyExc_BaseException, NULL);
 #else
 	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
-						NULL, NULL);
+	                                        NULL, NULL);
 #endif
 	if (PyExc_GreenletExit == NULL)
 	{
@@ -1680,7 +1681,7 @@ initgreenlet(void)
 	PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(GREENLET_USE_GC));
 	PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(GREENLET_USE_TRACING));
 
-        /* also publish module-level data as attributes of the greentype. */
+	/* also publish module-level data as attributes of the greentype. */
 	for (p=copy_on_greentype; *p; p++) {
 		PyObject* o = PyObject_GetAttrString(m, *p);
 		if (!o) continue;
