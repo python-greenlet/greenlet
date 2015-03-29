@@ -340,7 +340,7 @@ static void GREENLET_NOINLINE(slp_restore_state)(void)
 {
 	PyGreenlet* g = ts_target;
 	PyGreenlet* owner = ts_current;
-	
+
 	/* Restore the heap copy back into the C stack */
 	if (g->stack_saved != 0) {
 		memcpy(g->stack_start, g->stack_copy, g->stack_saved);
@@ -365,7 +365,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
 		owner = owner->stack_prev;  /* not saved if dying */
 	else
 		owner->stack_start = stackref;
-	
+
 	while (owner->stack_stop < target_stop) {
 		/* ts_current is entierely within the area to free */
 		if (g_save(owner, owner->stack_stop))
@@ -1055,23 +1055,23 @@ throw_greenlet(PyGreenlet *self, PyObject *typ, PyObject *val, PyObject *tb)
 }
 
 PyDoc_STRVAR(green_switch_doc,
-"switch(*args, **kwargs)\n\
-\n\
-Switch execution to this greenlet.\n\
-\n\
-If this greenlet has never been run, then this greenlet\n\
-will be switched to using the body of self.run(*args, **kwargs).\n\
-\n\
-If the greenlet is active (has been run, but was switch()'ed\n\
-out before leaving its run function), then this greenlet will\n\
-be resumed and the return value to its switch call will be\n\
-None if no arguments are given, the given argument if one\n\
-argument is given, or the args tuple and keyword args dict if\n\
-multiple arguments are given.\n\
-\n\
-If the greenlet is dead, or is the current greenlet then this\n\
-function will simply return the arguments using the same rules as\n\
-above.");
+"switch(*args, **kwargs)\n"
+"\n"
+"Switch execution to this greenlet.\n"
+"\n"
+"If this greenlet has never been run, then this greenlet\n"
+"will be switched to using the body of self.run(*args, **kwargs).\n"
+"\n"
+"If the greenlet is active (has been run, but was switch()'ed\n"
+"out before leaving its run function), then this greenlet will\n"
+"be resumed and the return value to its switch call will be\n"
+"None if no arguments are given, the given argument if one\n"
+"argument is given, or the args tuple and keyword args dict if\n"
+"multiple arguments are given.\n"
+"\n"
+"If the greenlet is dead, or is the current greenlet then this\n"
+"function will simply return the arguments using the same rules as\n"
+"above.\n");
 
 static PyObject* green_switch(
 	PyGreenlet* self,
@@ -1499,7 +1499,7 @@ PyTypeObject PyGreenlet_Type = {
 	(initproc)green_init,			/* tp_init */
 	GREENLET_tp_alloc,			/* tp_alloc */
 	green_new,				/* tp_new */
-	GREENLET_tp_free,			/* tp_free */        
+	GREENLET_tp_free,			/* tp_free */
 	(inquiry)GREENLET_tp_is_gc,		/* tp_is_gc */
 };
 
