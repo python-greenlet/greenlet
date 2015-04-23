@@ -22,6 +22,7 @@ slp_switch(void)
     void* ebx;
     unsigned int csr;
     unsigned short cw;
+    register int err;
     register int *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("fstcw %0" : "=m" (cw));
@@ -44,7 +45,8 @@ slp_switch(void)
     __asm__ volatile ("ldmxcsr %0" : : "m" (csr));
     __asm__ volatile ("fldcw %0" : : "m" (cw));
     __asm__ volatile ("" : : : REGS_TO_SAVE);
-    return 0;
+    __asm__ volatile ("xorl %%eax, %%eax" : "=a" (err));
+    return err;
 }
 
 #endif
@@ -53,7 +55,7 @@ slp_switch(void)
  * further self-processing support
  */
 
-/* 
+/*
  * if you want to add self-inspection tools, place them
  * here. See the x86_msvc for the necessary defines.
  * These features are highly experimental und not
