@@ -55,11 +55,7 @@ slp_switch(void)
      *
      * Then put the stack pointer into stackref. */
     __asm__ volatile (
-#ifdef __sparcv9
-        "flushw\n\t"
-#else
         "ta %1\n\t"
-#endif
         "mov %%sp, %0"
         : "=r" (stackref) :  "i" (ST_FLUSH_WINDOWS));
 
