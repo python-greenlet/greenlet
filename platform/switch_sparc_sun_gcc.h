@@ -39,6 +39,7 @@
 static int
 slp_switch(void)
 {
+    register int err;
     register int *stackref, stsizediff;
 
     /* Flush SPARC register windows onto the stack, so they can be used to
@@ -80,8 +81,8 @@ slp_switch(void)
          * we can't guarantee the other register windows are fine to use by
          * their threads anymore, so tell the CPU to clean them. */
         __asm__ volatile ("ta %0" : : "i" (ST_CLEAN_WINDOWS));
-
-        return 0;
+        __asm__ volatile ("mov %1, %0" : "=r" (err) : "i" (0));
+        return err;
     }
 }
 
