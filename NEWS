@@ -1,3 +1,12 @@
+0.4.6
+=====
+- Expose `_stack_saved` property on greenlet objects, it may be used to
+  introspect the amount of memory used by a saved stack, but the API is
+  subject to change in the future
+- Added a workaround for `return 0` compiler optimizations on all
+  architectures
+- C API typo fixes
+
 0.4.5
 =====
 - Fixed several bugs in greenlet C API
