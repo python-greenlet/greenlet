@@ -19,6 +19,7 @@
 static int
 slp_switch(void)
 {
+    register int err;
     register int *stackref, stsizediff;
 #ifdef __mips64
     uint64_t gpsave;
@@ -45,7 +46,8 @@ slp_switch(void)
     __asm__ __volatile__ ("ld $28,%0" : : "m" (gpsave) : );
 #endif
     __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
-    return 0;
+    __asm__ __volatile__ ("move %0, $0" : "=r" (err));
+    return err;
 }
 
 #endif
@@ -54,7 +56,7 @@ slp_switch(void)
  * further self-processing support
  */
 
-/* 
+/*
  * if you want to add self-inspection tools, place them
  * here. See the x86_msvc for the necessary defines.
  * These features are highly experimental und not
