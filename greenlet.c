@@ -308,82 +308,6 @@ static int (*g_initialstub)(void*);
 } while(0)
 #endif
 
-/***********************************************************/
-
-static int g_save(PyGreenlet* g, char* stop)
-{
-	/* Save more of g's stack into the heap -- at least up to 'stop'
-
-	   g->stack_stop |________|
-	                 |        |
-	                 |    __ stop       . . . . .
-	                 |        |    ==>  .       .
-	                 |________|          _______
-	                 |        |         |       |
-	                 |        |         |       |
-	  g->stack_start |        |         |_______| g->stack_copy
-
-	 */
-	intptr_t sz1 = g->stack_saved;
-	intptr_t sz2 = stop - g->stack_start;
-	assert(g->stack_start != NULL);
-	if (sz2 > sz1) {
-		char* c = (char*)PyMem_Realloc(g->stack_copy, sz2);
-		if (!c) {
-			PyErr_NoMemory();
-			return -1;
-		}
-		memcpy(c+sz1, g->stack_start+sz1, sz2-sz1);
-		g->stack_copy = c;
-		g->stack_saved = sz2;
-	}
-	return 0;
-}
-
-static void GREENLET_NOINLINE(slp_restore_state)(void)
-{
-	PyGreenlet* g = ts_target;
-	PyGreenlet* owner = ts_current;
-
-	/* Restore the heap copy back into the C stack */
-	if (g->stack_saved != 0) {
-		memcpy(g->stack_start, g->stack_copy, g->stack_saved);
-		PyMem_Free(g->stack_copy);
-		g->stack_copy = NULL;
-		g->stack_saved = 0;
-	}
-	if (owner->stack_start == NULL)
-		owner = owner->stack_prev; /* greenlet is dying, skip it */
-	while (owner && owner->stack_stop <= g->stack_stop)
-		owner = owner->stack_prev; /* find greenlet with more stack */
-	g->stack_prev = owner;
-}
-
-static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
-{
-	/* must free all the C stack up to target_stop */
-	char* target_stop = ts_target->stack_stop;
-	PyGreenlet* owner = ts_current;
-	assert(owner->stack_saved == 0);
-	if (owner->stack_start == NULL)
-		owner = owner->stack_prev;  /* not saved if dying */
-	else
-		owner->stack_start = stackref;
-
-	while (owner->stack_stop < target_stop) {
-		/* ts_current is entierely within the area to free */
-		if (g_save(owner, owner->stack_stop))
-			return -1;  /* XXX */
-		owner = owner->stack_prev;
-	}
-	if (owner != ts_target) {
-		if (g_save(owner, target_stop))
-			return -1;  /* XXX */
-	}
-	return 0;
-}
-
-
 /*
  * the following macros are spliced into the OS/compiler
  * specific code, in order to simplify maintenance.
@@ -427,6 +351,89 @@ void slp_restore_state_asm(void) {
 extern int slp_switch(void);
 
 #endif
+
+/***********************************************************/
+
+static int g_save(PyGreenlet* g, char* stop)
+{
+	/* Save more of g's stack into the heap -- at least up to 'stop'
+
+	   g->stack_stop |________|
+	                 |        |
+	                 |    __ stop       . . . . .
+	                 |        |    ==>  .       .
+	                 |________|          _______
+	                 |        |         |       |
+	                 |        |         |       |
+	  g->stack_start |        |         |_______| g->stack_copy
+
+	 */
+	intptr_t sz1 = g->stack_saved;
+	intptr_t sz2 = stop - g->stack_start;
+	assert(g->stack_start != NULL);
+	if (sz2 > sz1) {
+		char* c = (char*)PyMem_Realloc(g->stack_copy, sz2);
+		if (!c) {
+			PyErr_NoMemory();
+			return -1;
+		}
+		memcpy(c+sz1, g->stack_start+sz1, sz2-sz1);
+		g->stack_copy = c;
+		g->stack_saved = sz2;
+	}
+	return 0;
+}
+
+static void GREENLET_NOINLINE(slp_restore_state)(void)
+{
+	PyGreenlet* g = ts_target;
+	PyGreenlet* owner = ts_current;
+
+#ifdef SLP_BEFORE_RESTORE_STATE
+	SLP_BEFORE_RESTORE_STATE();
+#endif
+
+	/* Restore the heap copy back into the C stack */
+	if (g->stack_saved != 0) {
+		memcpy(g->stack_start, g->stack_copy, g->stack_saved);
+		PyMem_Free(g->stack_copy);
+		g->stack_copy = NULL;
+		g->stack_saved = 0;
+	}
+	if (owner->stack_start == NULL)
+		owner = owner->stack_prev; /* greenlet is dying, skip it */
+	while (owner && owner->stack_stop <= g->stack_stop)
+		owner = owner->stack_prev; /* find greenlet with more stack */
+	g->stack_prev = owner;
+}
+
+static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
+{
+	/* must free all the C stack up to target_stop */
+	char* target_stop = ts_target->stack_stop;
+	PyGreenlet* owner = ts_current;
+	assert(owner->stack_saved == 0);
+	if (owner->stack_start == NULL)
+		owner = owner->stack_prev;  /* not saved if dying */
+	else
+		owner->stack_start = stackref;
+
+#ifdef SLP_BEFORE_SAVE_STATE
+	SLP_BEFORE_SAVE_STATE();
+#endif
+
+	while (owner->stack_stop < target_stop) {
+		/* ts_current is entierely within the area to free */
+		if (g_save(owner, owner->stack_stop))
+			return -1;  /* XXX */
+		owner = owner->stack_prev;
+	}
+	if (owner != ts_target) {
+		if (g_save(owner, target_stop))
+			return -1;  /* XXX */
+	}
+	return 0;
+}
 
 static int g_switchstack(void)
 {

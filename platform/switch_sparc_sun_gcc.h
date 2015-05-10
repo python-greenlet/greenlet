@@ -2,6 +2,8 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 16-May-15  Alexey Borzenkov <snaury@gmail.com>
+ *      Move stack spilling code inside save/restore functions
  * 30-Aug-13  Floris Bruynooghe <flub@devork.be>
         Clean the register windows again before returning.
         This does not clobber the PIC register as it leaves
@@ -33,8 +35,18 @@
 
 
 #define STACK_MAGIC 0
-#define ST_FLUSH_WINDOWS 0x03
-#define ST_CLEAN_WINDOWS 0x04
+
+
+#if defined(__sparcv9)
+#define SLP_FLUSHW __asm__ volatile ("flushw")
+#else
+#define SLP_FLUSHW __asm__ volatile ("ta 3") /* ST_FLUSH_WINDOWS */
+#endif
+
+/* On sparc we need to spill register windows inside save/restore functions */
+#define SLP_BEFORE_SAVE_STATE() SLP_FLUSHW
+#define SLP_BEFORE_RESTORE_STATE() SLP_FLUSHW
+
 
 static int
 slp_switch(void)
@@ -42,23 +54,10 @@ slp_switch(void)
     register int err;
     register int *stackref, stsizediff;
 
-    /* Flush SPARC register windows onto the stack, so they can be used to
-     * restore the registers after the stack has been switched out and
-     * restored.  This also ensures the current window (pointed at by
-     * the CWP register) is the only window left in the registers
-     * (CANSAVE=0, CANRESTORE=0), that means the registers of our
-     * caller are no longer there and when we return they will always
-     * be loaded from the stack by a window underflow/fill trap.
-     *
-     * On SPARC v9 and above it might be more efficient to use the
-     * FLUSHW instruction instead of TA ST_FLUSH_WINDOWS.  But that
-     * requires the correct -mcpu flag to gcc.
-     *
-     * Then put the stack pointer into stackref. */
-    __asm__ volatile (
-        "ta %1\n\t"
-        "mov %%sp, %0"
-        : "=r" (stackref) :  "i" (ST_FLUSH_WINDOWS));
+    /* Put current stack pointer into stackref.
+     * Register spilling is done in save/restore.
+     */
+    __asm__ volatile ("mov %%sp, %0" : "=r" (stackref));
 
     {
         /* Thou shalt put SLP_SAVE_STATE into a local block */
@@ -74,13 +73,6 @@ slp_switch(void)
         /* Copy new stack from it's save store on the heap */
         SLP_RESTORE_STATE();
 
-        /* No need to set the return value register, the return
-         * statement below does this just fine.  After returning a restore
-         * instruction is given and a fill-trap will load all the registers
-         * from the stack if needed.  However in a multi-threaded environment
-         * we can't guarantee the other register windows are fine to use by
-         * their threads anymore, so tell the CPU to clean them. */
-        __asm__ volatile ("ta %0" : : "i" (ST_CLEAN_WINDOWS));
         __asm__ volatile ("mov %1, %0" : "=r" (err) : "i" (0));
         return err;
     }
