@@ -90,6 +90,10 @@ The running greenlet's stack_start is undefined but not NULL.
 #endif
 #endif
 
+#if PY_VERSION_HEX < 0x02060000
+#define PyLong_FromSsize_t PyInt_FromLong
+#endif
+
 #if PY_VERSION_HEX < 0x02050000
 typedef int Py_ssize_t;
 #endif
