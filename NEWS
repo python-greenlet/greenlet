@@ -1,3 +1,9 @@
+0.4.7
+=====
+- Added a missing workaround for `return 0` on mips
+- Restore compatibility with Python 2.5
+- Fixed stack switching on sparc
+
 0.4.6
 =====
 - Expose `_stack_saved` property on greenlet objects, it may be used to
