@@ -2,6 +2,7 @@ import unittest
 import sys
 import gc
 
+import time
 import weakref
 import greenlet
 import threading
@@ -28,6 +29,20 @@ class ArgRefcountTests(unittest.TestCase):
     if greenlet.GREENLET_USE_GC:
         # These only work with greenlet gc support
 
+        def recycle_threads(self):
+            # By introducing a thread that does sleep we allow other threads,
+            # that have triggered their __block condition, but did not have a
+            # chance to deallocate their thread state yet, to finally do so.
+            # The way it works is by requring a GIL switch (different thread),
+            # which does a GIL release (sleep), which might do a GIL switch
+            # to finished threads and allow them to clean up.
+            def worker():
+                time.sleep(0.001)
+            t = threading.Thread(target=worker)
+            t.start()
+            time.sleep(0.001)
+            t.join()
+
         def test_threaded_leak(self):
             gg = []
             def worker():
@@ -39,7 +54,7 @@ class ArgRefcountTests(unittest.TestCase):
                 t.join()
                 del t
             greenlet.getcurrent() # update ts_current
-            gc.collect()
+            self.recycle_threads()
             greenlet.getcurrent() # update ts_current
             gc.collect()
             greenlet.getcurrent() # update ts_current
@@ -62,7 +77,7 @@ class ArgRefcountTests(unittest.TestCase):
                 t.join()
                 del t
             greenlet.getcurrent() # update ts_current
-            gc.collect()
+            self.recycle_threads()
             greenlet.getcurrent() # update ts_current
             gc.collect()
             greenlet.getcurrent() # update ts_current
