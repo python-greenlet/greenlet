@@ -2,6 +2,8 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 10-Dec-13  Ulrich Weigand  <uweigand@de.ibm.com>
+ *	Support ELFv2 ABI.  Save float/vector registers.
  * 09-Mar-12 Michael Ellerman <michael@ellerman.id.au>
  *      64-bit implementation, copied from 32-bit.
  * 07-Sep-05 (py-dev mailing list discussion)
@@ -40,14 +42,28 @@
 
 #ifdef SLP_EVAL
 
+#if _CALL_ELF == 2
+#define STACK_MAGIC 4
+#else
 #define STACK_MAGIC 6
+#endif
 
-/* !!!!WARNING!!!! need to add "r31" in the next line if this header file
- * is meant to be compiled non-dynamically!
- */
+#if defined(__ALTIVEC__)
+#define ALTIVEC_REGS \
+       "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", \
+       "v28", "v29", "v30", "v31",
+#else
+#define ALTIVEC_REGS
+#endif
+
 #define REGS_TO_SAVE "r2", "r14", "r15", "r16", "r17", "r18", "r19", "r20", \
        "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29", "r31", \
+       "fr14", "fr15", "fr16", "fr17", "fr18", "fr19", "fr20", "fr21", \
+       "fr22", "fr23", "fr24", "fr25", "fr26", "fr27", "fr28", "fr29", \
+       "fr30", "fr31", \
+       ALTIVEC_REGS \
        "cr2", "cr3", "cr4"
+
 static int
 slp_switch(void)
 {
