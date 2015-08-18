@@ -50,6 +50,8 @@ else:
 
     if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
         extra_compile_args = ['/MT']
+    elif os.uname()[4] in ['ppc64el', 'ppc64le']:
+        extra_compile_args = ['-fno-tree-dominator-opts']
     else:
         extra_compile_args = []
 
