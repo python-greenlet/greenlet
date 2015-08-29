@@ -1,3 +1,8 @@
+0.4.8
+=====
+- Added support for iOS (arm32)
+- Added support for ppc64le
+
 0.4.7
 =====
 - Added a missing workaround for `return 0` on mips
