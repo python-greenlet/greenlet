@@ -1,3 +1,7 @@
+0.4.9
+=====
+- Fixed Windows builds
+
 0.4.8
 =====
 - Added support for iOS (arm32)
