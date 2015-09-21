@@ -12,6 +12,8 @@ pyver2dist = {
     "Python33x64": common_dist,
     "Python34": common_dist,
     "Python34x64": common_dist,
+    "Python35": common_dist,
+    "Python35x64": common_dist,
 }
 
 
