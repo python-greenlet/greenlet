@@ -6,8 +6,8 @@ python:
   - 3.2
   - 3.3
   - 3.4
+  - 3.5
 
 install: python setup.py build_ext -i
 
 script: python run-tests.py
-
