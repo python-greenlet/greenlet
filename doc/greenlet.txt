@@ -113,7 +113,7 @@ cause the former to suspend and the latter to resume where it was
 suspended.  Jumping between greenlets is called "switching".
 
 When you create a greenlet, it gets an initially empty stack; when you
-first switch to it, it starts the run a specified function, which may call
+first switch to it, it starts to run a specified function, which may call
 other functions, switch out of the greenlet, etc.  When eventually the
 outermost function finishes its execution, the greenlet's stack becomes
 empty again and the greenlet is "dead".  Greenlets can also die of an
