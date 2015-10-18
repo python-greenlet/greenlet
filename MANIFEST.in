@@ -19,6 +19,7 @@ include my_build_ext.py
 include platform/switch_aarch64_gcc.h
 include platform/switch_amd64_unix.h
 include platform/switch_arm32_gcc.h
+include platform/switch_arm32_ios.h
 include platform/switch_m68k_gcc.h
 include platform/switch_mips_unix.h
 include platform/switch_ppc64_linux.h
@@ -49,6 +50,7 @@ include tests/test_generator.py
 include tests/test_generator_nested.py
 include tests/test_greenlet.py
 include tests/test_leaks.py
+include tests/test_stack_saved.py
 include tests/test_throw.py
 include tests/test_tracing.py
 include tests/test_version.py
