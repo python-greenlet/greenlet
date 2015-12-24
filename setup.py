@@ -5,10 +5,12 @@ import sys, os, glob, platform, tempfile, shutil
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 # https://github.com/python-greenlet/greenlet/issues/4
+# https://github.com/python-greenlet/greenlet/issues/94
 if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or ("-with-redhat-3." in platform.platform() and platform.machine() == 'i686')
     or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
-    or ("SunOS" in platform.platform() and platform.machine() == "sun4v")):
+    or ("SunOS" in platform.platform() and platform.machine() == "sun4v")
+    or (sys.platform == "linux" and platform.machine() == "ppc")):
     os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
 
 try:
