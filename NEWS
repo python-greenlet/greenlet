@@ -1,3 +1,8 @@
+0.4.10
+======
+- Added missing files to manifest
+- Added workaround for ppc32 on Linux
+
 0.4.9
 =====
 - Fixed Windows builds
