@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+if [ -d /greenlet -a -d /opt/python ]; then
+    # Running inside docker
+    cd /greenlet
+    for version in cp27-cp27mu cp34-cp34m cp35-cp35m; do
+        /opt/python/${version}/bin/pip wheel greenlet
+        auditwheel repair greenlet*${version}*.whl
+        rm greenlet*${version}*whl
+    done
+    exit 0
+fi
+
+docker run --rm -ti -v "$(pwd):/greenlet" quay.io/pypa/manylinux1_x86_64 /greenlet/make-manylinux

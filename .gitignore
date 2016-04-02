@@ -5,6 +5,7 @@
 build/
 dist/
 .tox/
+wheelhouse/
 greenlet.egg-info/
 /doc/_build
 __pycache__/
