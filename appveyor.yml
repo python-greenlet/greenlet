@@ -1,0 +1,76 @@
+version: 0.4.10.{build}
+environment:
+  global:
+    # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
+    # /E:ON and /V:ON options are not enabled in the batch script intepreter
+    # See: http://stackoverflow.com/a/13751649/163740
+    CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\appveyor\\run_with_env.cmd"
+
+  matrix:
+    # http://www.appveyor.com/docs/installed-software#python
+    - PYTHON_ROOT: "C:\\Python26"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "2.6.x"
+
+    - PYTHON_ROOT: "C:\\Python26-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "2.6.x"
+
+    - PYTHON_ROOT: "C:\\Python27"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "2.7.x"
+
+    - PYTHON_ROOT: "C:\\Python27-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "2.7.x"
+
+    - PYTHON_ROOT: "C:\\Python33"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.3.x"
+
+    - PYTHON_ROOT: "C:\\Python33-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.3.x"
+
+    - PYTHON_ROOT: "C:\\Python34"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.4.x"
+
+    - PYTHON_ROOT: "C:\\Python34-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.4.x"
+
+    - PYTHON_ROOT: "C:\\Python35"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.5.x"
+
+    - PYTHON_ROOT: "C:\\Python35-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.5.x"
+
+install:
+  - "SET PATH=%PYTHON_ROOT%;%PYTHON_ROOT%\\Scripts;%PATH%"
+  - "python --version"
+  - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
+
+  # Copy current pip.exe away, so the file is not locked on upgrade
+  - "copy %PYTHON_ROOT%\\Scripts\\pip.exe %PYTHON_ROOT%\\Scripts\\pip-old.exe"
+
+  # Upgrade pip to the latest version
+  - "pip-old install --disable-pip-version-check --upgrade pip"
+
+  # Install requirements for running tests and building artifacts
+  - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"
+
+build_script:
+  - "%CMD_IN_ENV% python setup.py build"
+
+test_script:
+  - "%CMD_IN_ENV% python setup.py test"
+
+after_test:
+  - "%CMD_IN_ENV% python setup.py bdist_wheel"
+  - "%CMD_IN_ENV% python setup.py bdist_egg"
+
+artifacts:
+  - path: dist\*
