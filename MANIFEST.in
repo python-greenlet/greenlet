@@ -5,8 +5,11 @@ include LICENSE.PSF
 include MANIFEST.in
 include NEWS
 include README.rst
+include appveyor.yml
+include appveyor/run_with_env.cmd
 include benchmarks/chain.py
 include conftest.py
+include dev-requirements.txt
 include doc/Makefile
 include doc/conf.py
 include doc/greenlet.txt
@@ -14,6 +17,7 @@ include doc/index.txt
 include doc/make.bat
 include greenlet.c
 include greenlet.h
+include make-manylinux
 include make-win-release
 include my_build_ext.py
 include platform/switch_aarch64_gcc.h

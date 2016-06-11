@@ -2,6 +2,7 @@
 ======
 - Added missing files to manifest
 - Added workaround for ppc32 on Linux
+- Start building binary manylinux1 wheels
 
 0.4.9
 =====
