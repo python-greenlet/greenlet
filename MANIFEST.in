@@ -6,6 +6,7 @@ include MANIFEST.in
 include NEWS
 include README.rst
 include appveyor.yml
+include appveyor/run_pip.py
 include appveyor/run_with_env.cmd
 include benchmarks/chain.py
 include conftest.py
