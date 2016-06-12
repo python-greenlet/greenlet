@@ -54,7 +54,7 @@ install:
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
   # Upgrade pip to the latest version
-  - "python -mpip install --disable-pip-version-check --upgrade pip"
+  - "python appveyor\\run_pip.py install --disable-pip-version-check --upgrade pip"
 
   # Install requirements for running tests and building artifacts
   - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"
