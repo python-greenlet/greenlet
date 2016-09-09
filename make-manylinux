@@ -16,4 +16,4 @@ if [ -d /greenlet -a -d /opt/python ]; then
     exit 0
 fi
 
-docker run --rm -ti -v "$(pwd):/greenlet" quay.io/pypa/manylinux1_x86_64 /greenlet/$(basename $0)
+docker run --rm -ti -v "$(pwd):/greenlet:Z" quay.io/pypa/manylinux1_x86_64 /greenlet/$(basename $0)
