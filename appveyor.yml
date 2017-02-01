@@ -1,4 +1,4 @@
-version: 0.4.11.{build}
+version: 0.4.12.{build}
 environment:
   global:
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the

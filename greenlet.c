@@ -957,9 +957,13 @@ static int green_clear(PyGreenlet* self)
 }
 #endif
 
-static void green_dealloc_safe(PyGreenlet* self)
+static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
+
+#if GREENLET_USE_GC
+	PyObject_GC_UnTrack(self);
+#endif
 
 	if (PyGreenlet_ACTIVE(self) && self->run_info != NULL && !PyGreenlet_MAIN(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
@@ -1020,23 +1024,6 @@ static void green_dealloc_safe(PyGreenlet* self)
 	Py_CLEAR(self->dict);
 	Py_TYPE(self)->tp_free((PyObject*) self);
 }
-
-#if GREENLET_USE_GC
-static void green_dealloc(PyGreenlet* self)
-{
-	PyObject_GC_UnTrack((PyObject *)self);
-	if (PyObject_IS_GC((PyObject *)self)) {
-		Py_TRASHCAN_SAFE_BEGIN(self);
-		green_dealloc_safe(self);
-		Py_TRASHCAN_SAFE_END(self);
-	} else {
-		/* This object cannot be garbage collected, so trashcan is not allowed */
-		green_dealloc_safe(self);
-	}
-}
-#else
-#define green_dealloc green_dealloc_safe
-#endif
 
 static PyObject* single_result(PyObject* results)
 {
