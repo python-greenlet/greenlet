@@ -35,6 +35,7 @@
 
 
 #define STACK_MAGIC 0
+#define ST_FLUSH_WINDOWS 3
 
 
 #if defined(__sparcv9)
