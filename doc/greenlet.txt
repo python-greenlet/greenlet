@@ -41,7 +41,7 @@ a system, there will typically be a loop like the following one::
             while not line.endswith('\n'):
                 line += read_next_char()
             if line == 'quit\n':
-                print "are you sure?"
+                print("are you sure?")
                 if read_next_char() != 'y':
                     continue    # ignore the command
             process_command(line)
@@ -124,14 +124,14 @@ For example::
     from greenlet import greenlet
 
     def test1():
-        print 12
+        print(12)
         gr2.switch()
-        print 34
+        print(34)
 
     def test2():
-        print 56
+        print(56)
         gr1.switch()
-        print 78
+        print(78)
 
     gr1 = greenlet(test1)
     gr2 = greenlet(test2)
@@ -199,10 +199,10 @@ information between greenlets.  For example::
 
     def test1(x, y):
         z = gr2.switch(x+y)
-        print z
+        print(z)
 
     def test2(u):
-        print u
+        print(u)
         gr1.switch(42)
 
     gr1 = greenlet(test1)
