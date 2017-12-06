@@ -460,9 +460,15 @@ static int g_switchstack(void)
 		PyThreadState* tstate = PyThreadState_GET();
 		current->recursion_depth = tstate->recursion_depth;
 		current->top_frame = tstate->frame;
+#if PY_VERSION_HEX >= 0x030700A3
+		current->exc_type = tstate->exc_state.exc_type;
+		current->exc_value = tstate->exc_state.exc_value;
+		current->exc_traceback = tstate->exc_state.exc_traceback;
+#else
 		current->exc_type = tstate->exc_type;
 		current->exc_value = tstate->exc_value;
 		current->exc_traceback = tstate->exc_traceback;
+#endif
 	}
 	err = slp_switch();
 	if (err < 0) {   /* error */
@@ -482,11 +488,17 @@ static int g_switchstack(void)
 		tstate->recursion_depth = target->recursion_depth;
 		tstate->frame = target->top_frame;
 		target->top_frame = NULL;
+#if PY_VERSION_HEX >= 0x030700A3
+		tstate->exc_state.exc_type = target->exc_type;
+		tstate->exc_state.exc_value = target->exc_value;
+		tstate->exc_state.exc_traceback = target->exc_traceback;
+#else
 		tstate->exc_type = target->exc_type;
-		target->exc_type = NULL;
 		tstate->exc_value = target->exc_value;
-		target->exc_value = NULL;
 		tstate->exc_traceback = target->exc_traceback;
+#endif
+		target->exc_type = NULL;
+		target->exc_value = NULL;
 		target->exc_traceback = NULL;
 
 		assert(ts_origin == NULL);
