@@ -43,14 +43,14 @@ if hasattr(sys, "pypy_version_info"):
 else:
     headers = ['greenlet.h']
 
-    if sys.platform == 'win32' and '64 bit' in sys.version:
+    if sys.platform == 'win32' and '64 bit' in sys.version and not 'GCC' in sys.version:
         # this works when building with msvc, not with 64 bit gcc
         # switch_x64_masm.obj can be created with setup_switch_x64_masm.cmd
         extra_objects = ['platform/switch_x64_masm.obj']
     else:
         extra_objects = []
 
-    if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
+    if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes') and not 'GCC' in sys.version:
         extra_compile_args = ['/MT']
     elif hasattr(os, 'uname') and os.uname()[4] in ['ppc64el', 'ppc64le']:
         extra_compile_args = ['-fno-tree-dominator-opts']
