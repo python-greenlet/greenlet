@@ -44,7 +44,11 @@ slp_switch(void)
     void* rbx;
     unsigned int csr;
     unsigned short cw;
+#ifdef __MINGW64__
+    register long long *stackref, stsizediff;
+#else
     register long *stackref, stsizediff;
+#endif
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("fstcw %0" : "=m" (cw));
     __asm__ volatile ("stmxcsr %0" : "=m" (csr));
