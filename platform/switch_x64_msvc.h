@@ -22,7 +22,10 @@
  *      Initial final version after lots of iterations for i386.
  */
 
+/* Avoid alloca redefined warning on mingw64 */
+#ifndef alloca
 #define alloca _alloca
+#endif
 
 #define STACK_REFPLUS 1
 #define STACK_MAGIC 0

@@ -4,7 +4,7 @@
 
 #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
 #include "platform/switch_x86_msvc.h" /* MS Visual Studio on X86 */
-#elif defined(MS_WIN64) && defined(_M_X64) && defined(_MSC_VER)
+#elif defined(MS_WIN64) && defined(_M_X64) && defined(_MSC_VER) || defined(__MINGW64__)
 #include "platform/switch_x64_msvc.h" /* MS Visual Studio on X64 */
 #elif defined(__GNUC__) && defined(__amd64__) && defined(__ILP32__)
 #include "platform/switch_x32_unix.h" /* gcc on amd64 with x32 ABI */
