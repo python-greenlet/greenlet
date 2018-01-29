@@ -8,14 +8,6 @@ environment:
 
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
-    - PYTHON_ROOT: "C:\\Python26"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "2.6.x"
-
-    - PYTHON_ROOT: "C:\\Python26-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "2.6.x"
-
     - PYTHON_ROOT: "C:\\Python27"
       PYTHON_ARCH: "32"
       PYTHON_VERSION: "2.7.x"
