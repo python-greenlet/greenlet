@@ -1,6 +1,7 @@
 0.4.13
 ======
 - Support for Python 3.7
+- Support for MinGW x64
 
 0.4.12
 ======
