@@ -72,7 +72,6 @@ slp_switch(void)
                 SLP_RESTORE_STATE();
         }
         __asm__ volatile ("ldr r0,%1\n\tmov " REG_FP ",r0\n\tmov %0, #0" : "=r" (result) : "m" (fp) : "r0");
-        __asm__ volatile ("" : : : REGS_TO_SAVE);
         return result;
 }
 

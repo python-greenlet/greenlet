@@ -62,7 +62,6 @@ slp_switch(void)
            __asm__ volatile ("mov %0, #0" : "=r" (err));
         }
         __asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
-        __asm__ volatile ("" : : : REGS_TO_SAVE);
         return err;
 }
 
