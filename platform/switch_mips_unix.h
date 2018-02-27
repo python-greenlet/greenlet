@@ -45,7 +45,6 @@ slp_switch(void)
 #ifdef __mips64
     __asm__ __volatile__ ("ld $28,%0" : : "m" (gpsave) : );
 #endif
-    __asm__ __volatile__ ("" : : : REGS_TO_SAVE);
     __asm__ __volatile__ ("move %0, $0" : "=r" (err));
     return err;
 }

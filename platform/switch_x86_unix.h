@@ -87,7 +87,6 @@ slp_switch(void)
     __asm__ volatile ("movl %0, %%ebx" : : "m" (ebx));
     __asm__ volatile ("movl %0, %%ebp" : : "m" (ebp));
     __asm__ volatile ("fldcw %0" : : "m" (cw));
-    __asm__ volatile ("" : : : "esi", "edi");
     return err;
 }
 

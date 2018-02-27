@@ -65,7 +65,6 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
-    __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("li %0, 0" : "=r" (err));
     return err;
 }

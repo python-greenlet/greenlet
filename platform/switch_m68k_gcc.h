@@ -31,7 +31,6 @@ slp_switch(void)
   }
   __asm__ volatile ("move.l %0, %%a5" : : "m"(a5));
   __asm__ volatile ("move.l %0, %%fp" : : "m"(fp));
-  __asm__ volatile ("" : : : REGS_TO_SAVE);
   return err;
 }
 
