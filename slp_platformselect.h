@@ -47,4 +47,6 @@
 #include "platform/switch_aarch64_gcc.h" /* Aarch64 ABI */
 #elif defined(__GNUC__) && defined(__mc68000__)
 #include "platform/switch_m68k_gcc.h" /* gcc on m68k */
+#elif defined(__GNUC__) && defined(__csky__)
+#include "platform/switch_csky_gcc.h" /* gcc on csky */
 #endif
