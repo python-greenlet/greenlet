@@ -2,6 +2,10 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 21-Mar-18  Tulio Magno Quites Machado Filho  <tuliom@linux.vnet.ibm.com>
+ *      Added r30 to the list of saved registers in order to fully comply with
+ *      both ppc64 ELFv1 ABI and the ppc64le ELVv2 ABI, that classify this
+ *      register as a nonvolatile register used for local variables.
  * 21-Mar-18  Laszlo Boszormenyi  <gcs@debian.org>
  *      Save r2 (TOC pointer) manually.
  * 10-Dec-13  Ulrich Weigand  <uweigand@de.ibm.com>
@@ -58,8 +62,9 @@
 #define ALTIVEC_REGS
 #endif
 
-#define REGS_TO_SAVE "r14", "r15", "r16", "r17", "r18", "r19", "r20", \
-       "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29", "r31", \
+#define REGS_TO_SAVE "r14", "r15", "r16", "r17", "r18", "r19", "r20",  \
+       "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29",  \
+       "r30","r31",                                                    \
        "fr14", "fr15", "fr16", "fr17", "fr18", "fr19", "fr20", "fr21", \
        "fr22", "fr23", "fr24", "fr25", "fr26", "fr27", "fr28", "fr29", \
        "fr30", "fr31", \
