@@ -4,7 +4,7 @@
  * HISTORY
  * 21-Mar-18  Tulio Magno Quites Machado Filho  <tuliom@linux.vnet.ibm.com>
  *      Added r30 to the list of saved registers in order to fully comply with
- *      both ppc64 ELFv1 ABI and the ppc64le ELVv2 ABI, that classify this
+ *      both ppc64 ELFv1 ABI and the ppc64le ELFv2 ABI, that classify this
  *      register as a nonvolatile register used for local variables.
  * 21-Mar-18  Laszlo Boszormenyi  <gcs@debian.org>
  *      Save r2 (TOC pointer) manually.
