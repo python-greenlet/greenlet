@@ -30,7 +30,7 @@ typedef struct _greenlet {
 	int recursion_depth;
 	PyObject* weakreflist;
 #ifdef GREENLET_USE_EXC_INFO
-	_PyErr_StackItem *exc_info;
+	_PyErr_StackItem* exc_info;
 	_PyErr_StackItem exc_state;
 #else
 	PyObject* exc_type;

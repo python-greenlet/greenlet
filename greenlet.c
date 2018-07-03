@@ -153,7 +153,7 @@ static PyObject* ts_empty_dict;
 #define GREENLET_tp_is_gc 0
 #endif /* !GREENLET_USE_GC */
 
-static void green_clear_exc(PyGreenlet *g)
+static void green_clear_exc(PyGreenlet* g)
 {
 #ifdef GREENLET_USE_EXC_INFO
 	g->exc_info = NULL;
@@ -508,12 +508,7 @@ static int g_switchstack(void)
 		target->top_frame = NULL;
 #ifdef GREENLET_USE_EXC_INFO
 		tstate->exc_state = target->exc_state;
-		if (target->exc_info != NULL) {
-			tstate->exc_info = target->exc_info;
-		}
-		else {
-			tstate->exc_info = &tstate->exc_state;
-		}
+		tstate->exc_info = target->exc_info ? target->exc_info : &tstate->exc_state;
 #else
 		tstate->exc_type = target->exc_type;
 		tstate->exc_value = target->exc_value;
