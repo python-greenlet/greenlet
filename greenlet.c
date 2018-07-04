@@ -153,6 +153,21 @@ static PyObject* ts_empty_dict;
 #define GREENLET_tp_is_gc 0
 #endif /* !GREENLET_USE_GC */
 
+static void green_clear_exc(PyGreenlet* g)
+{
+#ifdef GREENLET_USE_EXC_INFO
+	g->exc_info = NULL;
+	g->exc_state.exc_type = NULL;
+	g->exc_state.exc_value = NULL;
+	g->exc_state.exc_traceback = NULL;
+	g->exc_state.previous_item = NULL;
+#else
+	g->exc_type = NULL;
+	g->exc_value = NULL;
+	g->exc_traceback = NULL;
+#endif
+}
+
 static PyGreenlet* green_create_main(void)
 {
 	PyGreenlet* gmain;
@@ -460,10 +475,9 @@ static int g_switchstack(void)
 		PyThreadState* tstate = PyThreadState_GET();
 		current->recursion_depth = tstate->recursion_depth;
 		current->top_frame = tstate->frame;
-#if PY_VERSION_HEX >= 0x030700A3
-		current->exc_type = tstate->exc_state.exc_type;
-		current->exc_value = tstate->exc_state.exc_value;
-		current->exc_traceback = tstate->exc_state.exc_traceback;
+#ifdef GREENLET_USE_EXC_INFO
+		current->exc_info = tstate->exc_info;
+		current->exc_state = tstate->exc_state;
 #else
 		current->exc_type = tstate->exc_type;
 		current->exc_value = tstate->exc_value;
@@ -474,9 +488,13 @@ static int g_switchstack(void)
 	if (err < 0) {   /* error */
 		PyGreenlet* current = ts_current;
 		current->top_frame = NULL;
+#ifdef GREENLET_USE_EXC_INFO
+		green_clear_exc(current);
+#else
 		current->exc_type = NULL;
 		current->exc_value = NULL;
 		current->exc_traceback = NULL;
+#endif
 
 		assert(ts_origin == NULL);
 		ts_target = NULL;
@@ -488,18 +506,15 @@ static int g_switchstack(void)
 		tstate->recursion_depth = target->recursion_depth;
 		tstate->frame = target->top_frame;
 		target->top_frame = NULL;
-#if PY_VERSION_HEX >= 0x030700A3
-		tstate->exc_state.exc_type = target->exc_type;
-		tstate->exc_state.exc_value = target->exc_value;
-		tstate->exc_state.exc_traceback = target->exc_traceback;
+#ifdef GREENLET_USE_EXC_INFO
+		tstate->exc_state = target->exc_state;
+		tstate->exc_info = target->exc_info ? target->exc_info : &tstate->exc_state;
 #else
 		tstate->exc_type = target->exc_type;
 		tstate->exc_value = target->exc_value;
 		tstate->exc_traceback = target->exc_traceback;
 #endif
-		target->exc_type = NULL;
-		target->exc_value = NULL;
-		target->exc_traceback = NULL;
+		green_clear_exc(target);
 
 		assert(ts_origin == NULL);
 		Py_INCREF(target);
@@ -752,9 +767,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 		self->stack_prev = ts_current;
 	}
 	self->top_frame = NULL;
-	self->exc_type = NULL;
-	self->exc_value = NULL;
-	self->exc_traceback = NULL;
+	green_clear_exc(self);
 	self->recursion_depth = PyThreadState_GET()->recursion_depth;
 
 	/* restore arguments in case they are clobbered */
@@ -935,9 +948,15 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	   - frames are not visited: alive greenlets are not garbage collected anyway */
 	Py_VISIT((PyObject*)self->parent);
 	Py_VISIT(self->run_info);
+#ifdef GREENLET_USE_EXC_INFO
+	Py_VISIT(self->exc_state.exc_type);
+	Py_VISIT(self->exc_state.exc_value);
+	Py_VISIT(self->exc_state.exc_traceback);
+#else
 	Py_VISIT(self->exc_type);
 	Py_VISIT(self->exc_value);
 	Py_VISIT(self->exc_traceback);
+#endif
 	Py_VISIT(self->dict);
 	return 0;
 }
@@ -961,9 +980,15 @@ static int green_clear(PyGreenlet* self)
 	   so even if it switches we are relatively safe. */
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
+#ifdef GREENLET_USE_EXC_INFO
+	Py_CLEAR(self->exc_state.exc_type);
+	Py_CLEAR(self->exc_state.exc_value);
+	Py_CLEAR(self->exc_state.exc_traceback);
+#else
 	Py_CLEAR(self->exc_type);
 	Py_CLEAR(self->exc_value);
 	Py_CLEAR(self->exc_traceback);
+#endif
 	Py_CLEAR(self->dict);
 	return 0;
 }
@@ -1030,9 +1055,15 @@ static void green_dealloc(PyGreenlet* self)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
+#ifdef GREENLET_USE_EXC_INFO
+	Py_CLEAR(self->exc_state.exc_type);
+	Py_CLEAR(self->exc_state.exc_value);
+	Py_CLEAR(self->exc_state.exc_traceback);
+#else
 	Py_CLEAR(self->exc_type);
 	Py_CLEAR(self->exc_value);
 	Py_CLEAR(self->exc_traceback);
+#endif
 	Py_CLEAR(self->dict);
 	Py_TYPE(self)->tp_free((PyObject*) self);
 }
