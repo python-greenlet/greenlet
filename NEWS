@@ -1,3 +1,9 @@
+0.4.14
+======
+- Support for C-SKY architecture
+- Fixed support for ppc64 ABI
+- Fixed support for Python 3.7
+
 0.4.13
 ======
 - Support for Python 3.7
