@@ -49,4 +49,6 @@
 #include "platform/switch_m68k_gcc.h" /* gcc on m68k */
 #elif defined(__GNUC__) && defined(__csky__)
 #include "platform/switch_csky_gcc.h" /* gcc on csky */
+#elif defined(__GNUC__) && defined(__riscv)
+#include "platform/switch_riscv_unix.h" /* gcc on RISC-V */
 #endif
