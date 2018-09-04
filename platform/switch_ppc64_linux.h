@@ -2,6 +2,8 @@
  * this is the internal transfer function.
  *
  * HISTORY
+ * 04-Sep-18  Alexey Borzenkov  <snaury@gmail.com>
+ *      Workaround a gcc bug using manual save/restore of r30
  * 21-Mar-18  Tulio Magno Quites Machado Filho  <tuliom@linux.vnet.ibm.com>
  *      Added r30 to the list of saved registers in order to fully comply with
  *      both ppc64 ELFv1 ABI and the ppc64le ELFv2 ABI, that classify this
@@ -64,7 +66,7 @@
 
 #define REGS_TO_SAVE "r14", "r15", "r16", "r17", "r18", "r19", "r20",  \
        "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29",  \
-       "r30","r31",                                                    \
+       "r31",                                                    \
        "fr14", "fr15", "fr16", "fr17", "fr18", "fr19", "fr20", "fr21", \
        "fr22", "fr23", "fr24", "fr25", "fr26", "fr27", "fr28", "fr29", \
        "fr30", "fr31", \
@@ -77,8 +79,10 @@ slp_switch(void)
     register int err;
     register long *stackref, stsizediff;
     void * toc;
+    void * r30;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("std 2, %0" : "=m" (toc));
+    __asm__ volatile ("std 30, %0" : "=m" (r30));
     __asm__ ("mr %0, 1" : "=r" (stackref) : );
     {
         SLP_SAVE_STATE(stackref, stsizediff);
@@ -91,6 +95,7 @@ slp_switch(void)
             );
         SLP_RESTORE_STATE();
     }
+    __asm__ volatile ("ld 30, %0" : : "m" (r30));
     __asm__ volatile ("ld 2, %0" : : "m" (toc));
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("li %0, 0" : "=r" (err));
