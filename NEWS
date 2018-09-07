@@ -1,6 +1,7 @@
-0.4.15.dev
+0.4.15
 ===========
 - Support for RISC-V architecture
+- Workaround a gcc bug on ppc64
 
 0.4.14
 ======
