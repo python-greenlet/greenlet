@@ -33,6 +33,7 @@ include platform/switch_ppc_aix.h
 include platform/switch_ppc_linux.h
 include platform/switch_ppc_macosx.h
 include platform/switch_ppc_unix.h
+include platform/switch_riscv_unix.h
 include platform/switch_s390_unix.h
 include platform/switch_sparc_sun_gcc.h
 include platform/switch_x32_unix.h
