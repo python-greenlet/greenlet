@@ -33,7 +33,7 @@ class ArgRefcountTests(unittest.TestCase):
             # By introducing a thread that does sleep we allow other threads,
             # that have triggered their __block condition, but did not have a
             # chance to deallocate their thread state yet, to finally do so.
-            # The way it works is by requring a GIL switch (different thread),
+            # The way it works is by requiring a GIL switch (different thread),
             # which does a GIL release (sleep), which might do a GIL switch
             # to finished threads and allow them to clean up.
             def worker():
