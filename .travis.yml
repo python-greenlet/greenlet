@@ -9,7 +9,8 @@ python:
   - 3.4
   - 3.5
   - 3.6
-  - 3.7-dev
+  - 3.7
+  - 3.8
 
 install: python setup.py build_ext -i
 
