@@ -4,17 +4,35 @@ sudo: false
 matrix:
   include:
   - arch: arm64
+    python: 2.6
+    dist: precise
+  - arch: amd64
+    python: 2.6
+    dist: precise
+  - arch: arm64
     python: 2.7
     dist: bionic
   - arch: amd64
     python: 2.7
     dist: bionic
   - arch: arm64
+    python: 3.2
+    dist: precise
+  - arch: amd64
+    python: 3.2
+    dist: precise
+  - arch: arm64
+    python: 3.3
+    dist: precise
+  - arch: amd64
+    python: 3.3
+    dist: precise
+  - arch: arm64
     python: 3.4
-    dist: bionic
+    dist: xenial
   - arch: amd64
     python: 3.4
-    dist: bionic
+    dist: xenial
   - arch: arm64
     python: 3.5
     dist: bionic
