@@ -4,9 +4,21 @@ sudo: false
 matrix:
   include:
   - arch: arm64
+    python: 2.6
+  - arch: amd64
+    python: 2.6
+  - arch: arm64
     python: 2.7
   - arch: amd64
     python: 2.7
+  - arch: arm64
+    python: 3.2
+  - arch: amd64
+    python: 3.2
+  - arch: arm64
+    python: 3.3
+  - arch: amd64
+    python: 3.3
   - arch: arm64
     python: 3.4
   - arch: amd64
