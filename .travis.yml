@@ -5,28 +5,40 @@ matrix:
   include:
   - arch: arm64
     python: 2.7
+    dist: xenial
   - arch: amd64
     python: 2.7
+    dist: xenial
   - arch: arm64
     python: 3.4
+    dist: xenial
   - arch: amd64
     python: 3.4
+    dist: xenial
   - arch: arm64
     python: 3.5
+    dist: xenial
   - arch: amd64
     python: 3.5
+    dist: xenial
   - arch: arm64
     python: 3.6
+    dist: xenial
   - arch: amd64
     python: 3.6
+    dist: xenial
   - arch: arm64
     python: 3.7
+    dist: xenial
   - arch: amd64
     python: 3.7
+    dist: xenial
   - arch: arm64
     python: 3.8
+    dist: xenial
   - arch: amd64
     python: 3.8
+    dist: xenial
 
 install: python setup.py build_ext -i
 
