@@ -3,30 +3,51 @@ sudo: false
 
 matrix:
   include:
+  - arch: amd64
+    python: 2.6
+    dist: precise
   - arch: arm64
     python: 2.7
+    dist: bionic
   - arch: amd64
     python: 2.7
+    dist: bionic
+  - arch: amd64
+    python: 3.2
+    dist: precise
+  - arch: amd64
+    python: 3.3
+    dist: precise
   - arch: arm64
     python: 3.4
+    dist: xenial
   - arch: amd64
     python: 3.4
+    dist: xenial
   - arch: arm64
     python: 3.5
+    dist: bionic
   - arch: amd64
     python: 3.5
+    dist: bionic
   - arch: arm64
     python: 3.6
+    dist: bionic
   - arch: amd64
     python: 3.6
+    dist: bionic
   - arch: arm64
     python: 3.7
+    dist: bionic
   - arch: amd64
     python: 3.7
+    dist: bionic
   - arch: arm64
     python: 3.8
+    dist: bionic
   - arch: amd64
     python: 3.8
+    dist: bionic
 
 install: python setup.py build_ext -i
 
