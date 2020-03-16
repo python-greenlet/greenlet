@@ -344,7 +344,7 @@ static int (*g_initialstub)(void*);
 #undef slp_switch
 
 #ifndef STACK_MAGIC
-#error "greenlet needs to be ported to this platform, or teached how to detect your compiler properly."
+#error "greenlet needs to be ported to this platform, or taught how to detect your compiler properly."
 #endif /* !STACK_MAGIC */
 
 #ifdef EXTERNAL_ASM
