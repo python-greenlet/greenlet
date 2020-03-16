@@ -51,4 +51,6 @@
 #include "platform/switch_csky_gcc.h" /* gcc on csky */
 #elif defined(__GNUC__) && defined(__riscv)
 #include "platform/switch_riscv_unix.h" /* gcc on RISC-V */
+#elif defined(__GNUC__) && defined(__alpha__)
+#include "platform/switch_alpha_unix.h" /* gcc on DEC Alpha */
 #endif
