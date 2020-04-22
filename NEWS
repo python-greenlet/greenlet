@@ -1,3 +1,7 @@
+0.4.16-dev
+===========
+- Support for DEC Alpha architecture
+
 0.4.15
 ===========
 - Support for RISC-V architecture
