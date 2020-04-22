@@ -1,6 +1,7 @@
 0.4.16-dev
 ===========
 - Support for DEC Alpha architecture
+- Support for Python 3.9
 
 0.4.15
 ===========
