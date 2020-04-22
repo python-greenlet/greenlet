@@ -109,6 +109,16 @@ extern PyTypeObject PyGreenlet_Type;
 #define GREENLET_USE_TRACING 1
 #endif
 
+#ifndef _Py_DEC_REFTOTAL
+  /* _Py_DEC_REFTOTAL macro has been removed from Python 3.9 by:
+    https://github.com/python/cpython/commit/49932fec62c616ec88da52642339d83ae719e924 */
+#  ifdef Py_REF_DEBUG
+#    define _Py_DEC_REFTOTAL _Py_RefTotal--
+#  else
+#    define _Py_DEC_REFTOTAL
+#  endif
+#endif
+
 /* Weak reference to the switching-to greenlet during the slp switch */
 static PyGreenlet* volatile ts_target = NULL;
 /* Strong reference to the switching from greenlet after the switch */
@@ -820,8 +830,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 			result = NULL;
 		} else {
 			/* call g.run(*args, **kwargs) */
-			result = PyEval_CallObjectWithKeywords(
-				run, args, kwargs);
+			result = PyObject_Call(run, args, kwargs);
 			Py_DECREF(args);
 			Py_XDECREF(kwargs);
 		}
