@@ -109,6 +109,14 @@ extern PyTypeObject PyGreenlet_Type;
 #define GREENLET_USE_TRACING 1
 #endif
 
+#if PY_VERSION_HEX >= 0x030900A4
+   /* Py_REFCNT and Py_SIZE macros are converted to functions
+   https://bugs.python.org/issue39573 */
+  #define __Py_SET_REFCNT(obj, refcnt) Py_SET_REFCNT(obj, refcnt)
+#else
+  #define __Py_SET_REFCNT(obj, refcnt) Py_REFCNT(obj) = (refcnt)
+#endif
+
 #ifndef _Py_DEC_REFTOTAL
   /* _Py_DEC_REFTOTAL macro has been removed from Python 3.9 by:
     https://github.com/python/cpython/commit/49932fec62c616ec88da52642339d83ae719e924 */
@@ -1015,7 +1023,7 @@ static void green_dealloc(PyGreenlet* self)
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
 		assert(Py_REFCNT(self) == 0);
-		Py_REFCNT(self) = 1;
+		__Py_SET_REFCNT(self, 1);
 		/* Save the current exception, if any. */
 		PyErr_Fetch(&error_type, &error_value, &error_traceback);
 		if (kill_greenlet(self) < 0) {
@@ -1044,11 +1052,11 @@ static void green_dealloc(PyGreenlet* self)
 		 * it would cause a recursive call.
 		 */
 		assert(Py_REFCNT(self) > 0);
-		if (--Py_REFCNT(self) != 0) {
+		if (--((PyObject*)(self))->ob_refcnt != 0) {
 			/* Resurrected! */
 			Py_ssize_t refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
-			Py_REFCNT(self) = refcnt;
+			__Py_SET_REFCNT(self, refcnt);
 #if GREENLET_USE_GC
 			PyObject_GC_Track((PyObject *)self);
 #endif
