@@ -109,12 +109,10 @@ extern PyTypeObject PyGreenlet_Type;
 #define GREENLET_USE_TRACING 1
 #endif
 
-#if PY_VERSION_HEX >= 0x030900A4
+#ifndef Py_SET_REFCNT
    /* Py_REFCNT and Py_SIZE macros are converted to functions
    https://bugs.python.org/issue39573 */
-  #define __Py_SET_REFCNT(obj, refcnt) Py_SET_REFCNT(obj, refcnt)
-#else
-  #define __Py_SET_REFCNT(obj, refcnt) Py_REFCNT(obj) = (refcnt)
+  #define Py_SET_REFCNT(obj, refcnt) Py_REFCNT(obj) = (refcnt)
 #endif
 
 #ifndef _Py_DEC_REFTOTAL
@@ -1023,7 +1021,7 @@ static void green_dealloc(PyGreenlet* self)
 		/* Hacks hacks hacks copied from instance_dealloc() */
 		/* Temporarily resurrect the greenlet. */
 		assert(Py_REFCNT(self) == 0);
-		__Py_SET_REFCNT(self, 1);
+		Py_SET_REFCNT(self, 1);
 		/* Save the current exception, if any. */
 		PyErr_Fetch(&error_type, &error_value, &error_traceback);
 		if (kill_greenlet(self) < 0) {
@@ -1056,7 +1054,7 @@ static void green_dealloc(PyGreenlet* self)
 			/* Resurrected! */
 			Py_ssize_t refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
-			__Py_SET_REFCNT(self, refcnt);
+			Py_SET_REFCNT(self, refcnt);
 #if GREENLET_USE_GC
 			PyObject_GC_Track((PyObject *)self);
 #endif
