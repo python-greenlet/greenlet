@@ -1012,6 +1012,7 @@ static int green_clear(PyGreenlet* self)
 static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
+	Py_ssize_t refcnt;
 
 #if GREENLET_USE_GC
 	PyObject_GC_UnTrack(self);
@@ -1051,11 +1052,11 @@ static void green_dealloc(PyGreenlet* self)
 		 */
 		assert(Py_REFCNT(self) > 0);
 		
-		Py_ssize_t refcnt = Py_REFCNT(self) - 1;
+		refcnt = Py_REFCNT(self) - 1;
 		Py_SET_REFCNT(self, refcnt);
 		if (refcnt != 0) {
 			/* Resurrected! */
-			Py_ssize_t refcnt = Py_REFCNT(self);
+			refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
 			Py_SET_REFCNT(self, refcnt);
 #if GREENLET_USE_GC
