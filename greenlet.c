@@ -1050,7 +1050,10 @@ static void green_dealloc(PyGreenlet* self)
 		 * it would cause a recursive call.
 		 */
 		assert(Py_REFCNT(self) > 0);
-		if (--((PyObject*)(self))->ob_refcnt != 0) {
+		
+		Py_ssize_t refcnt = Py_REFCNT(self) - 1;
+		Py_SET_REFCNT(self, refcnt);
+		if (refcnt != 0) {
 			/* Resurrected! */
 			Py_ssize_t refcnt = Py_REFCNT(self);
 			_Py_NewReference((PyObject*) self);
