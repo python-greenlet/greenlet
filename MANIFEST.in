@@ -22,6 +22,7 @@ include make-manylinux
 include make-win-release
 include my_build_ext.py
 include platform/switch_aarch64_gcc.h
+include platform/switch_alpha_unix.h
 include platform/switch_amd64_unix.h
 include platform/switch_arm32_gcc.h
 include platform/switch_arm32_ios.h

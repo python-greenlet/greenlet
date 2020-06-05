@@ -70,7 +70,7 @@ from my_build_ext import build_ext
 
 setup(
     name="greenlet",
-    version='0.4.16.dev',
+    version='0.4.16',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
     maintainer="Alexey Borzenkov",
@@ -102,6 +102,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Operating System :: OS Independent',
         'Topic :: Software Development :: Libraries :: Python Modules'],
     **setuptools_args)
