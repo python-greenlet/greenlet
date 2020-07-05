@@ -1760,6 +1760,7 @@ initgreenlet(void)
 	PyModule_AddObject(m, "GreenletExit", PyExc_GreenletExit);
 	PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(GREENLET_USE_GC));
 	PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(GREENLET_USE_TRACING));
+	PyModule_AddObject(m, "GREENLET_USE_CONTEXT_VARS", PyBool_FromLong(GREENLET_USE_CONTEXT_VARS));
 
 	/* also publish module-level data as attributes of the greentype. */
 	for (p=copy_on_greentype; *p; p++) {

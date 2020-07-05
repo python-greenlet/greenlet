@@ -2,14 +2,10 @@ from functools import partial
 import greenlet
 import unittest
 
-RUN_TESTS = True
-try:
+if greenlet.GREENLET_USE_CONTEXT_VARS:
     from contextvars import ContextVar
     from contextvars import copy_context
-except ImportError:
-    RUN_TESTS = False
 
-if RUN_TESTS:
     class ContextVarsTests(unittest.TestCase):
         def _new_ctx_run(self, *args, **kwargs):
             return copy_context().run(*args, **kwargs)
