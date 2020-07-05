@@ -17,6 +17,14 @@ extern "C" {
 #  define GREENLET_USE_EXC_INFO
 #endif
 
+#ifndef GREENLET_USE_CONTEXT_VARS
+#ifdef Py_CONTEXT_H
+#define GREENLET_USE_CONTEXT_VARS 1
+#else
+#define GREENLET_USE_CONTEXT_VARS 0
+#endif
+#endif
+
 typedef struct _greenlet {
 	PyObject_HEAD
 	char* stack_start;
@@ -29,7 +37,9 @@ typedef struct _greenlet {
 	struct _frame* top_frame;
 	int recursion_depth;
 	PyObject* weakreflist;
+#if GREENLET_USE_CONTEXT_VARS
 	PyObject* context;
+#endif
 #ifdef GREENLET_USE_EXC_INFO
 	_PyErr_StackItem* exc_info;
 	_PyErr_StackItem exc_state;

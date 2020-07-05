@@ -2,8 +2,12 @@ from functools import partial
 import greenlet
 import unittest
 
-from contextvars import ContextVar
-from contextvars import copy_context
+SKIP_TESTS = False
+try:
+    from contextvars import ContextVar
+    from contextvars import copy_context
+except ImportError:
+    SKIP_TESTS = True
 
 
 class ContextVarsTests(unittest.TestCase):
@@ -49,8 +53,10 @@ class ContextVarsTests(unittest.TestCase):
 
         self.assertEqual(set(counts.values()), {2})
 
+    @unittest.skipIf(SKIP_TESTS, "python runtime doesn't support contextvars")
     def test_context_propagated(self):
         self._new_ctx_run(self._test_context, True)
 
+    @unittest.skipIf(SKIP_TESTS, "python runtime doesn't support contextvars")
     def test_context_not_propagated(self):
         self._new_ctx_run(self._test_context, False)
