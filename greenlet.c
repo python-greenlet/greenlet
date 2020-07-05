@@ -491,6 +491,7 @@ static int g_switchstack(void)
 		PyThreadState* tstate = PyThreadState_GET();
 		current->recursion_depth = tstate->recursion_depth;
 		current->top_frame = tstate->frame;
+		current->context = tstate->context;
 #ifdef GREENLET_USE_EXC_INFO
 		current->exc_info = tstate->exc_info;
 		current->exc_state = tstate->exc_state;
@@ -522,6 +523,13 @@ static int g_switchstack(void)
 		tstate->recursion_depth = target->recursion_depth;
 		tstate->frame = target->top_frame;
 		target->top_frame = NULL;
+
+		tstate->context = target->context;
+		target->context = NULL;
+		/* Incrementing this value invalidates the contextvars cache,
+		   which would otherwise remain valid across switches */
+		tstate->context_ver++;
+
 #ifdef GREENLET_USE_EXC_INFO
 		tstate->exc_state = target->exc_state;
 		tstate->exc_info = target->exc_info ? target->exc_info : &tstate->exc_state;
@@ -963,6 +971,7 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	   - frames are not visited: alive greenlets are not garbage collected anyway */
 	Py_VISIT((PyObject*)self->parent);
 	Py_VISIT(self->run_info);
+	Py_VISIT(self->context);
 #ifdef GREENLET_USE_EXC_INFO
 	Py_VISIT(self->exc_state.exc_type);
 	Py_VISIT(self->exc_state.exc_value);
@@ -995,6 +1004,7 @@ static int green_clear(PyGreenlet* self)
 	   so even if it switches we are relatively safe. */
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
+	Py_CLEAR(self->context);
 #ifdef GREENLET_USE_EXC_INFO
 	Py_CLEAR(self->exc_state.exc_type);
 	Py_CLEAR(self->exc_state.exc_value);
@@ -1073,6 +1083,7 @@ static void green_dealloc(PyGreenlet* self)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
+	Py_CLEAR(self->context);
 #ifdef GREENLET_USE_EXC_INFO
 	Py_CLEAR(self->exc_state.exc_type);
 	Py_CLEAR(self->exc_state.exc_value);
