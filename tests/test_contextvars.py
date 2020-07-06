@@ -1,8 +1,10 @@
 from functools import partial
-import greenlet
+from greenlet import greenlet
+from greenlet import getcurrent
+from greenlet import GREENLET_USE_CONTEXT_VARS
 import unittest
 
-if greenlet.GREENLET_USE_CONTEXT_VARS:
+if GREENLET_USE_CONTEXT_VARS:
     from contextvars import ContextVar
     from contextvars import copy_context
 
@@ -24,11 +26,11 @@ if greenlet.GREENLET_USE_CONTEXT_VARS:
             id_var = ContextVar("id", default=None)
             id_var.set(0)
 
-            callback = greenlet.getcurrent().switch
+            callback = getcurrent().switch
             counts = dict((i, 0) for i in range(5))
 
             lets = [
-                greenlet.greenlet(partial(
+                greenlet(partial(
                     partial(
                         copy_context().run,
                         self._increment
@@ -54,3 +56,13 @@ if greenlet.GREENLET_USE_CONTEXT_VARS:
 
         def test_context_not_propagated(self):
             self._new_ctx_run(self._test_context, False)
+
+        def test_break_ctxvars(self):
+            let1 = greenlet(copy_context().run)
+            let2 = greenlet(copy_context().run)
+            let1.switch(getcurrent().switch)
+            let2.switch(getcurrent().switch)
+            # Since let2 entered the current context and let1 exits its own, the
+            # interpreter emits:
+            # RuntimeError: cannot exit context: thread state references a different context object
+            let1.switch()
