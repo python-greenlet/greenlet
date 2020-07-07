@@ -37,9 +37,6 @@ typedef struct _greenlet {
 	struct _frame* top_frame;
 	int recursion_depth;
 	PyObject* weakreflist;
-#if GREENLET_USE_CONTEXT_VARS
-	PyObject* context;
-#endif
 #ifdef GREENLET_USE_EXC_INFO
 	_PyErr_StackItem* exc_info;
 	_PyErr_StackItem exc_state;
@@ -49,6 +46,9 @@ typedef struct _greenlet {
 	PyObject* exc_traceback;
 #endif
 	PyObject* dict;
+#if GREENLET_USE_CONTEXT_VARS
+	PyObject* context;
+#endif
 } PyGreenlet;
 
 #define PyGreenlet_Check(op)      PyObject_TypeCheck(op, &PyGreenlet_Type)
