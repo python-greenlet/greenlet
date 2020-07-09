@@ -491,6 +491,9 @@ static int g_switchstack(void)
 		PyThreadState* tstate = PyThreadState_GET();
 		current->recursion_depth = tstate->recursion_depth;
 		current->top_frame = tstate->frame;
+#if GREENLET_USE_CONTEXT_VARS
+		current->context = tstate->context;
+#endif
 #ifdef GREENLET_USE_EXC_INFO
 		current->exc_info = tstate->exc_info;
 		current->exc_state = tstate->exc_state;
@@ -522,6 +525,15 @@ static int g_switchstack(void)
 		tstate->recursion_depth = target->recursion_depth;
 		tstate->frame = target->top_frame;
 		target->top_frame = NULL;
+
+#if GREENLET_USE_CONTEXT_VARS
+		tstate->context = target->context;
+		target->context = NULL;
+		/* Incrementing this value invalidates the contextvars cache,
+		   which would otherwise remain valid across switches */
+		tstate->context_ver++;
+#endif
+
 #ifdef GREENLET_USE_EXC_INFO
 		tstate->exc_state = target->exc_state;
 		tstate->exc_info = target->exc_info ? target->exc_info : &tstate->exc_state;
@@ -963,6 +975,9 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	   - frames are not visited: alive greenlets are not garbage collected anyway */
 	Py_VISIT((PyObject*)self->parent);
 	Py_VISIT(self->run_info);
+#if GREENLET_USE_CONTEXT_VARS
+	Py_VISIT(self->context);
+#endif
 #ifdef GREENLET_USE_EXC_INFO
 	Py_VISIT(self->exc_state.exc_type);
 	Py_VISIT(self->exc_state.exc_value);
@@ -995,6 +1010,9 @@ static int green_clear(PyGreenlet* self)
 	   so even if it switches we are relatively safe. */
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
+#if GREENLET_USE_CONTEXT_VARS
+	Py_CLEAR(self->context);
+#endif
 #ifdef GREENLET_USE_EXC_INFO
 	Py_CLEAR(self->exc_state.exc_type);
 	Py_CLEAR(self->exc_state.exc_value);
@@ -1073,6 +1091,9 @@ static void green_dealloc(PyGreenlet* self)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
+#if GREENLET_USE_CONTEXT_VARS
+	Py_CLEAR(self->context);
+#endif
 #ifdef GREENLET_USE_EXC_INFO
 	Py_CLEAR(self->exc_state.exc_type);
 	Py_CLEAR(self->exc_state.exc_value);
@@ -1739,6 +1760,7 @@ initgreenlet(void)
 	PyModule_AddObject(m, "GreenletExit", PyExc_GreenletExit);
 	PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(GREENLET_USE_GC));
 	PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(GREENLET_USE_TRACING));
+	PyModule_AddObject(m, "GREENLET_USE_CONTEXT_VARS", PyBool_FromLong(GREENLET_USE_CONTEXT_VARS));
 
 	/* also publish module-level data as attributes of the greentype. */
 	for (p=copy_on_greentype; *p; p++) {
