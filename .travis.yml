@@ -3,7 +3,8 @@ sudo: false
 
 matrix:
   include:
-  - arch: amd64
+  - stage: test
+    arch: amd64
     python: 2.6
     dist: precise
   - arch: arm64
@@ -66,6 +67,21 @@ matrix:
   - arch: ppc64le
     python: 3.8
     dist: bionic
+
+  # Build and deploy the aarch64 wheels on tagged releases to master branch
+  - stage: deploy
+    arch: arm64
+    dist: bionic
+    python: 3.8
+    services:
+      - docker
+    if: tag IS present AND repo = python-greenlet/greenlet
+    install:
+      - python3 -m pip install twine
+    script:
+      - ./make-manylinux manylinux2014_aarch64
+    after_success:
+      - python3 -m twine upload --skip-existing --repository-url=https://test.pypi.org/legacy/ wheelhouse/*
 
 install: python setup.py build_ext -i
 

@@ -1,7 +1,11 @@
 #!/bin/bash
-set -e
+set -e -x
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
+
+if [[ -z ${PLAT+x} ]]; then
+    PLAT=$1
+fi
 
 if [ -d /greenlet -a -d /opt/python ]; then
     # Running inside docker
@@ -10,10 +14,10 @@ if [ -d /greenlet -a -d /opt/python ]; then
     for variant in /opt/python/*; do
         rm -rf dist build *.egg-info
         $variant/bin/python setup.py clean --all bdist_wheel
-        auditwheel repair dist/*.whl
+        auditwheel repair dist/*.whl --plat $PLAT -w wheelhouse
     done
     rm -rf dist build *.egg-info
     exit 0
 fi
 
-docker run --rm -ti -v "$(pwd):/greenlet:Z" quay.io/pypa/manylinux1_x86_64 /greenlet/$(basename $0)
+docker run -e PLAT=$PLAT --rm -v "$(pwd):/greenlet:Z" quay.io/pypa/$PLAT /greenlet/$(basename $0)
