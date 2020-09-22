@@ -51,6 +51,7 @@ include slp_platformselect.h
 include tests/__init__.py
 include tests/_test_extension.c
 include tests/_test_extension_cpp.cpp
+include tests/test_contextvars.py
 include tests/test_cpp.py
 include tests/test_extension_interface.py
 include tests/test_gc.py
