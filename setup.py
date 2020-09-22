@@ -70,11 +70,9 @@ from my_build_ext import build_ext
 
 setup(
     name="greenlet",
-    version='0.4.16',
+    version='0.4.17',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
-    maintainer="Alexey Borzenkov",
-    maintainer_email="snaury@gmail.com",
     url="https://github.com/python-greenlet/greenlet",
     license="MIT License",
     platforms=['any'],
