@@ -904,15 +904,34 @@ static int green_init(PyGreenlet *self, PyObject *args, PyObject *kwargs)
 {
 	PyObject *run = NULL;
 	PyObject* nparent = NULL;
-	static char *kwlist[] = {"run", "parent", 0};
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|OO:green", kwlist,
-	                                 &run, &nparent))
+	PyObject* context = NULL;
+	static char *kwlist[] = {"run", "parent", "context", 0};
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOO:green", kwlist,
+	                                 &run, &nparent, &context))
 		return -1;
 
 	if (run != NULL) {
 		if (green_setrun(self, run, NULL))
 			return -1;
 	}
+#if GREENLET_USE_CONTEXT_VARS
+	if (context != NULL) {
+		if (PyBool_Check(context)) {
+			if (context == Py_True)
+				self->context = PyContext_CopyCurrent();
+		}
+		else if (PyContext_CheckExact(context)) {
+			self->context = context;
+			Py_INCREF(context);
+		}
+		else if (context != Py_None) {
+			PyErr_SetString(PyExc_TypeError,
+			                "context must be either a bool or None, "
+			                "or a Context instance");
+			return -1;
+		}
+	}
+#endif
 	if (nparent != NULL && nparent != Py_None)
 		return green_setparent(self, nparent, NULL);
 	return 0;
@@ -1558,11 +1577,16 @@ PyTypeObject PyGreenlet_Type = {
 	0,                                      /* tp_setattro */
 	0,                                      /* tp_as_buffer*/
 	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | GREENLET_GC_FLAGS, /* tp_flags */
-	"greenlet(run=None, parent=None) -> greenlet\n\n"
+	"greenlet(run=None, parent=None, context=None) -> greenlet\n\n"
 	"Creates a new greenlet object (without running it).\n\n"
 	" - *run* -- The callable to invoke.\n"
-	" - *parent* -- The parent greenlet. The default is the current "
-	"greenlet.",                            /* tp_doc */
+	" - *parent* -- The parent greenlet. The default is the current greenlet.\n"
+	" - *context* -- A PEP 567 context to run the greenlet. The default None \n"
+	"                or False means to start with an empty context, while \n"
+	"                True means to copy from the current context. \n"
+	"                This parameter is ignored if PEP 567 is not supported \n"
+	"                by the current "
+	"interpreter.",                         /* tp_doc */
 	(traverseproc)GREENLET_tp_traverse,     /* tp_traverse */
 	(inquiry)GREENLET_tp_clear,             /* tp_clear */
 	0,                                      /* tp_richcompare */

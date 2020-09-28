@@ -5,6 +5,7 @@ from greenlet import GREENLET_USE_CONTEXT_VARS
 import unittest
 
 if GREENLET_USE_CONTEXT_VARS:
+    from contextvars import Context
     from contextvars import ContextVar
     from contextvars import copy_context
 
@@ -31,16 +32,13 @@ if GREENLET_USE_CONTEXT_VARS:
 
             lets = [
                 greenlet(partial(
-                    partial(
-                        copy_context().run,
-                        self._increment
-                    ) if propagate else self._increment,
+                    self._increment,
                     greenlet_id=i,
                     ctx_var=id_var,
                     callback=callback,
                     counts=counts,
                     expect=0 if propagate else None,
-                ))
+                ), context=propagate)
                 for i in range(1, 5)
             ]
 
@@ -66,3 +64,34 @@ if GREENLET_USE_CONTEXT_VARS:
             # interpreter emits:
             # RuntimeError: cannot exit context: thread state references a different context object
             let1.switch()
+
+        def test_context_kwarg(self):
+            var = ContextVar("var", default=123)
+
+            ctx = Context()
+            ctx.run(var.set, 456)
+
+            self.assertEqual(greenlet(var.get).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=None).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=True).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=False).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=ctx).switch(), 456)
+            self.assertEqual(greenlet(var.get, getcurrent(), ctx).switch(), 456)
+
+            var.set(789)
+
+            self.assertEqual(greenlet(var.get).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=None).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=True).switch(), 789)
+            self.assertEqual(greenlet(var.get, context=False).switch(), 123)
+            self.assertEqual(greenlet(var.get, context=ctx).switch(), 456)
+            self.assertEqual(greenlet(var.get, getcurrent(), ctx).switch(), 456)
+
+            with self.assertRaises(TypeError):
+                greenlet(var.get, getcurrent(), 123)
+
+            with self.assertRaises(TypeError):
+                greenlet(context=123)
+
+            with self.assertRaises(TypeError):
+                greenlet(context={})
