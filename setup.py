@@ -91,9 +91,6 @@ setup(
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.0',
-        'Programming Language :: Python :: 3.1',
-        'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
@@ -108,6 +105,8 @@ setup(
         'docs': [
             'Sphinx',
         ]
-    }
-
+    },
+    # XXX: This is deprecated. appveyor.yml still uses it though.
+    test_suite='tests.test_collector',
+    zip_safe=False,
 )
