@@ -1,11 +1,23 @@
 #! /usr/bin/env python
 
-import sys, os, glob, platform, tempfile, shutil
+import sys
+import os
+import glob
+import platform
+
+# distutils is deprecated and vendored into setuptools now.
+from setuptools import setup
+from setuptools import Extension
+
+# XXX: This uses distutils directly and is probably
+# unnecessary with setuptools.
+from my_build_ext import build_ext
 
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 # https://github.com/python-greenlet/greenlet/issues/4
 # https://github.com/python-greenlet/greenlet/issues/94
+# pylint:disable=too-many-boolean-expressions
 if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or ("-with-redhat-3." in platform.platform() and platform.machine() == 'i686')
     or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
@@ -13,26 +25,13 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or (sys.platform == "linux" and platform.machine() == "ppc")):
     os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
 
-try:
-    if not (sys.modules.get("setuptools")
-            or "develop" in sys.argv
-            or "upload" in sys.argv
-            or "bdist_egg" in sys.argv
-            or "bdist_wheel" in sys.argv
-            or "test" in sys.argv):
-        raise ImportError()
-    from setuptools import setup, Extension
-    setuptools_args = dict(test_suite='tests.test_collector', zip_safe=False)
-except ImportError:
-    from distutils.core import setup, Extension
-    setuptools_args = dict()
 
 def readfile(filename):
-    f = open(filename)
-    try:
+    # The with statement is from Python 2.6, meaning we definitely no longer
+    # support 2.4 or 2.5. I strongly suspect that's not a problem; we'll be dropping
+    # our claim to support them very soon anyway.
+    with open(filename, 'r') as f:
         return f.read()
-    finally:
-        f.close()
 
 def _find_platform_headers():
     return glob.glob("platform/switch_*.h")
@@ -64,16 +63,17 @@ else:
         extra_compile_args=extra_compile_args,
         depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())]
 
-from distutils.core import Command
-from my_build_ext import build_ext
-
-
 setup(
     name="greenlet",
     version='0.4.17',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
     url="https://github.com/python-greenlet/greenlet",
+    project_urls={
+        'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
+        'Source Code': 'https://github.com/python-greenlet/gevent/',
+        'Documentation': 'https://greenlet.readthedocs.io/',
+    },
     license="MIT License",
     platforms=['any'],
     headers=headers,
@@ -102,5 +102,12 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Operating System :: OS Independent',
-        'Topic :: Software Development :: Libraries :: Python Modules'],
-    **setuptools_args)
+        'Topic :: Software Development :: Libraries :: Python Modules'
+    ],
+    extras_require={
+        'docs': [
+            'Sphinx',
+        ]
+    }
+
+)
