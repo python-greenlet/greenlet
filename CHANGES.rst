@@ -9,7 +9,9 @@
 - (Packaging) Stop asking setuptools to build both .tar.gz and .zip
   sdists. PyPI has standardized on .tar.gz for all platforms.
 - (Documentation) Publish the change log to https://greenlet.readthedocs.io
-- Drop support for Python 3.0, 3.1 and 3.2.
+- Drop support for Python 2.4, 2.5, 2.6, 3.0, 3.1, 3.2 and 3.4.
+  The project metadata now includes the ``python_requires`` data to
+  help installation tools understand supported versions.
 
 
 0.4.17 (2020-09-22)
