@@ -40,15 +40,13 @@ alternative to Python's built in coroutine support:
 Getting Greenlet
 ================
 
-The easiest way to get Greenlet is to install it with pip or
-easy_install::
+The easiest way to get Greenlet is to install it with pip::
 
   pip install greenlet
-  easy_install greenlet
 
 
 Source code archives and windows installers are available on the
-python package index at https://pypi.python.org/pypi/greenlet
+python package index at https://pypi.org/project/greenlet
 
 The source code repository is hosted on github:
 https://github.com/python-greenlet/greenlet

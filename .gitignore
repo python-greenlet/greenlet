@@ -7,7 +7,7 @@ dist/
 .tox/
 wheelhouse/
 greenlet.egg-info/
-/doc/_build
+/docs/_build
 __pycache__/
 /.ropeproject/
 /MANIFEST

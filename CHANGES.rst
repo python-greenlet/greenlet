@@ -1,15 +1,29 @@
-0.4.17
-======
+=========
+ Changes
+=========
+
+1.0.0 (unreleased)
+==================
+
+- (Packaging) Require setuptools to build from source.
+- (Packaging) Stop asking setuptools to build both .tar.gz and .zip
+  sdists. PyPI has standardized on .tar.gz for all platforms.
+- (Documentation) Publish the change log to https://greenlet.readthedocs.io
+- Drop support for Python 3.0, 3.1 and 3.2.
+
+
+0.4.17 (2020-09-22)
+===================
 - Support for PEP 567 ContextVars
 
 0.4.16
-===========
+======
 - Support for DEC Alpha architecture
 - Support for Python 3.9
 - Support for Python 3.10a0
 
 0.4.15
-===========
+======
 - Support for RISC-V architecture
 - Workaround a gcc bug on ppc64
 
@@ -49,16 +63,16 @@
 
 0.4.7
 =====
-- Added a missing workaround for `return 0` on mips
+- Added a missing workaround for ``return 0`` on mips
 - Restore compatibility with Python 2.5
 - Fixed stack switching on sparc
 
 0.4.6
 =====
-- Expose `_stack_saved` property on greenlet objects, it may be used to
+- Expose ``_stack_saved`` property on greenlet objects, it may be used to
   introspect the amount of memory used by a saved stack, but the API is
   subject to change in the future
-- Added a workaround for `return 0` compiler optimizations on all
+- Added a workaround for ``return 0`` compiler optimizations on all
   architectures
 - C API typo fixes
 

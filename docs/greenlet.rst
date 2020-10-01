@@ -1,8 +1,13 @@
-=====================================================
-greenlet: Lightweight concurrent programming
-=====================================================
-.. toctree::
-   :maxdepth: 2
+==============================================
+ greenlet: Lightweight concurrent programming
+==============================================
+
+.. TODO: Refactor and share the opening paragraphs with README.rst
+.. TODO: Break into a few pieces: Introduction, tutorial, API
+   reference, etc.
+
+
+.. sphinx-include-begin
 
 Motivation
 ==========
@@ -13,15 +18,15 @@ pseudo-concurrently (typically in a single or a few OS-level threads) and
 are synchronized with data exchanges on "channels".
 
 A "greenlet", on the other hand, is a still more primitive notion of
-micro-thread with no implicit scheduling; coroutines, in other words.  
+micro-thread with no implicit scheduling; coroutines, in other words.
 This is useful when you want to
 control exactly when your code runs.  You can build custom scheduled
 micro-threads on top of greenlet; however, it seems that greenlets are
-useful on their own as a way to make advanced control flow structures.  
+useful on their own as a way to make advanced control flow structures.
 For example, we can recreate generators; the difference with Python's own
 generators is that our generators can call nested functions and the nested
 functions can yield values too.  (Additionally, you don't need a "yield"
-keyword.  See the example in ``test/test_generator.py``). 
+keyword.  See the example in ``test/test_generator.py``).
 
 Greenlets are provided as a C extension module for the regular unmodified
 interpreter.
@@ -54,7 +59,7 @@ read_next_char() function needed by the code above.  We have two incompatible
 functions::
 
     def event_keydown(key):
-        ?? 
+        ??
 
     def read_next_char():
         ?? should wait for the next event_keydown() call
@@ -138,7 +143,7 @@ For example::
     gr1.switch()
 
 The last line jumps to test1, which prints 12, jumps to test2, prints 56,
-jumps back into test1, prints 34; and then test1 finishes and gr1 dies.  
+jumps back into test1, prints 34; and then test1 finishes and gr1 dies.
 At this point, the execution comes back to the original ``gr1.switch()``
 call.  Note that 78 is never printed.
 
@@ -153,12 +158,12 @@ organized in a tree.  Top-level code that doesn't run in a user-created
 greenlet runs in the implicit "main" greenlet, which is the root of the
 tree.
 
-In the above example, both gr1 and gr2 have the main greenlet as a parent.  
+In the above example, both gr1 and gr2 have the main greenlet as a parent.
 Whenever one of them dies, the execution comes back to "main".
 
 Uncaught exceptions are propagated into the parent, too.  For example, if
 the above test2() contained a typo, it would generate a NameError that
-would kill gr2, and the exception would go back directly into "main".  
+would kill gr2, and the exception would go back directly into "main".
 The traceback would show test2, but not test1.  Remember, switches are not
 calls, but transfer of execution between parallel "stack containers", and
 the "parent" defines which stack logically comes "below" the current one.
@@ -222,7 +227,7 @@ Here are the precise rules for sending objects around:
     will start to run now.
 
 Dying greenlet
-    If a greenlet's ``run()`` finishes, its return value is the object 
+    If a greenlet's ``run()`` finishes, its return value is the object
     sent to its parent.  If ``run()`` terminates with an exception, the
     exception is propagated to its parent (unless it is a
     ``greenlet.GreenletExit`` exception, in which case the exception
