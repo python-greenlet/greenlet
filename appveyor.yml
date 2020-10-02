@@ -1,4 +1,3 @@
-version: 0.4.17.{build}
 environment:
   global:
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
@@ -15,22 +14,6 @@ environment:
     - PYTHON_ROOT: "C:\\Python27-x64"
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "2.7.x"
-
-    - PYTHON_ROOT: "C:\\Python33"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.3.x"
-
-    - PYTHON_ROOT: "C:\\Python33-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.3.x"
-
-    - PYTHON_ROOT: "C:\\Python34"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.4.x"
-
-    - PYTHON_ROOT: "C:\\Python34-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.4.x"
 
     - PYTHON_ROOT: "C:\\Python35"
       PYTHON_ARCH: "32"
@@ -76,14 +59,14 @@ install:
   - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"
 
 build_script:
-  - "%CMD_IN_ENV% python setup.py build"
+  - "%CMD_IN_ENV% python -m pip install -U -e .[test]"
 
+# XXX: setup.py test is deprecated
 test_script:
   - "%CMD_IN_ENV% python setup.py test"
 
 after_test:
   - "%CMD_IN_ENV% python setup.py bdist_wheel"
-  - "%CMD_IN_ENV% python setup.py bdist_egg"
 
 artifacts:
   - path: dist\*

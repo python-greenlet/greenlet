@@ -65,7 +65,7 @@ else:
 
 setup(
     name="greenlet",
-    version='0.4.17',
+    version='1.0.0.dev0',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
     url="https://github.com/python-greenlet/greenlet",
@@ -86,13 +86,8 @@ setup(
         'Programming Language :: C',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.4',
-        'Programming Language :: Python :: 2.5',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
@@ -106,6 +101,7 @@ setup(
             'Sphinx',
         ]
     },
+    python_requires=">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*",
     # XXX: This is deprecated. appveyor.yml still uses it though.
     test_suite='tests.test_collector',
     zip_safe=False,
