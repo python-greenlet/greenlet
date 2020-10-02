@@ -4,14 +4,8 @@ import sys, os, subprocess, re
 
 common_dist = ("bdist_wheel", "bdist_egg", "test")
 pyver2dist = {
-    "Python26": common_dist,
-    "Python26x64": common_dist,
     "Python27": common_dist,
     "Python27x64": common_dist,
-    "Python33": common_dist,
-    "Python33x64": common_dist,
-    "Python34": common_dist,
-    "Python34x64": common_dist,
     "Python35": common_dist,
     "Python35x64": common_dist,
 }

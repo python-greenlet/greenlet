@@ -27,9 +27,6 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
 
 
 def readfile(filename):
-    # The with statement is from Python 2.6, meaning we definitely no longer
-    # support 2.4 or 2.5. I strongly suspect that's not a problem; we'll be dropping
-    # our claim to support them very soon anyway.
     with open(filename, 'r') as f:
         return f.read()
 

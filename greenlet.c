@@ -76,28 +76,6 @@ The running greenlet's stack_start is undefined but not NULL.
      using the dictionary key 'ts_curkey'.
 */
 
-/* Python <= 2.5 support */
-#if PY_MAJOR_VERSION < 3
-#ifndef Py_REFCNT
-#  define Py_REFCNT(ob) (((PyObject *) (ob))->ob_refcnt)
-#endif
-#ifndef Py_TYPE
-#  define Py_TYPE(ob)   (((PyObject *) (ob))->ob_type)
-#endif
-#ifndef PyVarObject_HEAD_INIT
-#  define PyVarObject_HEAD_INIT(type, size) \
-	PyObject_HEAD_INIT(type) size,
-#endif
-#endif
-
-#if PY_VERSION_HEX < 0x02060000
-#define PyLong_FromSsize_t PyInt_FromLong
-#endif
-
-#if PY_VERSION_HEX < 0x02050000
-typedef int Py_ssize_t;
-#endif
-
 extern PyTypeObject PyGreenlet_Type;
 
 /* Defines that customize greenlet module behaviour */
@@ -1163,18 +1141,6 @@ static PyObject* green_switch(
 	return single_result(g_switch(self, args, kwargs));
 }
 
-/* Macros required to support Python < 2.6 for green_throw() */
-#ifndef PyExceptionClass_Check
-#  define PyExceptionClass_Check    PyClass_Check
-#endif
-#ifndef PyExceptionInstance_Check
-#  define PyExceptionInstance_Check PyInstance_Check
-#endif
-#ifndef PyExceptionInstance_Class
-#  define PyExceptionInstance_Class(x) \
-	((PyObject *) ((PyInstanceObject *)(x))->in_class)
-#endif
-
 PyDoc_STRVAR(green_throw_doc,
 "Switches execution to the greenlet ``g``, but immediately raises the\n"
 "given exception in ``g``.  If no argument is provided, the exception\n"
@@ -1722,13 +1688,8 @@ initgreenlet(void)
 	{
 		INITERROR;
 	}
-#if PY_MAJOR_VERSION >= 3 || (PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION >= 5)
 	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
 	                                        PyExc_BaseException, NULL);
-#else
-	PyExc_GreenletExit = PyErr_NewException("greenlet.GreenletExit",
-	                                        NULL, NULL);
-#endif
 	if (PyExc_GreenletExit == NULL)
 	{
 		INITERROR;
@@ -1790,11 +1751,7 @@ initgreenlet(void)
 	_PyGreenlet_API[PyGreenlet_SetParent_NUM] =
 		(void *) PyGreenlet_SetParent;
 
-#ifdef GREENLET_USE_PYCAPSULE
 	c_api_object = PyCapsule_New((void *) _PyGreenlet_API, "greenlet._C_API", NULL);
-#else
-	c_api_object = PyCObject_FromVoidPtr((void *) _PyGreenlet_API, NULL);
-#endif
 	if (c_api_object != NULL)
 	{
 		PyModule_AddObject(m, "_C_API", c_api_object);
