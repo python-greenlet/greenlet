@@ -249,6 +249,67 @@ Note that any attempt to switch to a dead greenlet actually goes to the
 dead greenlet's parent, or its parent's parent, and so on.  (The final
 parent is the "main" greenlet, which is never dead.)
 
+Context variables
+-----------------
+
+On Python versions (3.7 and above) that natively support context
+variables as defined in :pep:`525`, each greenlet runs by default in
+its own :class:`contextvars.Context`, enabling
+:class:`~contextvars.ContextVar`\s to be used for "greenlet-local
+storage". (If you need to support earlier Python versions, you can use
+attributes on the greenlet object instead.)
+
+A new greenlet's context is initially empty, i.e., all
+:class:`~contextvars.ContextVar`\s have their default values. This
+matches the behavior of a new thread, but differs from that of a new
+:class:`asyncio.Task`, which inherits a copy of the context that was
+active when it was spawned.  You can assign to a greenlet's
+``gr_context`` attribute to change the context that it will use. For
+example::
+
+    import greenlet
+    import contextvars
+
+    example = contextvars.ContextVar("example", default=0)
+
+    def set_it(next_value):
+        previous_value = example.get()
+        example.set(next_value)
+        return previous_value
+
+    example.set(1)
+
+    # Default behavior: new greenlet gets an empty context
+    gr1 = greenlet.greenlet(set_it)
+    assert gr1.switch(2) == 0 and example.get() == 1
+
+    # Alternate behavior: new greenlet gets a copy of the current
+    # context (like asyncio)
+    gr2 = greenlet.greenlet(set_it)
+    gr2.gr_context = contextvars.copy_context()
+    assert gr2.switch(2) == 1 and example.get() == 1
+
+    # Alternate behavior: new greenlet shares the current context
+    # (like older, non-contextvars-aware versions of greenlet)
+    gr3 = greenlet.greenlet(set_it)
+    gr3.gr_context = greenlet.getcurrent().gr_context
+    assert gr3.switch(2) == 1 and example.get() == 2
+
+You can also use :meth:`Context.run() <contextvars.Context.run>` to set
+a new greenlet's context::
+
+    example.set(1)
+    gr4 = greenlet.greenlet(contextvars.copy_context().run)
+    assert gr4.switch(set_it, 2) == 1 and example.get() == 1
+
+However, :meth:`Context.run() <contextvars.Context.run>` requires that
+contexts be exited in the reverse of the order in which they were
+entered, and prohibits multiple calls to :meth:`~contextvars.Context.run`
+from being active for the same context at the same time. These restrictions
+make it challenging to use in an environment with arbitrary
+greenlet-to-greenlet control transfers. Assigning to ``gr_context``
+does not share these restrictions.
+
 Methods and attributes of greenlets
 -----------------------------------
 
@@ -260,14 +321,26 @@ Methods and attributes of greenlets
     this attribute no longer exists.
 
 ``g.parent``
-    The parent greenlet.  This is writeable, but it is not allowed to
+    The parent greenlet.  This is writable, but it is not allowed to
     create cycles of parents.
 
 ``g.gr_frame``
-    The current top frame, or None.
+    The frame that was active in this greenlet when it most recently
+    called ``some_other_greenlet.switch()``, and that will resume
+    execution when ``g.switch()`` is next called. The remainder of the
+    greenlet's stack can be accessed by following the frame objects'
+    ``f_back`` attributes.  ``gr_frame`` is non-None only for suspended
+    greenlets; it is None if the greenlet is dead, not yet started,
+    or currently executing.
+
+``g.gr_context``
+    The `contextvars.Context` in which ``g`` will run.  This is writable,
+    and can be set to ``None`` to cause the greenlet to start or resume
+    execution in a new, empty context.  This attribute only exists on
+    Python versions that have the `contextvars` module (3.7 and later).
 
 ``g.dead``
-    True if ``g`` is dead (i.e. it finished its execution).
+    True if ``g`` is dead (i.e., it finished its execution).
 
 ``bool(g)``
     True if ``g`` is active, False if it is dead or not yet started.

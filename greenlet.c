@@ -1047,7 +1047,7 @@ static void green_dealloc(PyGreenlet* self)
 		 * it would cause a recursive call.
 		 */
 		assert(Py_REFCNT(self) > 0);
-		
+
 		refcnt = Py_REFCNT(self) - 1;
 		Py_SET_REFCNT(self, refcnt);
 		if (refcnt != 0) {
@@ -1346,6 +1346,79 @@ static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 	return 0;
 }
 
+#ifdef GREENLET_USE_CONTEXT_VARS
+
+static PyObject* green_getcontext(PyGreenlet* self, void* c)
+{
+	PyThreadState* tstate = PyThreadState_GET();
+	PyObject* result;
+
+	if (!STATE_OK) {
+		return NULL;
+	}
+	if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
+		/* Currently running greenlet: context is stored in the thread state,
+		   not the greenlet object. */
+		if (self == ts_current) {
+			result = tstate->context;
+		} else {
+			PyErr_SetString(PyExc_ValueError, "cannot get context of a "
+							"greenlet that is running in a different thread");
+			return NULL;
+		}
+	} else {
+		/* Greenlet is not running: just return context. */
+		result = self->context;
+	}
+	if (result == NULL) {
+		result = Py_None;
+	}
+	Py_INCREF(result);
+	return result;
+}
+
+static int green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
+{
+	PyThreadState* tstate;
+	PyObject* octx = NULL;
+	if (!STATE_OK) {
+		return -1;
+	}
+	if (nctx == Py_None) {
+		/* Treat 'gr.gr_context = None' the same as 'del gr.gr_context' */
+		nctx = NULL;
+	}
+	if (nctx != NULL && !PyContext_CheckExact(nctx)) {
+		PyErr_SetString(PyExc_TypeError, "greenlet context must be a "
+						"contextvars.Context or None");
+		return -1;
+	}
+	tstate = PyThreadState_GET();
+	if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
+		/* Currently running greenlet: context is stored in the thread state,
+		   not the greenlet object. */
+		if (self == ts_current) {
+			octx = tstate->context;
+			tstate->context = nctx;
+			tstate->context_ver++;
+			Py_XINCREF(nctx);
+		} else {
+			PyErr_SetString(PyExc_ValueError, "cannot set context of a "
+							"greenlet that is running in a different thread");
+			return -1;
+		}
+	} else {
+		/* Greenlet is not running: just set context. */
+		octx = self->context;
+		self->context = nctx;
+		Py_XINCREF(nctx);
+	}
+	Py_XDECREF(octx);
+	return 0;
+}
+
+#endif
+
 static PyObject* green_getframe(PyGreenlet* self, void* c)
 {
 	PyObject* result = self->top_frame ? (PyObject*) self->top_frame : Py_None;
@@ -1477,7 +1550,11 @@ static PyGetSetDef green_getsets[] = {
 	{"parent",   (getter)green_getparent,
 	             (setter)green_setparent, /*XXX*/ NULL},
 	{"gr_frame", (getter)green_getframe,
-	             NULL, /*XXX*/ NULL},
+	 NULL, /*XXX*/ NULL},
+#ifdef GREENLET_USE_CONTEXT_VARS
+	{"gr_context", (getter)green_getcontext,
+	             (setter)green_setcontext, /*XXX*/ NULL},
+#endif
 	{"dead",     (getter)green_getdead,
 	             NULL, /*XXX*/ NULL},
 	{"_stack_saved", (getter)green_get_stack_saved,
