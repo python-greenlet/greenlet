@@ -180,7 +180,7 @@ if GREENLET_USE_CONTEXT_VARS:
             self.assertIsNone(gr.gr_context)
 
             # Make sure there are no reference leaks
-            del gr
+            gr = None
             gc.collect()
             self.assertEqual(sys.getrefcount(old_context), 2)
             self.assertEqual(sys.getrefcount(new_context), 2)
