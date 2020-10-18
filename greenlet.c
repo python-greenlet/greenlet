@@ -1346,7 +1346,7 @@ static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 	return 0;
 }
 
-#ifdef GREENLET_USE_CONTEXT_VARS
+#if GREENLET_USE_CONTEXT_VARS
 
 static PyObject* green_getcontext(PyGreenlet* self, void* c)
 {
@@ -1551,7 +1551,7 @@ static PyGetSetDef green_getsets[] = {
 	             (setter)green_setparent, /*XXX*/ NULL},
 	{"gr_frame", (getter)green_getframe,
 	 NULL, /*XXX*/ NULL},
-#ifdef GREENLET_USE_CONTEXT_VARS
+#if GREENLET_USE_CONTEXT_VARS
 	{"gr_context", (getter)green_getcontext,
 	             (setter)green_setcontext, /*XXX*/ NULL},
 #endif

@@ -295,20 +295,39 @@ example::
     gr3.gr_context = greenlet.getcurrent().gr_context
     assert gr3.switch(2) == 1 and example.get() == 2
 
-You can also use :meth:`Context.run() <contextvars.Context.run>` to set
-a new greenlet's context::
+You can alternatively set a new greenlet's context by surrounding its
+top-level function in a call to :meth:`Context.run()
+<contextvars.Context.run>`::
 
     example.set(1)
     gr4 = greenlet.greenlet(contextvars.copy_context().run)
     assert gr4.switch(set_it, 2) == 1 and example.get() == 1
 
-However, :meth:`Context.run() <contextvars.Context.run>` requires that
-contexts be exited in the reverse of the order in which they were
-entered, and prohibits multiple calls to :meth:`~contextvars.Context.run`
-from being active for the same context at the same time. These restrictions
-make it challenging to use in an environment with arbitrary
-greenlet-to-greenlet control transfers. Assigning to ``gr_context``
-does not share these restrictions.
+However, contextvars were not designed with greenlets in mind, so
+using :meth:`Context.run() <contextvars.Context.run>` becomes
+challenging in an environment with arbitrary greenlet-to-greenlet
+control transfers. The :meth:`~contextvars.Context.run` calls across
+all greenlets in a thread must effectively form a stack, where the
+last context entered is the first one to be exited. Also, it's
+not possible to have two calls to :meth:`~contextvars.Context.run` for
+the same context active in two different greenlets at the same
+time. Assigning to ``gr_context`` does not share these
+restrictions.
+
+You can access and change a greenlet's context almost no matter what
+state the greenlet is in. It can be dead, not yet started, or
+suspended (on any thread), or running (on the current thread only).
+Accessing or modifying ``gr_context`` of a greenlet running on a different
+thread raises :exc:`ValueError`.
+
+.. warning:: Assigning to ``gr_context`` of an active greenlet that
+   might be inside a call to :meth:`Context.run()
+   <contextvars.Context.run>` is not recommended, because
+   :meth:`~contextvars.Context.run` will raise an exception if the
+   current context when it exits doesn't match the context that it set
+   upon entry. The safest thing to do is set ``gr_context`` once,
+   before starting the greenlet; then there's no potential conflict
+   with :meth:`Context.run() <contextvars.Context.run>` calls.
 
 Methods and attributes of greenlets
 -----------------------------------
@@ -334,10 +353,15 @@ Methods and attributes of greenlets
     or currently executing.
 
 ``g.gr_context``
-    The `contextvars.Context` in which ``g`` will run.  This is writable,
-    and can be set to ``None`` to cause the greenlet to start or resume
-    execution in a new, empty context.  This attribute only exists on
-    Python versions that have the `contextvars` module (3.7 and later).
+    The :class:`contextvars.Context` in which ``g`` will
+    run. Writable; defaults to ``None``, reflecting that a greenlet
+    starts execution in an empty context unless told otherwise. (When
+    any :class:`~contextvars.ContextVar` is set within the greenlet,
+    such that the context is no longer empty, a new
+    :class:`~contextvars.Context` is created to store its value, and
+    the ``gr_context`` attribute is updated accordingly.)  This
+    attribute only exists on Python versions that natively support the
+    `contextvars` module (3.7 and later).
 
 ``g.dead``
     True if ``g`` is dead (i.e., it finished its execution).
