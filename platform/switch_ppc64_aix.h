@@ -52,11 +52,7 @@
 
 #ifdef SLP_EVAL
 
-#if _CALL_ELF == 2
-#define STACK_MAGIC 4
-#else
 #define STACK_MAGIC 6
-#endif
 
 #if defined(__ALTIVEC__)
 #define ALTIVEC_REGS \
