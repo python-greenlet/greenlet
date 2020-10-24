@@ -144,9 +144,6 @@ if GREENLET_USE_CONTEXT_VARS:
                 # parent switches us back to old_context
 
                 self.assertEqual(id_var.get(), 1)
-                del gr.gr_context  # equivalent to assigning None
-                self.assertIsNone(id_var.get())
-                self.assertIsNone(gr.gr_context)
                 gr.gr_context = new_context  # assign non-None while running
                 self.assertEqual(id_var.get(), 2)
 
@@ -163,6 +160,10 @@ if GREENLET_USE_CONTEXT_VARS:
                 self.assertIsNone(gr.gr_context)
 
             gr = greenlet(target)
+
+            with self.assertRaisesRegex(AttributeError, "can't delete attr"):
+                del gr.gr_context
+
             self.assertIsNone(gr.gr_context)
             old_context, new_context = gr.switch()
             self.assertIs(new_context, gr.gr_context)
@@ -175,7 +176,7 @@ if GREENLET_USE_CONTEXT_VARS:
             gr.gr_context = None  # assign None while suspended
             gr.switch()
             self.assertIs(gr.gr_context, old_context)
-            del gr.gr_context
+            gr.gr_context = None
             gr.switch()
             self.assertIsNone(gr.gr_context)
 
@@ -242,3 +243,18 @@ if GREENLET_USE_CONTEXT_VARS:
             self.assertIsNone(gr.gr_context)
             gr.gr_context = ctx
             self.assertIs(gr.gr_context, ctx)
+
+else:
+    # no contextvars support
+    class NoContextVarsTests(unittest.TestCase):
+        def test_contextvars_errors(self):
+            let1 = greenlet(getcurrent().switch)
+            with self.assertRaises(AttributeError):
+                let1.gr_context
+            with self.assertRaises(AttributeError):
+                let1.gr_context = None
+            let1.switch()
+            with self.assertRaises(AttributeError):
+                let1.gr_context
+            with self.assertRaises(AttributeError):
+                let1.gr_context = None

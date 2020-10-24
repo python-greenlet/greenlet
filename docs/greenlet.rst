@@ -320,6 +320,18 @@ suspended (on any thread), or running (on the current thread only).
 Accessing or modifying ``gr_context`` of a greenlet running on a different
 thread raises :exc:`ValueError`.
 
+Once a greenlet has started running, ``gr_context`` tracks its
+*current* context: the one that would be active if you switched to the
+greenlet right now.  This may not be the same as the value of
+``gr_context`` before the greenlet started running. One potential
+difference occurs if a greenlet running in the default empty context
+(represented as ``None``) sets any context variables: a new
+:class:`~contextvars.Context` will be implicitly created to hold them,
+which will be reflected in ``gr_context``. Another one occurs if a
+greenlet makes a call to ``Context.run(some_inner,
+func)``: its ``gr_context`` will be ``some_inner`` until ``func()``
+returns.
+
 .. warning:: Assigning to ``gr_context`` of an active greenlet that
    might be inside a call to :meth:`Context.run()
    <contextvars.Context.run>` is not recommended, because
@@ -355,13 +367,11 @@ Methods and attributes of greenlets
 ``g.gr_context``
     The :class:`contextvars.Context` in which ``g`` will
     run. Writable; defaults to ``None``, reflecting that a greenlet
-    starts execution in an empty context unless told otherwise. (When
-    any :class:`~contextvars.ContextVar` is set within the greenlet,
-    such that the context is no longer empty, a new
-    :class:`~contextvars.Context` is created to store its value, and
-    the ``gr_context`` attribute is updated accordingly.)  This
-    attribute only exists on Python versions that natively support the
-    `contextvars` module (3.7 and later).
+    starts execution in an empty context unless told otherwise.
+    Accessing or modifying this attribute raises :exc:`AttributeError`
+    on Python versions 3.6 and earlier (which don't natively support the
+    `contextvars` module) or if ``greenlet`` was built without
+    contextvars support.
 
 ``g.dead``
     True if ``g`` is dead (i.e., it finished its execution).

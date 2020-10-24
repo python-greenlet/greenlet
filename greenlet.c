@@ -1346,10 +1346,15 @@ static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 	return 0;
 }
 
-#if GREENLET_USE_CONTEXT_VARS
+#ifdef Py_CONTEXT_H
+#define GREENLET_NO_CONTEXTVARS_REASON "this build of greenlet"
+#else
+#define GREENLET_NO_CONTEXTVARS_REASON "this Python interpreter"
+#endif
 
 static PyObject* green_getcontext(PyGreenlet* self, void* c)
 {
+#if GREENLET_USE_CONTEXT_VARS
 	PyThreadState* tstate = PyThreadState_GET();
 	PyObject* result;
 
@@ -1363,7 +1368,7 @@ static PyObject* green_getcontext(PyGreenlet* self, void* c)
 			result = tstate->context;
 		} else {
 			PyErr_SetString(PyExc_ValueError, "cannot get context of a "
-							"greenlet that is running in a different thread");
+			                "greenlet that is running in a different thread");
 			return NULL;
 		}
 	} else {
@@ -1375,22 +1380,31 @@ static PyObject* green_getcontext(PyGreenlet* self, void* c)
 	}
 	Py_INCREF(result);
 	return result;
+#else
+	PyErr_SetString(PyExc_AttributeError, GREENLET_NO_CONTEXTVARS_REASON
+	                " does not support context variables");
+	return NULL;
+#endif
 }
 
 static int green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 {
+#if GREENLET_USE_CONTEXT_VARS
 	PyThreadState* tstate;
 	PyObject* octx = NULL;
 	if (!STATE_OK) {
 		return -1;
 	}
-	if (nctx == Py_None) {
-		/* Treat 'gr.gr_context = None' the same as 'del gr.gr_context' */
-		nctx = NULL;
+	if (nctx == NULL) {
+		PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
+		return -1;
 	}
-	if (nctx != NULL && !PyContext_CheckExact(nctx)) {
+	if (nctx == Py_None) {
+		/* "Empty context" is stored as NULL, not None. */
+		nctx = NULL;
+	} else if (!PyContext_CheckExact(nctx)) {
 		PyErr_SetString(PyExc_TypeError, "greenlet context must be a "
-						"contextvars.Context or None");
+		                "contextvars.Context or None");
 		return -1;
 	}
 	tstate = PyThreadState_GET();
@@ -1404,7 +1418,7 @@ static int green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 			Py_XINCREF(nctx);
 		} else {
 			PyErr_SetString(PyExc_ValueError, "cannot set context of a "
-							"greenlet that is running in a different thread");
+			                "greenlet that is running in a different thread");
 			return -1;
 		}
 	} else {
@@ -1415,9 +1429,14 @@ static int green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 	}
 	Py_XDECREF(octx);
 	return 0;
+#else
+	PyErr_SetString(PyExc_AttributeError, GREENLET_NO_CONTEXTVARS_REASON
+	                " does not support context variables");
+	return -1;
+#endif
 }
 
-#endif
+#undef GREENLET_NO_CONTEXTVARS_REASON
 
 static PyObject* green_getframe(PyGreenlet* self, void* c)
 {
@@ -1550,11 +1569,9 @@ static PyGetSetDef green_getsets[] = {
 	{"parent",   (getter)green_getparent,
 	             (setter)green_setparent, /*XXX*/ NULL},
 	{"gr_frame", (getter)green_getframe,
-	 NULL, /*XXX*/ NULL},
-#if GREENLET_USE_CONTEXT_VARS
+	             NULL, /*XXX*/ NULL},
 	{"gr_context", (getter)green_getcontext,
 	             (setter)green_setcontext, /*XXX*/ NULL},
-#endif
 	{"dead",     (getter)green_getdead,
 	             NULL, /*XXX*/ NULL},
 	{"_stack_saved", (getter)green_get_stack_saved,
