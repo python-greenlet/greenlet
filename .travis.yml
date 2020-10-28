@@ -1,5 +1,5 @@
 language: python
-sudo: false
+cache: pip
 
 matrix:
   include:
@@ -48,7 +48,15 @@ matrix:
   - arch: ppc64le
     python: 3.8
     dist: bionic
-  - python: 3.9-dev
+  - arch: arm64
+    python: 3.9
+    dist: bionic
+  - arch: amd64
+    python: 3.9
+    dist: bionic
+  - arch: ppc64le
+    python: 3.9
+    dist: bionic
 
 install: pip install -U -e .[test]
 
