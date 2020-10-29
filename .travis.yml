@@ -1,54 +1,19 @@
 language: python
-sudo: false
+cache: pip
+dist: bionic
 
-matrix:
-  include:
-  - arch: arm64
-    python: 2.7
-    dist: bionic
-  - arch: amd64
-    python: 2.7
-    dist: bionic
-  - arch: ppc64le
-    python: 2.7
-    dist: bionic
-  - arch: arm64
-    python: 3.5
-    dist: bionic
-  - arch: amd64
-    python: 3.5
-    dist: bionic
-  - arch: ppc64le
-    python: 3.5
-    dist: bionic
-  - arch: arm64
-    python: 3.6
-    dist: bionic
-  - arch: amd64
-    python: 3.6
-    dist: bionic
-  - arch: ppc64le
-    python: 3.6
-    dist: bionic
-  - arch: arm64
-    python: 3.7
-    dist: bionic
-  - arch: amd64
-    python: 3.7
-    dist: bionic
-  - arch: ppc64le
-    python: 3.7
-    dist: bionic
-  - arch: arm64
-    python: 3.8
-    dist: bionic
-  - arch: amd64
-    python: 3.8
-    dist: bionic
-  - arch: ppc64le
-    python: 3.8
-    dist: bionic
-  - python: 3.9-dev
+arch:
+  - arm64
+  - amd64
+  - ppc64le
+
+python:
+  - 2.7
+  - 3.5
+  - 3.6
+  - 3.7
+  - 3.8
+  - 3.9
 
 install: pip install -U -e .[test]
 

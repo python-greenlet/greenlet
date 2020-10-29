@@ -47,6 +47,14 @@ environment:
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "3.8.x"
 
+    - PYTHON_ROOT: "C:\\Python39"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.9.x"
+
+    - PYTHON_ROOT: "C:\\Python39-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.9.x"
+
 install:
   - "SET PATH=%PYTHON_ROOT%;%PYTHON_ROOT%\\Scripts;%PATH%"
   - "python --version"
