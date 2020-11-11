@@ -9,10 +9,6 @@ import platform
 from setuptools import setup
 from setuptools import Extension
 
-# XXX: This uses distutils directly and is probably
-# unnecessary with setuptools.
-from my_build_ext import build_ext
-
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 # https://github.com/python-greenlet/greenlet/issues/4
@@ -53,12 +49,34 @@ else:
     else:
         extra_compile_args = []
 
-    ext_modules = [Extension(
-        name='greenlet',
-        sources=['greenlet.c'],
-        extra_objects=extra_objects,
-        extra_compile_args=extra_compile_args,
-        depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers())]
+    ext_modules = [
+        Extension(
+            name='greenlet',
+            sources=['greenlet.c'],
+            extra_objects=extra_objects,
+            extra_compile_args=extra_compile_args,
+            depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers()
+        ),
+        # Test extensions.
+        # XXX: We used to try hard to not include these in built
+        # distributions. That's really not important, at least not once we have a clean
+        # layout with the test directory nested inside a greenlet directory.
+        # See https://github.com/python-greenlet/greenlet/issues/184 and 189
+        Extension(
+            '_test_extension',
+            [os.path.join('tests', '_test_extension.c')],
+            include_dirs=[os.path.curdir]
+        ),
+    ]
+
+    if os.environ.get('GREENLET_TEST_CPP', 'yes').lower() not in ('0', 'no', 'false'):
+        ext_modules.append(
+            Extension(
+                '_test_extension_cpp',
+                [os.path.join('tests', '_test_extension_cpp.cpp')],
+                language="c++",
+                include_dirs=[os.path.curdir]),
+        )
 
 setup(
     name="greenlet",
@@ -75,7 +93,6 @@ setup(
     platforms=['any'],
     headers=headers,
     ext_modules=ext_modules,
-    cmdclass=dict(build_ext=build_ext),
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',

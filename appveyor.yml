@@ -1,67 +1,145 @@
+clone_depth: 50
+max_jobs: 8
+shallow_clone: true
+build:
+  parallel: true
+  verbosity: minimal
+# The VS 2019 image doesn't have
+# the MSVC needed for Python 2.7.
+# Note that as of 2020-11-11, this does not include
+# a Python 3.9 build.
+image: Visual Studio 2015
+
 environment:
   global:
+    APPVEYOR_SAVE_CACHE_ON_ERROR: "true"
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
-    # /E:ON and /V:ON options are not enabled in the batch script intepreter
+    # /E:ON and /V:ON options are not enabled in the batch script interpreter
     # See: http://stackoverflow.com/a/13751649/163740
     CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\appveyor\\run_with_env.cmd"
+    # Use a fixed hash seed for reproducability
+    PYTHONHASHSEED: 8675309
+    # Don't get warnings about Python 2 support being deprecated. We
+    # know.
+    PIP_NO_PYTHON_VERSION_WARNING: 1
+    PIP_UPGRADE_STRATEGY: eager
+    # Enable this if debugging a resource leak. Otherwise
+    # it slows things down.
+    # PYTHONTRACEMALLOC: 10
 
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
-    - PYTHON_ROOT: "C:\\Python27"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "2.7.x"
 
-    - PYTHON_ROOT: "C:\\Python27-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "2.7.x"
-
-    - PYTHON_ROOT: "C:\\Python35"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.5.x"
-
-    - PYTHON_ROOT: "C:\\Python35-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.5.x"
-
-    - PYTHON_ROOT: "C:\\Python36"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.6.x"
-
-    - PYTHON_ROOT: "C:\\Python36-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.6.x"
-
-    - PYTHON_ROOT: "C:\\Python37"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.7.x"
-
-    - PYTHON_ROOT: "C:\\Python37-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.7.x"
-
-    - PYTHON_ROOT: "C:\\Python38"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.8.x"
-
-    - PYTHON_ROOT: "C:\\Python38-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.8.x"
-
-    - PYTHON_ROOT: "C:\\Python39"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.9.x"
-
-    - PYTHON_ROOT: "C:\\Python39-x64"
+    - PYTHON: "C:\\Python39-x64"
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "3.9.x"
+      PYTHON_EXE: python
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
+    - PYTHON: "C:\\Python27"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "2.7.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python27-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "2.7.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python35"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.5.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python35-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.5.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python36"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python36-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python37"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.7.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python37-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.7.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python38"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.8.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python38-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.8.x"
+      PYTHON_EXE: python
+
+
+cache:
+  - "%TMP%\\py\\"
+  - '%LOCALAPPDATA%\pip\Cache -> appveyor.yml,setup.py'
 
 install:
-  - "SET PATH=%PYTHON_ROOT%;%PYTHON_ROOT%\\Scripts;%PATH%"
+  # If there is a newer build queued for the same PR, cancel this one.
+  # The AppVeyor 'rollout builds' option is supposed to serve the same
+  # purpose but it is problematic because it tends to cancel builds pushed
+  # directly to master instead of just PR builds (or the converse).
+  # credits: JuliaLang developers.
+  - ps: if ($env:APPVEYOR_PULL_REQUEST_NUMBER -and $env:APPVEYOR_BUILD_NUMBER -ne ((Invoke-RestMethod `
+        https://ci.appveyor.com/api/projects/$env:APPVEYOR_ACCOUNT_NAME/$env:APPVEYOR_PROJECT_SLUG/history?recordsNumber=50).builds | `
+        Where-Object pullRequestId -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)[0].buildNumber) { `
+          throw "There are newer queued builds for this pull request, failing early." }
+  - ECHO "Filesystem root:"
+  - ps: "ls \"C:/\""
+
+  - ECHO "Installed SDKs:"
+  - ps: "if(Test-Path(\"C:/Program Files/Microsoft SDKs/Windows\")) {ls \"C:/Program Files/Microsoft SDKs/Windows\";}"
+
+  # Install Python (from the official .msi of http://python.org) and pip when
+  # not already installed.
+  # PyPy portion based on https://github.com/wbond/asn1crypto/blob/master/appveyor.yml
+  - ps:
+      $env:PYTMP = "${env:TMP}\py";
+      if (!(Test-Path "$env:PYTMP")) {
+        New-Item -ItemType directory -Path "$env:PYTMP" | Out-Null;
+      }
+      if ("${env:PYTHON_ID}" -eq "pypy") {
+        if (!(Test-Path "${env:PYTMP}\pypy2-v7.3.1-win32.zip")) {
+          (New-Object Net.WebClient).DownloadFile('https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-win32.zip', "${env:PYTMP}\pypy2-v7.3.1-win32.zip");
+        }
+        7z x -y "${env:PYTMP}\pypy2-v7.3.1-win32.zip" -oC:\ | Out-Null;
+      }
+      elseif (-not(Test-Path($env:PYTHON))) {
+        & appveyor\install.ps1;
+      }
+
+  # Prepend newly installed Python to the PATH of this build (this cannot be
+  # done from inside the powershell script as it would require to restart
+  # the parent CMD process).
+  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PYTHON%\\bin;%PATH%"
+  - "SET PYEXE=%PYTHON%\\%PYTHON_EXE%.exe"
+
   - "python --version"
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
-  # Upgrade pip to the latest version
-  #- "python appveyor\\run_pip.py install --disable-pip-version-check --upgrade pip"
+  # Upgrade to the latest version of pip to avoid it displaying warnings
+  # about it being out of date. Do this here instead of above in
+  # powershell because the annoying 'DEPRECATION:blahblahblah 2.7 blahblahblah'
+  # breaks powershell.
+  - "%CMD_IN_ENV% %PYEXE% -mensurepip -U --user"
+  - "%CMD_IN_ENV% %PYEXE% -mpip install -U --user pip"
 
   # Install requirements for running tests and building artifacts
   - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"

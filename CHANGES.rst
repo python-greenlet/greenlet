@@ -14,6 +14,8 @@
 - (Packaging) Require setuptools to build from source.
 - (Packaging) Stop asking setuptools to build both .tar.gz and .zip
   sdists. PyPI has standardized on .tar.gz for all platforms.
+- (Packaging) Stop using a custom distutils command to build
+  extensions. distutils is deprecated.
 - (Documentation) Publish the change log to https://greenlet.readthedocs.io
 - Drop support for Python 2.4, 2.5, 2.6, 3.0, 3.1, 3.2 and 3.4.
   The project metadata now includes the ``python_requires`` data to
