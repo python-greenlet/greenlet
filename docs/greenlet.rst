@@ -49,6 +49,7 @@ a system, there will typically be a loop like the following one::
                 print("are you sure?")
                 if read_next_char() != 'y':
                     continue    # ignore the command
+                break # stop the command loop
             process_command(line)
 
 Now assume that you want to plug this program into a GUI.  Most GUI toolkits
