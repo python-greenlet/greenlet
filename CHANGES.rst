@@ -5,6 +5,12 @@
 1.0.0 (unreleased)
 ==================
 
+- Add the ability to set a greenlet's PEP 567 contextvars context
+  directly, by assigning to the greenlet's ``gr_context`` attribute.
+  This restores support for some patterns of using greenlets atop an
+  async environment that became more challenging in 0.4.17. Thanks to
+  Joshua Oreman, Mike bayer, and Fantix King, among others. See `PR
+  198 <https://github.com/python-greenlet/greenlet/pull/198/>`_.
 - (Packaging) Require setuptools to build from source.
 - (Packaging) Stop asking setuptools to build both .tar.gz and .zip
   sdists. PyPI has standardized on .tar.gz for all platforms.
