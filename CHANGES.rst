@@ -12,7 +12,9 @@
 - Drop support for Python 2.4, 2.5, 2.6, 3.0, 3.1, 3.2 and 3.4.
   The project metadata now includes the ``python_requires`` data to
   help installation tools understand supported versions.
-
+- Add partial support for AIX ppc64 and IBM i. Thanks to Jesse
+  Gorzinski and Kevin Adler. See `PR 197
+  <https://github.com/python-greenlet/greenlet/pull/197>`_.
 
 0.4.17 (2020-09-22)
 ===================
