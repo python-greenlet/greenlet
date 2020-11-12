@@ -37,10 +37,7 @@ include LICENSE
 include LICENSE.PSF
 include MANIFEST.in
 
-### XXX: Move these to a subdirectory.
 include make-manylinux
-include make-manifest
-include make-win-release
 
 global-exclude *.pyc
 global-exclude *.pyd

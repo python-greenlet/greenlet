@@ -71,10 +71,13 @@ else:
             ] + _find_platform_headers()
         ),
         # Test extensions.
-        # XXX: We used to try hard to not include these in built
-        # distributions. That's really not important, at least not once we have a clean
-        # layout with the test directory nested inside a greenlet directory.
-        # See https://github.com/python-greenlet/greenlet/issues/184 and 189
+        #
+        # We used to try hard to not include these in built
+        # distributions, because we only distributed ``greenlet.so``.
+        # That's really not important, now we have a clean layout with
+        # the test directory nested inside a greenlet directory. See
+        # https://github.com/python-greenlet/greenlet/issues/184 and
+        # 189
         Extension(
             name='greenlet.tests._test_extension',
             sources=[GREENLET_TEST_DIR + '_test_extension.c'],
