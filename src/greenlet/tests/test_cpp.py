@@ -1,7 +1,10 @@
+from __future__ import print_function
+from __future__ import absolute_import
+
 import unittest
 
 import greenlet
-import _test_extension_cpp
+from . import _test_extension_cpp
 
 
 class CPPTests(unittest.TestCase):

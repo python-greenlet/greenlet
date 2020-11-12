@@ -1725,19 +1725,19 @@ static char* copy_on_greentype[] = {
 
 static struct PyModuleDef greenlet_module_def = {
 	PyModuleDef_HEAD_INIT,
-	"greenlet",
+	"greenlet._greenlet",
 	NULL,
 	-1,
 	GreenMethods,
 };
 
 PyMODINIT_FUNC
-PyInit_greenlet(void)
+PyInit__greenlet(void)
 #else
 #define INITERROR return
 
 PyMODINIT_FUNC
-initgreenlet(void)
+init_greenlet(void)
 #endif
 {
 	PyObject* m = NULL;
@@ -1750,7 +1750,7 @@ initgreenlet(void)
 #if PY_MAJOR_VERSION >= 3
 	m = PyModule_Create(&greenlet_module_def);
 #else
-	m = Py_InitModule("greenlet", GreenMethods);
+	m = Py_InitModule("greenlet._greenlet", GreenMethods);
 #endif
 	if (m == NULL)
 	{
@@ -1855,6 +1855,10 @@ initgreenlet(void)
 	_PyGreenlet_API[PyGreenlet_SetParent_NUM] =
 		(void *) PyGreenlet_SetParent;
 
+	/* XXX: Note that our module name is ``greenlet._greenlet``, but for
+	   backwards compatibility with existing C code, we need the _C_API to
+	   be directly in greenlet.
+	*/
 	c_api_object = PyCapsule_New((void *) _PyGreenlet_API, "greenlet._C_API", NULL);
 	if (c_api_object != NULL)
 	{

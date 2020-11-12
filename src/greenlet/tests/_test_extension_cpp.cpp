@@ -74,7 +74,7 @@ static PyMethodDef test_methods[] = {
 
 static struct PyModuleDef moduledef = {
 	PyModuleDef_HEAD_INIT,
-	"_test_extension_cpp",
+	"greenlet.tests._test_extension_cpp",
 	NULL,
 	0,
 	test_methods,
@@ -97,7 +97,7 @@ init_test_extension_cpp(void)
 #if PY_MAJOR_VERSION >= 3
 	module = PyModule_Create(&moduledef);
 #else
-	module = Py_InitModule("_test_extension_cpp", test_methods);
+	module = Py_InitModule("greenlet.tests._test_extension_cpp", test_methods);
 #endif
 
 	if (module == NULL) {

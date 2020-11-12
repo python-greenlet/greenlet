@@ -6,7 +6,7 @@ from functools import partial
 
 from greenlet import greenlet
 from greenlet import getcurrent
-from greenlet import GREENLET_USE_CONTEXT_VARS
+
 
 try:
     from contextvars import Context
@@ -15,7 +15,8 @@ try:
 except ImportError:
     Context = ContextVar = copy_context = None
 
-@unittest.skipUnless(GREENLET_USE_CONTEXT_VARS, "ContextVar not supported")
+# We don't support testing if greenlet's built-in context var support is disabled.
+@unittest.skipUnless(Context is not None, "ContextVar not supported")
 class ContextVarsTests(unittest.TestCase):
     def _new_ctx_run(self, *args, **kwargs):
         return copy_context().run(*args, **kwargs)
@@ -249,7 +250,7 @@ class ContextVarsTests(unittest.TestCase):
         gr.gr_context = ctx
         self.assertIs(gr.gr_context, ctx)
 
-@unittest.skipIf(GREENLET_USE_CONTEXT_VARS, "ContextVar supported")
+@unittest.skipIf(Context is not None, "ContextVar supported")
 class NoContextVarsTests(unittest.TestCase):
     def test_contextvars_errors(self):
         let1 = greenlet(getcurrent().switch)

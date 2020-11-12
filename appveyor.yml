@@ -101,11 +101,12 @@ install:
         https://ci.appveyor.com/api/projects/$env:APPVEYOR_ACCOUNT_NAME/$env:APPVEYOR_PROJECT_SLUG/history?recordsNumber=50).builds | `
         Where-Object pullRequestId -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)[0].buildNumber) { `
           throw "There are newer queued builds for this pull request, failing early." }
-  - ECHO "Filesystem root:"
-  - ps: "ls \"C:/\""
+  ## Debugging
+  # - ECHO "Filesystem root:"
+  # - ps: "ls \"C:/\""
 
-  - ECHO "Installed SDKs:"
-  - ps: "if(Test-Path(\"C:/Program Files/Microsoft SDKs/Windows\")) {ls \"C:/Program Files/Microsoft SDKs/Windows\";}"
+  # - ECHO "Installed SDKs:"
+  # - ps: "if(Test-Path(\"C:/Program Files/Microsoft SDKs/Windows\")) {ls \"C:/Program Files/Microsoft SDKs/Windows\";}"
 
   # Install Python (from the official .msi of http://python.org) and pip when
   # not already installed.
@@ -147,9 +148,9 @@ install:
 build_script:
   - "%CMD_IN_ENV% python -m pip install -U -e .[test]"
 
-# XXX: setup.py test is deprecated
+
 test_script:
-  - "%CMD_IN_ENV% python setup.py test"
+  - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests"
 
 after_test:
   - "%CMD_IN_ENV% python setup.py bdist_wheel"
