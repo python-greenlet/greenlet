@@ -134,6 +134,9 @@ static void **_PyGreenlet_API = NULL;
 	 _PyGreenlet_API[PyGreenlet_SetParent_NUM])
 
 /* Macro that imports greenlet and initializes C API */
+/* NOTE: This has actually moved to ``greenlet._greenlet._C_API``, but we
+   keep the older definition to be sure older code that might have a copy of
+   the header still works. */
 #define PyGreenlet_Import() \
 { \
 	_PyGreenlet_API = (void**)PyCapsule_Import("greenlet._C_API", 0); \

@@ -8,6 +8,7 @@ import platform
 # distutils is deprecated and vendored into setuptools now.
 from setuptools import setup
 from setuptools import Extension
+from setuptools import find_packages
 
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
@@ -26,19 +27,28 @@ def readfile(filename):
     with open(filename, 'r') as f:
         return f.read()
 
+GREENLET_SRC_DIR = 'src/greenlet/'
+GREENLET_HEADER_DIR = GREENLET_SRC_DIR
+GREENLET_HEADER = GREENLET_HEADER_DIR + 'greenlet.h'
+GREENLET_TEST_DIR = 'src/greenlet/tests/'
+# The location of the platform specific assembly files
+# for switching.
+GREENLET_PLATFORM_DIR = GREENLET_SRC_DIR + 'platform/'
+
 def _find_platform_headers():
-    return glob.glob("platform/switch_*.h")
+    return glob.glob(GREENLET_PLATFORM_DIR + "switch_*.h")
 
 if hasattr(sys, "pypy_version_info"):
     ext_modules = []
     headers = []
 else:
-    headers = ['greenlet.h']
+
+    headers = [GREENLET_HEADER]
 
     if sys.platform == 'win32' and '64 bit' in sys.version:
         # this works when building with msvc, not with 64 bit gcc
         # switch_x64_masm.obj can be created with setup_switch_x64_masm.cmd
-        extra_objects = ['platform/switch_x64_masm.obj']
+        extra_objects = [GREENLET_PLATFORM_DIR + 'switch_x64_masm.obj']
     else:
         extra_objects = []
 
@@ -51,11 +61,14 @@ else:
 
     ext_modules = [
         Extension(
-            name='greenlet',
-            sources=['greenlet.c'],
+            name='greenlet._greenlet',
+            sources=[GREENLET_SRC_DIR + 'greenlet.c'],
             extra_objects=extra_objects,
             extra_compile_args=extra_compile_args,
-            depends=['greenlet.h', 'slp_platformselect.h'] + _find_platform_headers()
+            depends=[
+                GREENLET_HEADER,
+                GREENLET_SRC_DIR + 'slp_platformselect.h',
+            ] + _find_platform_headers()
         ),
         # Test extensions.
         # XXX: We used to try hard to not include these in built
@@ -63,19 +76,19 @@ else:
         # layout with the test directory nested inside a greenlet directory.
         # See https://github.com/python-greenlet/greenlet/issues/184 and 189
         Extension(
-            '_test_extension',
-            [os.path.join('tests', '_test_extension.c')],
-            include_dirs=[os.path.curdir]
+            name='greenlet.tests._test_extension',
+            sources=[GREENLET_TEST_DIR + '_test_extension.c'],
+            include_dirs=[GREENLET_HEADER_DIR]
         ),
     ]
 
     if os.environ.get('GREENLET_TEST_CPP', 'yes').lower() not in ('0', 'no', 'false'):
         ext_modules.append(
             Extension(
-                '_test_extension_cpp',
-                [os.path.join('tests', '_test_extension_cpp.cpp')],
+                name='greenlet.tests._test_extension_cpp',
+                sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
                 language="c++",
-                include_dirs=[os.path.curdir]),
+                include_dirs=[GREENLET_HEADER_DIR]),
         )
 
 setup(
@@ -83,7 +96,7 @@ setup(
     version='1.0.0.dev0',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
-    url="https://github.com/python-greenlet/greenlet",
+    url="https://greenlet.readthedocs.io/",
     project_urls={
         'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
         'Source Code': 'https://github.com/python-greenlet/gevent/',
@@ -91,6 +104,9 @@ setup(
     },
     license="MIT License",
     platforms=['any'],
+    package_dir={'': 'src'},
+    packages=find_packages('src'),
+    include_package_data=True,
     headers=headers,
     ext_modules=ext_modules,
     classifiers=[
@@ -113,10 +129,10 @@ setup(
     extras_require={
         'docs': [
             'Sphinx',
-        ]
+        ],
+        'test': [
+        ],
     },
     python_requires=">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*",
-    # XXX: This is deprecated. appveyor.yml still uses it though.
-    test_suite='tests.test_collector',
     zip_safe=False,
 )

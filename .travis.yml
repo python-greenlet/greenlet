@@ -17,4 +17,4 @@ python:
 
 install: pip install -U -e .[test]
 
-script: python run-tests.py
+script: python -m unittest discover -v greenlet.tests

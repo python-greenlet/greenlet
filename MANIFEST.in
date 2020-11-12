@@ -1,70 +1,48 @@
-include .travis.yml
-include .readthedocs.yml
+###
+# Source code
+###
+recursive-include src *.py
+recursive-include src *.c
+recursive-include src *.cpp
+recursive-include src *.h
+recursive-include src *.cmd
+recursive-include src *.asm
+recursive-include src *.obj
+recursive-include benchmarks *
+
+###
+# Documentation
+###
+recursive-include docs *
+prune docs/_build
+
+###
+# Configuration and project files
+###
+
+include *.yml
+include *.txt
+include *.ini
+include *.rst
+include *.cfg
+include *.py
+include *.ini
+
+recursive-include appveyor *.cmd
+recursive-include appveyor *.ps1
+recursive-include appveyor *.py
+
 include AUTHORS
 include LICENSE
 include LICENSE.PSF
 include MANIFEST.in
-include CHANGES.rst
-include README.rst
-include appveyor.yml
-include appveyor/run_pip.py
-include appveyor/run_with_env.cmd
-include benchmarks/chain.py
-include conftest.py
-include dev-requirements.txt
-include docs/Makefile
-include docs/conf.py
-include docs/greenlet.rst
-include docs/index.rst
-include docs/changes.rst
-include docs/make.bat
-include greenlet.c
-include greenlet.h
+
+### XXX: Move these to a subdirectory.
 include make-manylinux
 include make-manifest
 include make-win-release
-include my_build_ext.py
-include platform/switch_aarch64_gcc.h
-include platform/switch_alpha_unix.h
-include platform/switch_amd64_unix.h
-include platform/switch_arm32_gcc.h
-include platform/switch_arm32_ios.h
-include platform/switch_csky_gcc.h
-include platform/switch_m68k_gcc.h
-include platform/switch_mips_unix.h
-include platform/switch_ppc64_linux.h
-include platform/switch_ppc_aix.h
-include platform/switch_ppc_linux.h
-include platform/switch_ppc_macosx.h
-include platform/switch_ppc_unix.h
-include platform/switch_riscv_unix.h
-include platform/switch_s390_unix.h
-include platform/switch_sparc_sun_gcc.h
-include platform/switch_x32_unix.h
-include platform/switch_x64_masm.asm
-include platform/switch_x64_masm.obj
-include platform/switch_x64_msvc.h
-include platform/switch_x86_msvc.h
-include platform/switch_x86_unix.h
-include run-tests.py
-include setup.cfg
-include setup.py
-include setup_switch_x64_masm.cmd
-include slp_platformselect.h
-include tests/__init__.py
-include tests/_test_extension.c
-include tests/_test_extension_cpp.cpp
-include tests/test_contextvars.py
-include tests/test_cpp.py
-include tests/test_extension_interface.py
-include tests/test_gc.py
-include tests/test_generator.py
-include tests/test_generator_nested.py
-include tests/test_greenlet.py
-include tests/test_leaks.py
-include tests/test_stack_saved.py
-include tests/test_throw.py
-include tests/test_tracing.py
-include tests/test_version.py
-include tests/test_weakref.py
-include tox.ini
+
+global-exclude *.pyc
+global-exclude *.pyd
+global-exclude *.so
+global-exclude .coverage
