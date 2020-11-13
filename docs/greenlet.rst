@@ -387,7 +387,7 @@ active when it was spawned. You can assign to a greenlet's
 example:
 
 .. doctest::
-   :pyversion: > 3.7
+    :pyversion: > 3.7
 
     >>> import greenlet
     >>> import contextvars
@@ -406,7 +406,7 @@ By default, a new greenlet gets an empty context, unrelated to the
 current context:
 
 .. doctest::
-   :pyversion: > 3.7
+    :pyversion: > 3.7
 
     >>> gr1 = greenlet.greenlet(set_it)
     >>> gr1.switch(2)
@@ -419,7 +419,7 @@ You can make a greenlet get a copy of the current context when it is
 created, like asyncio:
 
 .. doctest::
-   :pyversion: > 3.7
+    :pyversion: > 3.7
 
     >>> gr2 = greenlet.greenlet(set_it)
     >>> gr2.gr_context = contextvars.copy_context()
@@ -431,7 +431,7 @@ You can also make a greenlet *share* the current context, like older,
 non-contextvars-aware versions of greenlet:
 
 .. doctest::
-   :pyversion: > 3.7
+    :pyversion: > 3.7
 
     >>> gr3 = greenlet.greenlet(set_it)
     >>> gr3.gr_context = greenlet.getcurrent().gr_context
@@ -444,7 +444,7 @@ top-level function in a call to :meth:`Context.run()
 <contextvars.Context.run>`:
 
 .. doctest::
-   :pyversion: > 3.7
+    :pyversion: > 3.7
 
     >>> _ = example.set(1)
     >>> gr4 = greenlet.greenlet(contextvars.copy_context().run)
