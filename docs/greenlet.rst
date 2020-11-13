@@ -1,165 +1,16 @@
-==============================================
- greenlet: Lightweight concurrent programming
-==============================================
+=================
+ Using greenlets
+=================
 
-.. TODO: Refactor and share the opening paragraphs with README.rst
-.. TODO: Break into a few pieces: Introduction, tutorial, API
-   reference, etc.
-
-
-.. sphinx-include-begin
+.. currentmodule:: greenlet
 
 .. |--| unicode:: U+2013   .. en dash
 .. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
    :trim:
 
-Motivation
-==========
-
-The "greenlet" package is a spin-off of `Stackless`_, a version of CPython
-that supports micro-threads called "tasklets". Tasklets run
-pseudo-concurrently (typically in a single or a few OS-level threads) and
-are synchronized with data exchanges on "channels".
-
-A "greenlet", on the other hand, is a still more primitive notion of
-micro-thread with no implicit scheduling; coroutines, in other words.
-This is useful when you want to
-control exactly when your code runs. You can build custom scheduled
-micro-threads on top of greenlet; however, it seems that greenlets are
-useful on their own as a way to make advanced control flow structures.
-For example, we can recreate generators; the difference with Python's own
-generators is that our generators can call nested functions and the nested
-functions can yield values too. (Additionally, you don't need a "yield"
-keyword. See the example in ``test/test_generator.py``).
-
-Greenlets are provided as a C extension module for the regular unmodified
-interpreter.
-
-.. _`Stackless`: http://www.stackless.com
-
-Example
--------
-
-Let's consider a system controlled by a terminal-like console, where the user
-types commands. Assume that the input comes character by character. In such
-a system, there will typically be a loop like the following one:
-
-.. doctest::
-
-    >>> def echo_user_input(user_input):
-    ...     print('    <<< ' + user_input.strip())
-    ...     return user_input
-    >>> def process_commands():
-    ...    while True:
-    ...        line = ''
-    ...        while not line.endswith('\n'):
-    ...            line += read_next_char()
-    ...        echo_user_input(line)
-    ...        if line == 'quit\n':
-    ...            print("Are you sure?")
-    ...            if echo_user_input(read_next_char()) != 'y':
-    ...                continue    # ignore the command
-    ...            print("(Exiting loop.)")
-    ...            break # stop the command loop
-    ...        process_command(line)
-
-Now assume that you want to plug this program into a GUI. Most GUI
-toolkits are event-based. They will invoke a call-back for each
-character the user presses (``event_keydown(key)``) [#f1]_. In this setting,
-it is difficult to implement the ``read_next_char()`` function needed
-by the code above. We have two incompatible functions:
-
-.. doctest::
-
-    >>> def event_keydown(key):
-    ...    "Called by the event system asynchronously."
-
-    >>> def read_next_char():
-    ...    """
-    ...    Called from `process_commands`; should wait for
-    ...    the next `event_keydown()` call.
-    ...    """
-
-You might consider doing that with threads. Greenlets are an alternate
-solution that don't have the related locking and shutdown problems. You
-start the ``process_commands()`` function in its own, separate greenlet, and
-then you exchange the keypresses with it as follows:
-
-.. doctest::
-
-    >>> from greenlet import greenlet
-    >>> g_processor = greenlet(process_commands)
-    >>> def event_keydown(key):
-    ...     # jump into g_processor, sending it the key
-    ...     g_processor.switch(key)
-
-    >>> def read_next_char():
-    ...     # g_self is g_processor in this simple example
-    ...     g_self = greenlet.getcurrent()
-    ...     assert g_self is g_processor
-    ...     # jump to the parent (main) greenlet, where the GUI event
-    ...     # loop is running, and wait for the next key
-    ...     main_greenlet = g_self
-    ...     next_char = g_self.parent.switch()
-    ...     return next_char
-
-Next, we can start the processor, which will immediately switch back
-to the main greenlet:
-
-.. doctest::
-
-    >>> _ = g_processor.switch()
-
-Now we can hand control over to the main event loop of the GUI. Of
-course, in documentation we don't have a gui, so we'll fake one that
-feeds keys to ``event_keydown``; we'll also fake a ``process_command``
-function that just prints the line it got.
-
-.. doctest::
-
-   >>> def process_command(line):
-   ...     print('(Processing command: ' + line.strip() + ')')
-
-   >>> def gui_mainloop():
-   ...    # The user types "hello"
-   ...    for c in 'hello\n':
-   ...        event_keydown(c)
-   ...    # The user types "quit"
-   ...    for c in 'quit\n':
-   ...        event_keydown(c)
-   ...    # The user responds to the prompt with 'y'
-   ...    event_keydown('y')
-
-   >>> gui_mainloop()
-       <<< hello
-   (Processing command: hello)
-       <<< quit
-   Are you sure?
-       <<< y
-   (Exiting loop.)
-
-In this example, the execution flow is: when ``read_next_char()`` is called, it
-is part of the ``g_processor`` greenlet, so when it switches to its parent
-greenlet, it resumes execution in the top-level main loop (the GUI). When
-the GUI calls ``event_keydown()``, it switches to ``g_processor``, which means that
-the execution jumps back wherever it was suspended in that greenlet |---| in
-this case, to the ``switch()`` instruction in ``read_next_char()`` |---| and the ``key``
-argument in ``event_keydown()`` is passed as the return value of the switch() in
-``read_next_char()``.
-
-Note that ``read_next_char()`` will be suspended and resumed with its call stack
-preserved, so that it will itself return to different positions in
-``process_commands()`` depending on where it was originally called from. This
-allows the logic of the program to be kept in a nice control-flow way; we
-don't have to completely rewrite ``process_commands()`` to turn it into a state
-machine.
-
-
-Usage
-=====
 
 Introduction
-------------
+============
 
 A "greenlet" is a small independent pseudo-thread. Think about it as a
 small stack of frames; the outermost (bottom) frame is the initial
@@ -208,7 +59,7 @@ At this point, the execution comes back to the original ``gr1.switch()``
 call, which returns the value that ``test1`` returned. Note that 78 is never printed.
 
 Parents
--------
+=======
 
 Let's see where execution goes when a greenlet dies. Every greenlet has a
 "parent" greenlet. The parent greenlet is initially the one in which the
@@ -244,7 +95,7 @@ the "parent" defines which stack logically comes "below" the current one.
     NameError: name 'this_should_be_a_name_error' is not defined
 
 Instantiation
--------------
+=============
 
 :class:`greenlet.greenlet` is the greenlet type, which supports the following
 operations:
@@ -254,11 +105,11 @@ operations:
     callable to invoke, and ``parent`` is the parent greenlet, which
     defaults to the current greenlet.
 
-``greenlet.getcurrent()``
+:func:`greenlet.getcurrent`
     Returns the current greenlet (i.e. the one which called this
     function).
 
-``greenlet.GreenletExit``
+:exc:`greenlet.GreenletExit`
     This special exception does not propagate to the parent greenlet; it
     can be used to kill a single greenlet.
 
@@ -267,8 +118,10 @@ its ``run`` attribute, which is normally set when the greenlet is
 created; but for subclasses it also makes sense to define a ``run`` method
 instead of giving a ``run`` argument to the constructor.
 
+.. _switching:
+
 Switching
----------
+=========
 
 Switches between greenlets occur when the method ``switch()`` of a greenlet is
 called, in which case execution jumps to the greenlet whose ``switch()`` is
@@ -364,197 +217,19 @@ in the the last element of the tuple:
     (('howdy',), {'language': 'en_US'})
     (('all', "y'all"), {'language': 'en_US_OK'})
 
+.. _switch_to_dead:
+
+Switching To Dead Greenlets
+---------------------------
+
 Note that any attempt to switch to a dead greenlet actually goes to the
 dead greenlet's parent, or its parent's parent, and so on. (The final
 parent is the "main" greenlet, which is never dead.)
 
-Context variables
------------------
 
-On Python versions (3.7 and above) that natively support context
-variables as defined in :pep:`525`, each greenlet runs by default in
-its own :class:`contextvars.Context`, enabling
-:class:`~contextvars.ContextVar`\s to be used for "greenlet-local
-storage". (If you need to support earlier Python versions, you can use
-attributes on the greenlet object instead.)
-
-A new greenlet's context is initially empty, i.e., all
-:class:`~contextvars.ContextVar`\s have their default values. This
-matches the behavior of a new thread, but differs from that of a new
-:class:`asyncio.Task`, which inherits a copy of the context that was
-active when it was spawned. You can assign to a greenlet's
-``gr_context`` attribute to change the context that it will use. For
-example:
-
-.. doctest::
-    :pyversion: > 3.7
-
-    >>> import greenlet
-    >>> import contextvars
-
-    >>> example = contextvars.ContextVar("example", default=0)
-
-    >>> def set_it(next_value):
-    ...    previous_value = example.get()
-    ...    print("Value of example in greenlet  :", previous_value)
-    ...    print("Setting example in greenlet to:", next_value)
-    ...    example.set(next_value)
-
-    >>> _ = example.set(1)
-
-By default, a new greenlet gets an empty context, unrelated to the
-current context:
-
-.. doctest::
-    :pyversion: > 3.7
-
-    >>> gr1 = greenlet.greenlet(set_it)
-    >>> gr1.switch(2)
-    Value of example in greenlet  : 0
-    Setting example in greenlet to: 2
-    >>> example.get()
-    1
-
-You can make a greenlet get a copy of the current context when it is
-created, like asyncio:
-
-.. doctest::
-    :pyversion: > 3.7
-
-    >>> gr2 = greenlet.greenlet(set_it)
-    >>> gr2.gr_context = contextvars.copy_context()
-    >>> gr2.switch(2)
-    Value of example in greenlet  : 1
-    Setting example in greenlet to: 2
-
-You can also make a greenlet *share* the current context, like older,
-non-contextvars-aware versions of greenlet:
-
-.. doctest::
-    :pyversion: > 3.7
-
-    >>> gr3 = greenlet.greenlet(set_it)
-    >>> gr3.gr_context = greenlet.getcurrent().gr_context
-    >>> gr3.switch(2)
-    Value of example in greenlet  : 1
-    Setting example in greenlet to: 2
-
-You can alternatively set a new greenlet's context by surrounding its
-top-level function in a call to :meth:`Context.run()
-<contextvars.Context.run>`:
-
-.. doctest::
-    :pyversion: > 3.7
-
-    >>> _ = example.set(1)
-    >>> gr4 = greenlet.greenlet(contextvars.copy_context().run)
-    >>> gr4.switch(set_it, 2)
-    Value of example in greenlet  : 1
-    Setting example in greenlet to: 2
-    >>> example.get()
-    1
-
-However, contextvars were not designed with greenlets in mind, so
-using :meth:`Context.run() <contextvars.Context.run>` becomes
-challenging in an environment with arbitrary greenlet-to-greenlet
-control transfers. The :meth:`~contextvars.Context.run` calls across
-all greenlets in a thread must effectively form a stack, where the
-last context entered is the first one to be exited. Also, it's
-not possible to have two calls to :meth:`~contextvars.Context.run` for
-the same context active in two different greenlets at the same
-time. Assigning to ``gr_context`` does not share these
-restrictions.
-
-You can access and change a greenlet's context almost no matter what
-state the greenlet is in. It can be dead, not yet started, or
-suspended (on any thread), or running (on the current thread only).
-Accessing or modifying ``gr_context`` of a greenlet running on a
-different thread raises :exc:`ValueError`.
-
-.. warning::
-
-   Changing the ``gr_context`` after a greenlet has begun
-   running is not recommended for reasons outlined below.
-
-Once a greenlet has started running, ``gr_context`` tracks its
-*current* context: the one that would be active if you switched to the
-greenlet right now. This may not be the same as the value of
-``gr_context`` before the greenlet started running. One potential
-difference occurs if a greenlet running in the default empty context
-(represented as ``None``) sets any context variables: a new
-:class:`~contextvars.Context` will be implicitly created to hold them,
-which will be reflected in ``gr_context``. Another one occurs if a
-greenlet makes a call to ``Context.run(some_inner, func)``: its
-``gr_context`` will be ``some_inner`` until ``func()`` returns.
-
-.. warning::
-
-   Assigning to ``gr_context`` of an active greenlet that might be
-   inside a call to :meth:`Context.run() <contextvars.Context.run>` is
-   not recommended, because :meth:`~contextvars.Context.run` will
-   raise an exception if the current context when it exits doesn't
-   match the context that it set upon entry. The safest thing to do is
-   set ``gr_context`` once, before starting the greenlet; then there's
-   no potential conflict with :meth:`Context.run()
-   <contextvars.Context.run>` calls.
-
-Methods and attributes of greenlets
------------------------------------
-
-``g.switch(*args, **kwargs)``
-    Switches execution to the greenlet ``g``. See above.
-
-``g.run``
-    The callable that ``g`` will run when it starts. After ``g``
-    started, this attribute no longer exists.
-
-``g.parent``
-    The parent greenlet. This is writable, but it is not allowed to create
-    cycles of parents.
-
-``g.gr_frame``
-    The frame that was active in this greenlet when it most recently
-    called ``some_other_greenlet.switch()``, and that will resume
-    execution when ``g.switch()`` is next called. The remainder of the
-    greenlet's stack can be accessed by following the frame objects'
-    ``f_back`` attributes. ``gr_frame`` is non-None only for suspended
-    greenlets; it is None if the greenlet is dead, not yet started, or
-    currently executing.
-
-``g.gr_context``
-    The :class:`contextvars.Context` in which ``g`` will
-    run. Writable; defaults to ``None``, reflecting that a greenlet
-    starts execution in an empty context unless told otherwise.
-    Generally, this should only be set once, before a greenlet begins running.
-    Accessing or modifying this attribute raises :exc:`AttributeError`
-    on Python versions 3.6 and earlier (which don't natively support the
-    `contextvars` module) or if ``greenlet`` was built without
-    contextvars support.
-
-``g.dead``
-    True if ``g`` is dead (i.e., it finished its execution).
-
-``bool(g)``
-    True if ``g`` is active, False if it is dead or not yet started.
-
-``g.throw([typ, [val, [tb]]])``
-    Switches execution to the greenlet ``g``, but immediately raises the
-    given exception in ``g``. If no argument is provided, the exception
-    defaults to ``greenlet.GreenletExit``. The normal exception
-    propagation rules apply, as described above. Note that calling this
-    method is almost equivalent to the following::
-
-        def raiser():
-            raise typ, val, tb
-        g_raiser = greenlet(raiser, parent=g)
-        g_raiser.switch()
-
-    except that this trick does not work for the
-    ``greenlet.GreenletExit`` exception, which would not propagate
-    from ``g_raiser`` to ``g``.
 
 Greenlets and Python threads
-----------------------------
+============================
 
 Greenlets can be combined with Python threads; in this case, each thread
 contains an independent "main" greenlet with a tree of sub-greenlets. It
@@ -562,7 +237,7 @@ is not possible to mix or switch between greenlets belonging to different
 threads.
 
 Garbage-collecting live greenlets
----------------------------------
+=================================
 
 If all the references to a greenlet object go away (including the
 references from the parent attribute of other greenlets), then there is no
@@ -582,122 +257,3 @@ new reference to it stored somewhere; just catching and ignoring the
 Greenlets do not participate in garbage collection; cycles involving data
 that is present in a greenlet's frames will not be detected. Storing
 references to other greenlets cyclically may lead to leaks.
-
-Tracing support
----------------
-
-Standard Python tracing and profiling doesn't work as expected when used with
-greenlet since stack and frame switching happens on the same Python thread.
-It is difficult to detect greenlet switching reliably with conventional
-methods, so to improve support for debugging, tracing and profiling greenlet
-based code there are new functions in the greenlet module:
-
-.. Add doctest for this.
-
-``greenlet.gettrace()``
-    Returns a previously set tracing function, or None.
-
-``greenlet.settrace(callback)``
-    Sets a new tracing function and returns a previous tracing function, or
-    None. The callback is called on various events and is expected to have
-    the following signature:
-
-        def callback(event, args):
-            if event == 'switch':
-                origin, target = args
-                # Handle a switch from origin to target.
-                # Note that callback is running in the context of target
-                # greenlet and any exceptions will be passed as if
-                # target.throw() was used instead of a switch.
-                return
-            if event == 'throw':
-                origin, target = args
-                # Handle a throw from origin to target.
-                # Note that callback is running in the context of target
-                # greenlet and any exceptions will replace the original, as
-                # if target.throw() was used with the replacing exception.
-                return
-
-    For compatibility it is very important to unpack args tuple only when
-    event is either ``'switch'`` or ``'throw'`` and not when ``event`` is
-    potentially something else. This way API can be extended to new events
-    similar to ``sys.settrace()``.
-
-C API Reference
-===============
-
-Greenlets can be created and manipulated from extension modules written in C or
-C++, or from applications that embed Python. The ``greenlet.h`` header is
-provided, and exposes the entire API available to pure Python modules.
-
-Types
------
-+--------------------+-------------------+
-| Type name          | Python name       |
-+====================+===================+
-| PyGreenlet         | greenlet.greenlet |
-+--------------------+-------------------+
-
-Exceptions
-----------
-+---------------------+-----------------------+
-| Type name           | Python name           |
-+=====================+=======================+
-| PyExc_GreenletError | greenlet.error        |
-+---------------------+-----------------------+
-| PyExc_GreenletExit  | greenlet.GreenletExit |
-+---------------------+-----------------------+
-
-Reference
----------
-
-.. TODO: Use the c-domain to document these functions.
-
-``PyGreenlet_Import()``
-    A macro that imports the greenlet module and initializes the C API. This
-    must be called once for each extension module that uses the greenlet C API.
-
-``int PyGreenlet_Check(PyObject* p)``
-    Macro that returns true if the argument is a PyGreenlet.
-
-``int PyGreenlet_STARTED(PyGreenlet* g)``
-    Macro that returns true if the greenlet ``g`` has started.
-
-``int PyGreenlet_ACTIVE(PyGreenlet* g)``
-    Macro that returns true if the greenlet ``g`` has started and has not died.
-
-``PyGreenlet* PyGreenlet_GET_PARENT(PyGreenlet* g)``
-    Macro that returns the parent greenlet of ``g``.
-
-``int PyGreenlet_SetParent(PyGreenlet* g, PyGreenlet* nparent)``
-    Set the parent greenlet of ``g``. Returns 0 for success. If -1 is returned,
-    then ``g`` is not a pointer to a PyGreenlet, and an AttributeError will
-    be raised.
-
-``PyGreenlet *PyGreenlet_GetCurrent(void)``
-    Returns the currently active greenlet object.
-
-``PyGreenlet *PyGreenlet_New(PyObject* run, PyObject* parent)``
-    Creates a new greenlet object with the callable ``run`` and parent
-    ``parent``. Both parameters are optional. If ``run`` is NULL, then the
-    greenlet will be created, but will fail if switched in. If ``parent`` is
-    NULL, the parent is automatically set to the current greenlet.
-
-``PyObject *PyGreenlet_Switch(PyGreenlet* g, PyObject* args, PyObject* kwargs)``
-    Switches to the greenlet ``g``. ``args`` and ``kwargs`` are optional and
-    can be NULL. If ``args`` is NULL, an empty tuple is passed to the target
-    greenlet. If kwargs is NULL, no keyword arguments are passed to the target
-    greenlet. If arguments are specified, ``args`` should be a tuple and
-    ``kwargs`` should be a dict.
-
-``PyObject *PyGreenlet_Throw(PyGreenlet *g, PyObject *typ, PyObject *val, PyObject *tb)``
-    Switches to greenlet ``g``, but immediately raise an exception of type
-    ``typ`` with the value ``val``, and optionally, the traceback object
-    ``tb``. ``tb`` can be NULL.
-
-
-
-.. rubric:: Footnotes
-
-.. [#f1]  Replace "GUI" with "XML expat parser" if that rings more bells to
-          you. In general, it can be framework that issues asynchronous callbacks.

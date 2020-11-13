@@ -1118,7 +1118,7 @@ PyDoc_STRVAR(green_switch_doc,
 "Switch execution to this greenlet.\n"
 "\n"
 "If this greenlet has never been run, then this greenlet\n"
-"will be switched to using the body of self.run(*args, **kwargs).\n"
+"will be switched to using the body of ``self.run(*args, **kwargs)``.\n"
 "\n"
 "If the greenlet is active (has been run, but was switch()'ed\n"
 "out before leaving its run function), then this greenlet will\n"
@@ -1142,10 +1142,10 @@ static PyObject* green_switch(
 }
 
 PyDoc_STRVAR(green_throw_doc,
-"Switches execution to the greenlet ``g``, but immediately raises the\n"
-"given exception in ``g``.  If no argument is provided, the exception\n"
-"defaults to ``greenlet.GreenletExit``.  The normal exception\n"
-"propagation rules apply, as described above.  Note that calling this\n"
+"Switches execution to this greenlet, but immediately raises the\n"
+"given exception in this greenlet.  If no argument is provided, the exception\n"
+"defaults to `greenlet.GreenletExit`.  The normal exception\n"
+"propagation rules apply, as described for `switch`.  Note that calling this\n"
 "method is almost equivalent to the following::\n"
 "\n"
 "    def raiser():\n"
@@ -1154,7 +1154,7 @@ PyDoc_STRVAR(green_throw_doc,
 "    g_raiser.switch()\n"
 "\n"
 "except that this trick does not work for the\n"
-"``greenlet.GreenletExit`` exception, which would not propagate\n"
+"`greenlet.GreenletExit` exception, which would not propagate\n"
 "from ``g_raiser`` to ``g``.\n");
 
 static PyObject *
@@ -1654,6 +1654,12 @@ PyTypeObject PyGreenlet_Type = {
 	(inquiry)GREENLET_tp_is_gc,             /* tp_is_gc */
 };
 
+PyDoc_STRVAR(mod_getcurrent_doc,
+"getcurrent() -> greenlet\n"
+"\n"
+"Returns the current greenlet (i.e. the one which called this function).\n"
+);
+
 static PyObject* mod_getcurrent(PyObject* self)
 {
 	if (!STATE_OK)
@@ -1663,6 +1669,11 @@ static PyObject* mod_getcurrent(PyObject* self)
 }
 
 #if GREENLET_USE_TRACING
+PyDoc_STRVAR(mod_settrace_doc,
+"settrace(callback) -> object\n"
+"\n"
+"Sets a new tracing function and returns the previous one.\n"
+);
 static PyObject* mod_settrace(PyObject* self, PyObject* args)
 {
 	int err;
@@ -1687,6 +1698,12 @@ static PyObject* mod_settrace(PyObject* self, PyObject* args)
 	return previous;
 }
 
+PyDoc_STRVAR(mod_gettrace_doc,
+"gettrace() -> object\n"
+"\n"
+"Returns the currently set tracing function, or None.\n"
+);
+
 static PyObject* mod_gettrace(PyObject* self)
 {
 	PyObject* tracefunc;
@@ -1701,10 +1718,10 @@ static PyObject* mod_gettrace(PyObject* self)
 #endif
 
 static PyMethodDef GreenMethods[] = {
-	{"getcurrent", (PyCFunction)mod_getcurrent, METH_NOARGS, /*XXX*/ NULL},
+	{"getcurrent", (PyCFunction)mod_getcurrent, METH_NOARGS, mod_getcurrent_doc},
 #if GREENLET_USE_TRACING
-	{"settrace", (PyCFunction)mod_settrace, METH_VARARGS, NULL},
-	{"gettrace", (PyCFunction)mod_gettrace, METH_NOARGS, NULL},
+	{"settrace", (PyCFunction)mod_settrace, METH_VARARGS, mod_settrace_doc},
+	{"gettrace", (PyCFunction)mod_gettrace, METH_NOARGS, mod_gettrace_doc},
 #endif
 	{NULL,     NULL}        /* Sentinel */
 };
@@ -1828,6 +1845,7 @@ init_greenlet(void)
 	PyModule_AddObject(m, "GREENLET_USE_CONTEXT_VARS", PyBool_FromLong(GREENLET_USE_CONTEXT_VARS));
 
 	/* also publish module-level data as attributes of the greentype. */
+	/* XXX: Why? */
 	for (p=copy_on_greentype; *p; p++) {
 		PyObject* o = PyObject_GetAttrString(m, *p);
 		if (!o) continue;

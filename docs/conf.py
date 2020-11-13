@@ -18,7 +18,7 @@ import sys, os
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #sys.path.insert(0, os.path.abspath('.'))
 import pkg_resources
-sys.path.append(os.path.abspath('../')) # XXX: Move to src directory
+sys.path.append(os.path.abspath('../src/'))
 rqmt = pkg_resources.require('greenlet')[0]
 # -- General configuration -----------------------------------------------------
 
@@ -259,7 +259,9 @@ intersphinx_mapping = {
 # either True or None mean the same thing as just setting the flag, but
 # only None works in 1.8 (True works in 2.0)
 autodoc_default_options = {
-    'members': None,
+    # Our only type with members is ``greenlet``, and it
+    # currently contains malformed ReST
+    #'members': None,
     'show-inheritance': None,
 }
 autodoc_member_order = 'bysource'
