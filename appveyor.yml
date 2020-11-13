@@ -146,11 +146,12 @@ install:
   - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"
 
 build_script:
-  - "%CMD_IN_ENV% python -m pip install -U -e .[test]"
+  - "%CMD_IN_ENV% python -m pip install -U -e .[test,docs]"
 
 
 test_script:
   - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests"
+  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 
 after_test:
   - "%CMD_IN_ENV% python setup.py bdist_wheel"

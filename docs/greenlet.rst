@@ -9,6 +9,10 @@
 
 .. sphinx-include-begin
 
+.. |--| unicode:: U+2013   .. en dash
+.. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
+   :trim:
+
 Motivation
 ==========
 
@@ -38,68 +42,116 @@ Example
 
 Let's consider a system controlled by a terminal-like console, where the user
 types commands. Assume that the input comes character by character. In such
-a system, there will typically be a loop like the following one::
+a system, there will typically be a loop like the following one:
 
-    def process_commands(*args):
-        while True:
-            line = ''
-            while not line.endswith('\n'):
-                line += read_next_char()
-            if line == 'quit\n':
-                print("are you sure?")
-                if read_next_char() != 'y':
-                    continue    # ignore the command
-                break # stop the command loop
-            process_command(line)
+.. doctest::
 
-Now assume that you want to plug this program into a GUI. Most GUI toolkits
-are event-based. They will invoke a call-back for each character the user
-presses. [Replace "GUI" with "XML expat parser" if that rings more bells to
-you ``:-)``]  In this setting, it is difficult to implement the
-read_next_char() function needed by the code above. We have two incompatible
-functions::
+    >>> def echo_user_input(user_input):
+    ...     print('    <<< ' + user_input.strip())
+    ...     return user_input
+    >>> def process_commands():
+    ...    while True:
+    ...        line = ''
+    ...        while not line.endswith('\n'):
+    ...            line += read_next_char()
+    ...        echo_user_input(line)
+    ...        if line == 'quit\n':
+    ...            print("Are you sure?")
+    ...            if echo_user_input(read_next_char()) != 'y':
+    ...                continue    # ignore the command
+    ...            print("(Exiting loop.)")
+    ...            break # stop the command loop
+    ...        process_command(line)
 
-    def event_keydown(key):
-        ??
+Now assume that you want to plug this program into a GUI. Most GUI
+toolkits are event-based. They will invoke a call-back for each
+character the user presses (``event_keydown(key)``) [#f1]_. In this setting,
+it is difficult to implement the ``read_next_char()`` function needed
+by the code above. We have two incompatible functions:
 
-    def read_next_char():
-        ?? should wait for the next event_keydown() call
+.. doctest::
+
+    >>> def event_keydown(key):
+    ...    "Called by the event system asynchronously."
+
+    >>> def read_next_char():
+    ...    """
+    ...    Called from `process_commands`; should wait for
+    ...    the next `event_keydown()` call.
+    ...    """
 
 You might consider doing that with threads. Greenlets are an alternate
 solution that don't have the related locking and shutdown problems. You
-start the process_commands() function in its own, separate greenlet, and
-then you exchange the keypresses with it as follows::
+start the ``process_commands()`` function in its own, separate greenlet, and
+then you exchange the keypresses with it as follows:
 
-    def event_keydown(key):
-             # jump into g_processor, sending it the key
-        g_processor.switch(key)
+.. doctest::
 
-    def read_next_char():
-            # g_self is g_processor in this simple example
-        g_self = greenlet.getcurrent()
-            # jump to the parent (main) greenlet, waiting for the next key
-        next_char = g_self.parent.switch()
-        return next_char
+    >>> from greenlet import greenlet
+    >>> g_processor = greenlet(process_commands)
+    >>> def event_keydown(key):
+    ...     # jump into g_processor, sending it the key
+    ...     g_processor.switch(key)
 
-    g_processor = greenlet(process_commands)
-    g_processor.switch(*args)   # input arguments to process_commands()
+    >>> def read_next_char():
+    ...     # g_self is g_processor in this simple example
+    ...     g_self = greenlet.getcurrent()
+    ...     assert g_self is g_processor
+    ...     # jump to the parent (main) greenlet, where the GUI event
+    ...     # loop is running, and wait for the next key
+    ...     main_greenlet = g_self
+    ...     next_char = g_self.parent.switch()
+    ...     return next_char
 
-    gui.mainloop()
+Next, we can start the processor, which will immediately switch back
+to the main greenlet:
 
-In this example, the execution flow is: when read_next_char() is called, it
-is part of the g_processor greenlet, so when it switches to its parent
+.. doctest::
+
+    >>> _ = g_processor.switch()
+
+Now we can hand control over to the main event loop of the GUI. Of
+course, in documentation we don't have a gui, so we'll fake one that
+feeds keys to ``event_keydown``; we'll also fake a ``process_command``
+function that just prints the line it got.
+
+.. doctest::
+
+   >>> def process_command(line):
+   ...     print('(Processing command: ' + line.strip() + ')')
+
+   >>> def gui_mainloop():
+   ...    # The user types "hello"
+   ...    for c in 'hello\n':
+   ...        event_keydown(c)
+   ...    # The user types "quit"
+   ...    for c in 'quit\n':
+   ...        event_keydown(c)
+   ...    # The user responds to the prompt with 'y'
+   ...    event_keydown('y')
+
+   >>> gui_mainloop()
+       <<< hello
+   (Processing command: hello)
+       <<< quit
+   Are you sure?
+       <<< y
+   (Exiting loop.)
+
+In this example, the execution flow is: when ``read_next_char()`` is called, it
+is part of the ``g_processor`` greenlet, so when it switches to its parent
 greenlet, it resumes execution in the top-level main loop (the GUI). When
-the GUI calls event_keydown(), it switches to g_processor, which means that
-the execution jumps back wherever it was suspended in that greenlet -- in
-this case, to the switch() instruction in read_next_char() -- and the ``key``
-argument in event_keydown() is passed as the return value of the switch() in
-read_next_char().
+the GUI calls ``event_keydown()``, it switches to ``g_processor``, which means that
+the execution jumps back wherever it was suspended in that greenlet |---| in
+this case, to the ``switch()`` instruction in ``read_next_char()`` |---| and the ``key``
+argument in ``event_keydown()`` is passed as the return value of the switch() in
+``read_next_char()``.
 
-Note that read_next_char() will be suspended and resumed with its call stack
+Note that ``read_next_char()`` will be suspended and resumed with its call stack
 preserved, so that it will itself return to different positions in
-process_commands() depending on where it was originally called from. This
+``process_commands()`` depending on where it was originally called from. This
 allows the logic of the program to be kept in a nice control-flow way; we
-don't have to completely rewrite process_commands() to turn it into a state
+don't have to completely rewrite ``process_commands()`` to turn it into a state
 machine.
 
 
@@ -125,28 +177,35 @@ outermost function finishes its execution, the greenlet's stack becomes
 empty again and the greenlet is "dead". Greenlets can also die of an
 uncaught exception.
 
-For example::
+For example:
 
-    from greenlet import greenlet
+.. doctest::
 
-    def test1():
-        print(12)
-        gr2.switch()
-        print(34)
+    >>> from greenlet import greenlet
 
-    def test2():
-        print(56)
-        gr1.switch()
-        print(78)
+    >>> def test1():
+    ...     print(12)
+    ...     gr2.switch()
+    ...     print(34)
+    ...     return 'test1 done'
 
-    gr1 = greenlet(test1)
-    gr2 = greenlet(test2)
-    gr1.switch()
+    >>> def test2():
+    ...     print(56)
+    ...     gr1.switch()
+    ...     print(78)
 
-The last line jumps to test1, which prints 12, jumps to test2, prints 56,
-jumps back into test1, prints 34; and then test1 finishes and gr1 dies.
+    >>> gr1 = greenlet(test1)
+    >>> gr2 = greenlet(test2)
+    >>> gr1.switch()
+    12
+    56
+    34
+    'test1 done'
+
+The last line jumps to ``test1``, which prints 12, jumps to ``test2``, prints 56,
+jumps back into ``test1``, prints 34; and then ``test1`` finishes and ``gr1`` dies.
 At this point, the execution comes back to the original ``gr1.switch()``
-call. Note that 78 is never printed.
+call, which returns the value that ``test1`` returned. Note that 78 is never printed.
 
 Parents
 -------
@@ -154,25 +213,40 @@ Parents
 Let's see where execution goes when a greenlet dies. Every greenlet has a
 "parent" greenlet. The parent greenlet is initially the one in which the
 greenlet was created (this can be changed at any time). The parent is
-where execution continues when a greenlet dies. This way, greenlets are
+where execution continues when a greenlet dies. In this way, greenlets are
 organized in a tree. Top-level code that doesn't run in a user-created
 greenlet runs in the implicit "main" greenlet, which is the root of the
 tree.
 
-In the above example, both gr1 and gr2 have the main greenlet as a parent.
+In the above example, both ``gr1`` and ``gr2`` have the main greenlet as a parent.
 Whenever one of them dies, the execution comes back to "main".
 
 Uncaught exceptions are propagated into the parent, too. For example, if
-the above test2() contained a typo, it would generate a NameError that
-would kill gr2, and the exception would go back directly into "main".
-The traceback would show test2, but not test1. Remember, switches are not
+the above ``test2()`` contained a typo, it would generate a :exc:`NameError` that
+would kill ``gr2``, and the exception would go back directly into "main".
+The traceback would show ``test2``, but not test1. Remember, switches are not
 calls, but transfer of execution between parallel "stack containers", and
 the "parent" defines which stack logically comes "below" the current one.
+
+.. doctest::
+
+    >>> def test2():
+    ...    print(this_should_be_a_name_error)
+    >>> gr1 = greenlet(test1)
+    >>> gr2 = greenlet(test2)
+    >>> gr1.switch()
+    Traceback (most recent call last):
+      ...
+      File "<doctest default[3]>", line 1, in <module>
+        gr1.switch()
+      File "<doctest default[0]>", line 2, in test2
+        print(this_should_be_a_name_error)
+    NameError: name 'this_should_be_a_name_error' is not defined
 
 Instantiation
 -------------
 
-``greenlet.greenlet`` is the greenlet type, which supports the following
+:class:`greenlet.greenlet` is the greenlet type, which supports the following
 operations:
 
 ``greenlet(run=None, parent=None)``
@@ -196,27 +270,31 @@ instead of giving a ``run`` argument to the constructor.
 Switching
 ---------
 
-Switches between greenlets occur when the method switch() of a greenlet is
-called, in which case execution jumps to the greenlet whose switch() is
+Switches between greenlets occur when the method ``switch()`` of a greenlet is
+called, in which case execution jumps to the greenlet whose ``switch()`` is
 called, or when a greenlet dies, in which case execution jumps to the
 parent greenlet. During a switch, an object or an exception is "sent" to
 the target greenlet; this can be used as a convenient way to pass
-information between greenlets. For example::
+information between greenlets. For example:
 
-    def test1(x, y):
-        z = gr2.switch(x+y)
-        print(z)
+.. doctest::
 
-    def test2(u):
-        print(u)
-        gr1.switch(42)
+    >>> def test1(x, y):
+    ...     z = gr2.switch(x + y)
+    ...     print(z)
 
-    gr1 = greenlet(test1)
-    gr2 = greenlet(test2)
-    gr1.switch("hello", " world")
+    >>> def test2(u):
+    ...     print(u)
+    ...     gr1.switch(42)
+
+    >>> gr1 = greenlet(test1)
+    >>> gr2 = greenlet(test2)
+    >>> gr1.switch("hello", " world")
+    hello world
+    42
 
 This prints "hello world" and 42, with the same order of execution as the
-previous example. Note that the arguments of test1() and test2() are not
+previous example. Note that the arguments of ``test1()`` and ``test2()`` are not
 provided when the greenlet is created, but only the first time someone
 switches to it.
 
@@ -245,6 +323,47 @@ was just sent. This means that ``x = g.switch(y)`` will send the object
 ``y`` to ``g``, and will later put the (unrelated) object that some
 (unrelated) greenlet passes back to us into ``x``.
 
+You can pass multiple or keyword arguments to ``switch()``. if the
+greenlet hasn't begun running, those are passed as function arguments
+to ``run`` as usual in Python. If the greenlet *was* running, multiple
+arguments will be a :class:`tuple`, and keyword arguments will be a
+:class:`dict`; any number of positional arguments with keyword
+arguments will have the entire set in a tuple, with positional
+arguments in their own nested tuple, and keyword arguments as a `dict`
+in the the last element of the tuple:
+
+.. doctest::
+
+    >>> def test1(x, y, **kwargs):
+    ...     while 1:
+    ...         z = gr2.switch(x + y + ' ' + str(kwargs))
+    ...         if not z: break
+    ...         print(z)
+
+    >>> def test2(u):
+    ...     print(u)
+    ...     # A single argument -> itself
+    ...     gr1.switch(42)
+    ...     # Multiple positional args -> a tuple
+    ...     gr1.switch("how", "are", "you")
+    ...     # Only keyword arguments -> a dict
+    ...     gr1.switch(language='en')
+    ...     # one positional and keywords -> ((tuple,), dict)
+    ...     gr1.switch("howdy", language='en_US')
+    ...     # multiple positional and keywords -> ((tuple,), dict)
+    ...     gr1.switch("all", "y'all", language='en_US_OK')
+    ...     gr1.switch(None) # terminate
+
+    >>> gr1 = greenlet(test1)
+    >>> gr2 = greenlet(test2)
+    >>> gr1.switch("hello", " world", language='en')
+    hello world {'language': 'en'}
+    42
+    ('how', 'are', 'you')
+    {'language': 'en'}
+    (('howdy',), {'language': 'en_US'})
+    (('all', "y'all"), {'language': 'en_US_OK'})
+
 Note that any attempt to switch to a dead greenlet actually goes to the
 dead greenlet's parent, or its parent's parent, and so on. (The final
 parent is the "main" greenlet, which is never dead.)
@@ -265,43 +384,75 @@ matches the behavior of a new thread, but differs from that of a new
 :class:`asyncio.Task`, which inherits a copy of the context that was
 active when it was spawned. You can assign to a greenlet's
 ``gr_context`` attribute to change the context that it will use. For
-example::
+example:
 
-    import greenlet
-    import contextvars
+.. doctest::
+   :pyversion: > 3.7
 
-    example = contextvars.ContextVar("example", default=0)
+    >>> import greenlet
+    >>> import contextvars
 
-    def set_it(next_value):
-        previous_value = example.get()
-        example.set(next_value)
-        return previous_value
+    >>> example = contextvars.ContextVar("example", default=0)
 
-    example.set(1)
+    >>> def set_it(next_value):
+    ...    previous_value = example.get()
+    ...    print("Value of example in greenlet  :", previous_value)
+    ...    print("Setting example in greenlet to:", next_value)
+    ...    example.set(next_value)
 
-    # Default behavior: new greenlet gets an empty context
-    gr1 = greenlet.greenlet(set_it)
-    assert gr1.switch(2) == 0 and example.get() == 1
+    >>> _ = example.set(1)
 
-    # Alternate behavior: new greenlet gets a copy of the current
-    # context (like asyncio)
-    gr2 = greenlet.greenlet(set_it)
-    gr2.gr_context = contextvars.copy_context()
-    assert gr2.switch(2) == 1 and example.get() == 1
+By default, a new greenlet gets an empty context, unrelated to the
+current context:
 
-    # Alternate behavior: new greenlet shares the current context
-    # (like older, non-contextvars-aware versions of greenlet)
-    gr3 = greenlet.greenlet(set_it)
-    gr3.gr_context = greenlet.getcurrent().gr_context
-    assert gr3.switch(2) == 1 and example.get() == 2
+.. doctest::
+   :pyversion: > 3.7
+
+    >>> gr1 = greenlet.greenlet(set_it)
+    >>> gr1.switch(2)
+    Value of example in greenlet  : 0
+    Setting example in greenlet to: 2
+    >>> example.get()
+    1
+
+You can make a greenlet get a copy of the current context when it is
+created, like asyncio:
+
+.. doctest::
+   :pyversion: > 3.7
+
+    >>> gr2 = greenlet.greenlet(set_it)
+    >>> gr2.gr_context = contextvars.copy_context()
+    >>> gr2.switch(2)
+    Value of example in greenlet  : 1
+    Setting example in greenlet to: 2
+
+You can also make a greenlet *share* the current context, like older,
+non-contextvars-aware versions of greenlet:
+
+.. doctest::
+   :pyversion: > 3.7
+
+    >>> gr3 = greenlet.greenlet(set_it)
+    >>> gr3.gr_context = greenlet.getcurrent().gr_context
+    >>> gr3.switch(2)
+    Value of example in greenlet  : 1
+    Setting example in greenlet to: 2
 
 You can alternatively set a new greenlet's context by surrounding its
 top-level function in a call to :meth:`Context.run()
-<contextvars.Context.run>`::
+<contextvars.Context.run>`:
 
-    example.set(1)
-    gr4 = greenlet.greenlet(contextvars.copy_context().run)
-    assert gr4.switch(set_it, 2) == 1 and example.get() == 1
+.. doctest::
+   :pyversion: > 3.7
+
+    >>> _ = example.set(1)
+    >>> gr4 = greenlet.greenlet(contextvars.copy_context().run)
+    >>> gr4.switch(set_it, 2)
+    Value of example in greenlet  : 1
+    Setting example in greenlet to: 2
+    >>> example.get()
+    1
 
 However, contextvars were not designed with greenlets in mind, so
 using :meth:`Context.run() <contextvars.Context.run>` becomes
@@ -415,7 +566,7 @@ Garbage-collecting live greenlets
 
 If all the references to a greenlet object go away (including the
 references from the parent attribute of other greenlets), then there is no
-way to ever switch back to this greenlet. In this case, a GreenletExit
+way to ever switch back to this greenlet. In this case, a :exc:`GreenletExit`
 exception is generated into the greenlet. This is the only case where a
 greenlet receives the execution asynchronously. This gives
 ``try:finally:`` blocks a chance to clean up resources held by the
@@ -424,9 +575,9 @@ greenlets are infinite loops waiting for data and processing it. Such
 loops are automatically interrupted when the last reference to the
 greenlet goes away.
 
-The greenlet is expected to either die or be resurrected by having a new
-reference to it stored somewhere; just catching and ignoring the
-GreenletExit is likely to lead to an infinite loop.
+The greenlet is expected to either die or be resurrected by having a
+new reference to it stored somewhere; just catching and ignoring the
+`GreenletExit` is likely to lead to an infinite loop.
 
 Greenlets do not participate in garbage collection; cycles involving data
 that is present in a greenlet's frames will not be detected. Storing
@@ -441,13 +592,15 @@ It is difficult to detect greenlet switching reliably with conventional
 methods, so to improve support for debugging, tracing and profiling greenlet
 based code there are new functions in the greenlet module:
 
+.. Add doctest for this.
+
 ``greenlet.gettrace()``
     Returns a previously set tracing function, or None.
 
 ``greenlet.settrace(callback)``
     Sets a new tracing function and returns a previous tracing function, or
     None. The callback is called on various events and is expected to have
-    the following signature::
+    the following signature:
 
         def callback(event, args):
             if event == 'switch':
@@ -498,23 +651,25 @@ Exceptions
 Reference
 ---------
 
+.. TODO: Use the c-domain to document these functions.
+
 ``PyGreenlet_Import()``
     A macro that imports the greenlet module and initializes the C API. This
     must be called once for each extension module that uses the greenlet C API.
 
-``int PyGreenlet_Check(PyObject *p)``
+``int PyGreenlet_Check(PyObject* p)``
     Macro that returns true if the argument is a PyGreenlet.
 
-``int PyGreenlet_STARTED(PyGreenlet *g)``
+``int PyGreenlet_STARTED(PyGreenlet* g)``
     Macro that returns true if the greenlet ``g`` has started.
 
-``int PyGreenlet_ACTIVE(PyGreenlet *g)``
+``int PyGreenlet_ACTIVE(PyGreenlet* g)``
     Macro that returns true if the greenlet ``g`` has started and has not died.
 
-``PyGreenlet *PyGreenlet_GET_PARENT(PyGreenlet *g)``
+``PyGreenlet* PyGreenlet_GET_PARENT(PyGreenlet* g)``
     Macro that returns the parent greenlet of ``g``.
 
-``int PyGreenlet_SetParent(PyGreenlet *g, PyGreenlet *nparent)``
+``int PyGreenlet_SetParent(PyGreenlet* g, PyGreenlet* nparent)``
     Set the parent greenlet of ``g``. Returns 0 for success. If -1 is returned,
     then ``g`` is not a pointer to a PyGreenlet, and an AttributeError will
     be raised.
@@ -522,13 +677,13 @@ Reference
 ``PyGreenlet *PyGreenlet_GetCurrent(void)``
     Returns the currently active greenlet object.
 
-``PyGreenlet *PyGreenlet_New(PyObject *run, PyObject *parent)``
+``PyGreenlet *PyGreenlet_New(PyObject* run, PyObject* parent)``
     Creates a new greenlet object with the callable ``run`` and parent
     ``parent``. Both parameters are optional. If ``run`` is NULL, then the
     greenlet will be created, but will fail if switched in. If ``parent`` is
     NULL, the parent is automatically set to the current greenlet.
 
-``PyObject *PyGreenlet_Switch(PyGreenlet *g, PyObject *args, PyObject *kwargs)``
+``PyObject *PyGreenlet_Switch(PyGreenlet* g, PyObject* args, PyObject* kwargs)``
     Switches to the greenlet ``g``. ``args`` and ``kwargs`` are optional and
     can be NULL. If ``args`` is NULL, an empty tuple is passed to the target
     greenlet. If kwargs is NULL, no keyword arguments are passed to the target
@@ -540,7 +695,9 @@ Reference
     ``typ`` with the value ``val``, and optionally, the traceback object
     ``tb``. ``tb`` can be NULL.
 
-Indices and tables
-==================
 
-* :ref:`search`
+
+.. rubric:: Footnotes
+
+.. [#f1]  Replace "GUI" with "XML expat parser" if that rings more bells to
+          you. In general, it can be framework that issues asynchronous callbacks.
