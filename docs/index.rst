@@ -111,8 +111,8 @@ then you exchange the keypresses with it as follows:
     ...     assert g_self is g_processor
     ...     # jump to the parent (main) greenlet, where the GUI event
     ...     # loop is running, and wait for the next key
-    ...     main_greenlet = g_self
-    ...     next_char = g_self.parent.switch()
+    ...     main_greenlet = g_self.parent
+    ...     next_char = main_greenlet.switch()
     ...     return next_char
 
 Next, we can start the processor, which will immediately switch back
