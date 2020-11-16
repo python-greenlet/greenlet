@@ -18,6 +18,7 @@ Contents
    api
    c_api
    changes
+   development
 
 
 .. |--| unicode:: U+2013   .. en dash
