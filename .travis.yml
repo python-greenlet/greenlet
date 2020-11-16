@@ -1,10 +1,23 @@
 language: python
-cache: pip
-dist: bionic
 
+dist: bionic
+osx_image: xcode11.4
+
+env:
+    global:
+        - PYTHONHASHSEED=8675309
+        - PYTHONUNBUFFERED=1
+        - PYTHONDONTWRITEBYTECODE=1
+        - PIP_UPGRADE_STRATEGY=eager
+        # Don't get warnings about Python 2 support being deprecated. We
+        # know. The env var works for pip 20.
+        - PIP_NO_PYTHON_VERSION_WARNING=1
+        - PIP_NO_WARN_SCRIPT_LOCATION=1
+        # Uploading built wheels for releases.
+        # TWINE_PASSWORD is encrypted and stored directly in the
+        # travis repo settings.
+        - TWINE_USERNAME="__token__"
 arch:
-  - arm64
-  - amd64
   - ppc64le
 
 python:
@@ -15,8 +28,115 @@ python:
   - 3.8
   - 3.9
 
-install: pip install -U -e .[test,docs]
+install:
+  - python -m pip install -U pip
+  - python -m pip install -U twine
+  - python setup.py bdist_wheel
+  - python -m pip install -U -e .[test,docs]
+  - ls -l dist
+  - twine check dist/*
 
 script:
   - python -m unittest discover -v greenlet.tests
   - sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
+
+jobs:
+  fast_finish: true
+  include:
+    # The manylinux builds and tests.
+    # These take awhile, so get them started while others proceed in parallel.
+    - stage: test
+      name: x86_64 manylinux tests and wheels (all Pythons)
+      language: python
+      python: 3.8
+      os: linux
+      arch: amd64
+      services: docker
+      env: DOCKER_IMAGE=quay.io/pypa/manylinux2010_x86_64
+      install:
+        - python -m pip install -U pip twine
+        - docker pull $DOCKER_IMAGE
+      script: bash make-manylinux
+    - stage: test
+      name: aarch64 manylinux tests and wheels (all Pythons)
+      language: python
+      os: linux
+      python: 3.8
+      arch: arm64
+      services: docker
+      env: DOCKER_IMAGE=quay.io/pypa/manylinux2014_aarch64
+      install:
+        - python -m pip install -U pip twine
+        - docker pull $DOCKER_IMAGE
+      script: bash ./make-manylinux
+
+    # It's important to use 'macpython' builds to get the least
+    # restrictive wheel tag. It's also important to avoid
+    # 'homebrew 3' because it floats instead of being a specific
+    # version.
+    # XXX: This doesn't seem to properly save the pip cache. Is it
+    # because of 'language: generic'? Trying to list the directory specifically.
+    - name: Python 2.7 wheels for MacOS
+      os: osx
+      language: generic
+      # We require at least 2.7.15 to upload wheels.
+      # See https://github.com/zopefoundation/BTrees/issues/113
+      env: TERRYFY_PYTHON='macpython 2.7.18'
+    # Can't correctly upload.
+    # - name: Python 3.5 wheels for MacOS
+    #   os: osx
+    #   language: generic
+    #   env: TERRYFY_PYTHON='macpython 3.5'
+    - name: Python 3.6 wheels for MacOS
+      os: osx
+      language: generic
+      env: TERRYFY_PYTHON='macpython 3.6.1'
+    - name: Python 3.7 wheels for MacOS
+      os: osx
+      language: generic
+      env: TERRYFY_PYTHON='macpython 3.7.0'
+    - name: Python 3.8 wheels for MacOS
+      os: osx
+      language: generic
+      env: TERRYFY_PYTHON='macpython 3.8.0'
+    - name: Python 3.9 wheels for MacOS
+      os: osx
+      language: generic
+      env: TERRYFY_PYTHON='macpython 3.9.0'
+
+before_install:
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      git clone https://github.com/MacPython/terryfy
+      source terryfy/travis_tools.sh
+      get_python_environment $TERRYFY_PYTHON venv
+    fi
+
+after_success:
+  - |
+    if [[ -n "$DOCKER_IMAGE" ]]; then
+      python -mensurepip
+      python -m pip install -U pip
+      python -m pip install -U twine
+      ls -l wheelhouse
+      twine check wheelhouse/*
+      if [[ $TRAVIS_TAG ]]; then
+        twine upload --skip-existing wheelhouse/*
+      fi
+    fi
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      ls -l dist
+      twine check dist/*
+      if [[ $TRAVIS_TAG ]]; then
+        python -m twine upload --skip-existing dist/*
+      fi
+    fi
+
+cache:
+  pip: true
+  directories:
+    - $HOME/Library/Caches/pip
+
+before_cache:
+    - rm -f $HOME/.cache/pip/log/debug.log

@@ -26,12 +26,22 @@ environment:
     # Enable this if debugging a resource leak. Otherwise
     # it slows things down.
     # PYTHONTRACEMALLOC: 10
+    # Upload settings for twine.
+    TWINE_USERNAME: "__token__"
+    TWINE_PASSWORD:
+      secure: 9JKBIB2o2S18+REaEqzUrP/1g08eRdX3eEa7D/BBN5ae0XHTlrPqbvRTNJceiUa/o3r4bejFF3o0xA69ueMd+09PGKAAAfpQnwnQPInuLVkOq3mprNk4wW0GyWLFzI3WqZhYnWH7PZtmG4Kr7mNOyd6Qdi773kN3Hn7CNhvk+ik/K3zbsGerb2YYloM/KIQSJbgdEqNcIIItoqrZzg/cqiM/47Pz7ZzcGDvevD8Nx/0lVGqFVJnj8cMevwa9iDPYn7fB59Y1GEEbtBjenrWr1Q==
 
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
 
     - PYTHON: "C:\\Python39-x64"
       PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.9.x"
+      PYTHON_EXE: python
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
+    - PYTHON: "C:\\Python39"
+      PYTHON_ARCH: "32"
       PYTHON_VERSION: "3.9.x"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
@@ -158,3 +168,8 @@ after_test:
 
 artifacts:
   - path: dist\*
+
+deploy_script:
+  - ps: if ($env:APPVEYOR_REPO_TAG -eq $TRUE) { pip install twine; twine upload --skip-existing dist/* }
+
+deploy: on

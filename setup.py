@@ -99,6 +99,7 @@ setup(
     version='1.0.0.dev0',
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
+    long_description_content_type="text/x-rst",
     url="https://greenlet.readthedocs.io/",
     project_urls={
         'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
