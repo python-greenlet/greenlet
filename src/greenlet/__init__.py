@@ -25,9 +25,7 @@ __all__ = [
 ###
 # Metadata
 ###
-from ._greenlet import __version__
-# TODO: Move the definition of __version__ here, instead of the
-# C code. zest.releaser will find it here, but not in C.
+__version__ = '1.0.0.dev0'
 from ._greenlet import _C_API # pylint:disable=no-name-in-module
 
 ###

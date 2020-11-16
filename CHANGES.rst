@@ -33,6 +33,8 @@
 - Add partial support for AIX ppc64 and IBM i. Thanks to Jesse
   Gorzinski and Kevin Adler. See `PR 197
   <https://github.com/python-greenlet/greenlet/pull/197>`_.
+- (C API) The undocumented ``GREENLET_VERSION`` macro that defined a string
+  giving the greenlet version is now deprecated and will not be updated.
 
 0.4.17 (2020-09-22)
 ===================

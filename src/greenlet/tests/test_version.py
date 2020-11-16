@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import sys
 import os
-import re
 import unittest
 
 import greenlet
@@ -12,47 +11,29 @@ import greenlet
 class VersionTests(unittest.TestCase):
     def test_version(self):
         def find_dominating_file(name):
+            if os.path.exists(name):
+                return name
+
+            tried = []
             here = os.path.abspath(os.path.dirname(__file__))
             for i in range(10):
                 up = ['..'] * i
                 path = [here] + up + [name]
                 fname = os.path.join(*path)
                 fname = os.path.abspath(fname)
+                tried.append(fname)
                 if os.path.exists(fname):
                     return fname
-            raise AssertionError("Could not find file " + name + "; last checked " + fname)
+            raise AssertionError("Could not find file " + name + "; checked " + str(tried))
 
         try:
             setup_py = find_dominating_file('setup.py')
         except AssertionError as e:
             raise unittest.SkipTest("Unable to find setup.py; must be out of tree. " + str(e))
 
-        try:
-            greenlet_h = find_dominating_file('greenlet.h')
-        except AssertionError as e:
-            if '.tox' not in os.path.abspath(os.path.dirname(__file__)):
-                raise
-            # If we're in tox, we can recover.
-            greenlet_h = os.path.join(
-                os.path.dirname(setup_py),
-                'src',
-                'greenlet',
-                'greenlet.h'
-            )
-            if not os.path.exists(greenlet_h):
-                raise # Something must have changed in the layout. Fix this test.
-
-
-        with open(greenlet_h) as f:
-            greenlet_h = f.read()
-
-        hversion, = re.findall('GREENLET_VERSION "(.*)"', greenlet_h)
-
-
 
         invoke_setup = "%s %s --version" % (sys.executable, setup_py)
         with os.popen(invoke_setup) as f:
             sversion = f.read().strip()
 
-        self.assertEqual(sversion, hversion)
         self.assertEqual(sversion, greenlet.__version__)
