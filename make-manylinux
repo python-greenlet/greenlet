@@ -1,19 +1,52 @@
 #!/bin/bash
+# Initially based on a snippet from the greenlet project.
+# This needs to be run from the root of the project.
+# To update: docker pull quay.io/pypa/manylinux2010_x86_64
 set -e
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
+# Use a fixed hash seed for reproducability
+export PYTHONHASHSEED=8675309
+export CI=1
+export TRAVIS=true
+# Don't get warnings about Python 2 support being deprecated. We
+# know. The env var works for pip 20.
+export PIP_NO_PYTHON_VERSION_WARNING=1
+export PIP_NO_WARN_SCRIPT_LOCATION=1
+
 
 if [ -d /greenlet -a -d /opt/python ]; then
     # Running inside docker
-    cd /greenlet
-    rm -rf wheelhouse
-    for variant in /opt/python/*; do
-        rm -rf dist build *.egg-info
-        $variant/bin/python setup.py clean --all bdist_wheel
-        auditwheel repair dist/*.whl
+
+    # Build in an isolated directory
+    mkdir /tmp/build
+    cd /tmp/build
+    git clone /greenlet greenlet
+    cd greenlet
+
+    mkdir -p /greenlet/wheelhouse
+    OPATH="$PATH"
+    which auditwheel
+    for variant in `ls -d /opt/python/cp{27,35,36,37,38,39}*`; do
+        export PATH="$variant/bin:$OPATH"
+        echo "Building $variant $(python --version)"
+
+        python -mpip install -U pip
+        python setup.py bdist_wheel
+        python -mpip install -U .
+        python -m unittest discover -v greenlet.tests
+        PATH="$OPATH" auditwheel repair dist/greenlet*.whl
+        cp wheelhouse/greenlet*.whl /greenlet/wheelhouse
+
+        rm -rf build
+        rm -f dist/greenlet*.whl
+
     done
-    rm -rf dist build *.egg-info
+
     exit 0
 fi
 
-docker run --rm -ti -v "$(pwd):/greenlet:Z" quay.io/pypa/manylinux1_x86_64 /greenlet/$(basename $0)
+# Mount the current directory as /greenlet
+# Can't use -i on Travis with arm64, "input device not a tty"
+docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-quay.io/pypa/manylinux2010_x86_64} /greenlet/$(basename $0)
+ls -l wheelhouse
