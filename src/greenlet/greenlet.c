@@ -5,6 +5,12 @@
 #include "greenlet.h"
 #include "structmember.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 
 /***********************************************************
 
@@ -1774,11 +1780,6 @@ init_greenlet(void)
 		INITERROR;
 	}
 
-	if (PyModule_AddStringConstant(m, "__version__", GREENLET_VERSION) < 0)
-	{
-		INITERROR;
-	}
-
 #if PY_MAJOR_VERSION >= 3
 	ts_curkey = PyUnicode_InternFromString("__greenlet_ts_curkey");
 	ts_delkey = PyUnicode_InternFromString("__greenlet_ts_delkey");
@@ -1887,3 +1888,7 @@ init_greenlet(void)
 	return m;
 #endif
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

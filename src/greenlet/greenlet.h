@@ -11,7 +11,8 @@
 extern "C" {
 #endif
 
-#define GREENLET_VERSION "1.0.0.dev0"
+/* This is deprecated and undocumented. It does not change. */
+#define GREENLET_VERSION "1.0.0"
 
 #if PY_VERSION_HEX >= 0x030700A3
 #  define GREENLET_USE_EXC_INFO

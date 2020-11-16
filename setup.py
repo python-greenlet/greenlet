@@ -94,9 +94,20 @@ else:
                 include_dirs=[GREENLET_HEADER_DIR]),
         )
 
+
+def get_greenlet_version():
+    with open('src/greenlet/__init__.py') as f:
+        looking_for = '__version__ = \''
+        for line in f:
+            if line.startswith(looking_for):
+                version = line[len(looking_for):-2]
+                return version
+    raise ValueError("Unable to find version")
+
+
 setup(
     name="greenlet",
-    version='1.0.0.dev0',
+    version=get_greenlet_version(),
     description='Lightweight in-process concurrent programming',
     long_description=readfile("README.rst"),
     long_description_content_type="text/x-rst",
