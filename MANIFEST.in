@@ -27,6 +27,7 @@ include *.rst
 include *.cfg
 include *.py
 include *.ini
+include .clang-format
 
 recursive-include appveyor *.cmd
 recursive-include appveyor *.ps1
