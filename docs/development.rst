@@ -20,8 +20,7 @@ greenlet uses Semantic Versions; this includes changes to the ABI
 Releases are made using `zest.releaser
 <https://zestreleaser.readthedocs.io/en/latest/>`_.
 
-.. code-block::
-   :language: shell
+.. code-block:: shell
 
    $ pip install zest.releaser[recommended]
    $ fullrelease

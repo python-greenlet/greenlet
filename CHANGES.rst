@@ -35,6 +35,13 @@
   <https://github.com/python-greenlet/greenlet/pull/197>`_.
 - (C API) The undocumented ``GREENLET_VERSION`` macro that defined a string
   giving the greenlet version is now deprecated and will not be updated.
+- greenlet is now always built with support for tracing and garbage
+  collection, and, on Python 3.7 and above, support for context
+  variables. The internal and undocumented C preprocessor macros that could be used to
+  alter that at compile time have been removed (no combination other
+  than the defaults was ever tested). This helps define a
+  stable ABI.
+
 
 0.4.17 (2020-09-22)
 ===================

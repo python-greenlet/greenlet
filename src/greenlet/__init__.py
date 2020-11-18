@@ -53,7 +53,9 @@ except ImportError:
 
 ###
 # Constants
-# These constants aren't documented and aren't recommended
+# These constants aren't documented and aren't recommended.
+# In 1.0, USE_GC and USE_TRACING are always true, and USE_CONTEXT_VARS
+# is the same as ``sys.version_info[:2] >= 3.7``
 ###
 from ._greenlet import GREENLET_USE_CONTEXT_VARS # pylint:disable=unused-import
 from ._greenlet import GREENLET_USE_GC # pylint:disable=unused-import

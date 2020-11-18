@@ -14,17 +14,6 @@ extern "C" {
 /* This is deprecated and undocumented. It does not change. */
 #define GREENLET_VERSION "1.0.0"
 
-#if PY_VERSION_HEX >= 0x030700A3
-#  define GREENLET_USE_EXC_INFO
-#endif
-
-#ifndef GREENLET_USE_CONTEXT_VARS
-#ifdef Py_CONTEXT_H
-#define GREENLET_USE_CONTEXT_VARS 1
-#else
-#define GREENLET_USE_CONTEXT_VARS 0
-#endif
-#endif
 
 typedef struct _greenlet {
 	PyObject_HEAD
@@ -38,7 +27,7 @@ typedef struct _greenlet {
 	struct _frame* top_frame;
 	int recursion_depth;
 	PyObject* weakreflist;
-#ifdef GREENLET_USE_EXC_INFO
+#if PY_VERSION_HEX >= 0x030700A3
 	_PyErr_StackItem* exc_info;
 	_PyErr_StackItem exc_state;
 #else
@@ -47,7 +36,7 @@ typedef struct _greenlet {
 	PyObject* exc_traceback;
 #endif
 	PyObject* dict;
-#if GREENLET_USE_CONTEXT_VARS
+#if PY_VERSION_HEX >= 0x030700A3
 	PyObject* context;
 #endif
 } PyGreenlet;
