@@ -4,7 +4,7 @@
 
 .. TODO: Refactor and share the opening paragraphs with README.rst
 .. TODO: Break into a few pieces: Introduction, tutorial, API
-   reference, etc.
+   reference, etc. https://documentation.divio.com/explanation/
 
 Contents
 ========
@@ -13,6 +13,7 @@ Contents
    :maxdepth: 1
 
    greenlet
+   creating_executing_greenlets
    contextvars
    tracing
    api

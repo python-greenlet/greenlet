@@ -58,6 +58,8 @@ jumps back into ``test1``, prints 34; and then ``test1`` finishes and ``gr1`` di
 At this point, the execution comes back to the original ``gr1.switch()``
 call, which returns the value that ``test1`` returned. Note that 78 is never printed.
 
+.. _greenlet_parents:
+
 Parents
 =======
 
@@ -75,7 +77,7 @@ Whenever one of them dies, the execution comes back to "main".
 Uncaught exceptions are propagated into the parent, too. For example, if
 the above ``test2()`` contained a typo, it would generate a :exc:`NameError` that
 would kill ``gr2``, and the exception would go back directly into "main".
-The traceback would show ``test2``, but not test1. Remember, switches are not
+The traceback would show ``test2``, but not ``test1``. Remember, switches are not
 calls, but transfer of execution between parallel "stack containers", and
 the "parent" defines which stack logically comes "below" the current one.
 
@@ -94,29 +96,10 @@ the "parent" defines which stack logically comes "below" the current one.
         print(this_should_be_a_name_error)
     NameError: name 'this_should_be_a_name_error' is not defined
 
-Instantiation
-=============
+Creating Greenlets
+==================
 
-:class:`greenlet.greenlet` is the greenlet type, which supports the following
-operations:
-
-``greenlet(run=None, parent=None)``
-    Create a new greenlet object (without running it). ``run`` is the
-    callable to invoke, and ``parent`` is the parent greenlet, which
-    defaults to the current greenlet.
-
-:func:`greenlet.getcurrent`
-    Returns the current greenlet (i.e. the one which called this
-    function).
-
-:exc:`greenlet.GreenletExit`
-    This special exception does not propagate to the parent greenlet; it
-    can be used to kill a single greenlet.
-
-The ``greenlet`` type can be subclassed, too. A greenlet runs by calling
-its ``run`` attribute, which is normally set when the greenlet is
-created; but for subclasses it also makes sense to define a ``run`` method
-instead of giving a ``run`` argument to the constructor.
+See :doc:`creating_executing_greenlets`.
 
 .. _switching:
 
@@ -156,7 +139,8 @@ Here are the precise rules for sending objects around:
 ``g.switch(*args, **kwargs)``
     Switches execution to the greenlet ``g``, sending it the given
     arguments. As a special case, if ``g`` did not start yet, then it
-    will start to run now.
+    will start to run now; ``args`` and ``kwargs`` are passed to the
+    greenlet's ``run()`` function as its arguments.
 
 Dying greenlet
     If a greenlet's ``run()`` finishes, its return value is the object
@@ -176,7 +160,7 @@ was just sent. This means that ``x = g.switch(y)`` will send the object
 ``y`` to ``g``, and will later put the (unrelated) object that some
 (unrelated) greenlet passes back to us into ``x``.
 
-You can pass multiple or keyword arguments to ``switch()``. if the
+You can pass multiple or keyword arguments to ``switch()``. If the
 greenlet hasn't begun running, those are passed as function arguments
 to ``run`` as usual in Python. If the greenlet *was* running, multiple
 arguments will be a :class:`tuple`, and keyword arguments will be a
@@ -262,11 +246,12 @@ Garbage-collecting live greenlets
 =================================
 
 If all the references to a greenlet object go away (including the
-references from the parent attribute of other greenlets), then there is no
-way to ever switch back to this greenlet. In this case, a :exc:`GreenletExit`
-exception is generated into the greenlet. This is the only case where a
-greenlet receives the execution asynchronously. This gives
-``try:finally:`` blocks a chance to clean up resources held by the
+references from the parent attribute of other greenlets), then there
+is no way to ever switch back to this greenlet. In this case, a
+:exc:`GreenletExit` exception is generated into the greenlet. This is
+the only case where a greenlet receives the execution asynchronously
+(without an explicit call to :meth:`greenlet.switch`). This gives
+``try/finally`` blocks a chance to clean up resources held by the
 greenlet. This feature also enables a programming style in which
 greenlets are infinite loops waiting for data and processing it. Such
 loops are automatically interrupted when the last reference to the

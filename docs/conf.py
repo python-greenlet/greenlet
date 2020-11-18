@@ -252,6 +252,7 @@ texinfo_documents = [
 
 intersphinx_mapping = {
     'https://docs.python.org/': None,
+    'https://www.gevent.org/': None,
 }
 
 
