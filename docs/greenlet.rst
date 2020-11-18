@@ -240,15 +240,22 @@ threads.
 
    >>> from greenlet import getcurrent
    >>> from threading import Thread
-   >>> main = getcurrent()
-   >>> def run():
-   ...      try:
-   ...          main.switch()
-   ...      except greenlet.error as e:
-   ...          print(e)
-   >>> t = Thread(target=run)
+   >>> from threading import Event
+   >>> started = Event()
+   >>> switched = Event()
+   >>> class T(Thread):
+   ...     def run(self):
+   ...         self.glet = getcurrent()
+   ...         started.set()
+   ...         switched.wait()
+   >>> t = T()
    >>> t.start()
-   cannot switch to a different thread
+   >>> _ = started.wait()
+   >>> t.glet.switch()
+   Traceback (most recent call last):
+   ...
+   greenlet.error: cannot switch to a different thread
+   >>> switched.set()
    >>> t.join()
 
 Garbage-collecting live greenlets
