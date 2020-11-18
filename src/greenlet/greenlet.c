@@ -1652,9 +1652,10 @@ static PyNumberMethods green_as_number = {
 };
 
 PyTypeObject PyGreenlet_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0) "greenlet.greenlet", /* tp_name */
-    sizeof(PyGreenlet),                                 /* tp_basicsize */
-    0,                                                  /* tp_itemsize */
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "greenlet.greenlet", /* tp_name */
+    sizeof(PyGreenlet),  /* tp_basicsize */
+    0,                   /* tp_itemsize */
     /* methods */
     (destructor)green_dealloc, /* tp_dealloc */
     0,                         /* tp_print */

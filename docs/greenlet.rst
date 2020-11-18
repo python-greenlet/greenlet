@@ -236,6 +236,21 @@ contains an independent "main" greenlet with a tree of sub-greenlets. It
 is not possible to mix or switch between greenlets belonging to different
 threads.
 
+.. doctest::
+
+   >>> from greenlet import getcurrent
+   >>> from threading import Thread
+   >>> main = getcurrent()
+   >>> def run():
+   ...      try:
+   ...          main.switch()
+   ...      except greenlet.error as e:
+   ...          print(e)
+   >>> t = Thread(target=run)
+   >>> t.start()
+   cannot switch to a different thread
+   >>> t.join()
+
 Garbage-collecting live greenlets
 =================================
 
@@ -250,10 +265,95 @@ greenlets are infinite loops waiting for data and processing it. Such
 loops are automatically interrupted when the last reference to the
 greenlet goes away.
 
+.. doctest::
+
+   >>> from greenlet import getcurrent, greenlet, GreenletExit
+   >>> def run():
+   ...     print("Beginning greenlet")
+   ...     try:
+   ...         while 1:
+   ...             print("Switching to parent")
+   ...             getcurrent().parent.switch()
+   ...     except GreenletExit:
+   ...          print("Got GreenletExit; quitting")
+
+   >>> glet = greenlet(run)
+   >>> _ = glet.switch()
+   Beginning greenlet
+   Switching to parent
+   >>> glet = None
+   Got GreenletExit; quitting
+
 The greenlet is expected to either die or be resurrected by having a
 new reference to it stored somewhere; just catching and ignoring the
 `GreenletExit` is likely to lead to an infinite loop.
 
-Greenlets do not participate in garbage collection; cycles involving data
-that is present in a greenlet's frames will not be detected. Storing
-references to other greenlets cyclically may lead to leaks.
+Greenlets participate in garbage collection in a limited fashion;
+cycles involving data that is present in a greenlet's frames may not
+be detected. Storing references to other greenlets cyclically may lead
+to leaks.
+
+Here, we define a function that creates a cycle; when we run it and
+then collect garbage, the cycle is found and cleared, even while the
+function is running.
+
+.. note:: These examples require Python 3 to run; Python 2 won't
+          collect cycles if the ``__del__`` method is defined.
+
+.. doctest::
+   :pyversion: >= 3.5
+
+   >>> import gc
+   >>> class Cycle(object):
+   ...    def __del__(self):
+   ...         print("(Running finalizer)")
+
+   >>> def collect_it():
+   ...      print("Collecting garbage")
+   ...      gc.collect()
+   >>> def run(collect=collect_it):
+   ...      cycle1 = Cycle()
+   ...      cycle2 = Cycle()
+   ...      cycle1.cycle = cycle2
+   ...      cycle2.cycle = cycle1
+   ...      print("Deleting cycle vars")
+   ...      del cycle1
+   ...      del cycle2
+   ...      collect()
+   ...      print("Returning")
+   >>> run()
+   Deleting cycle vars
+   Collecting garbage
+   (Running finalizer)
+   (Running finalizer)
+   Returning
+
+If we use the same function in a greenlet, the cycle is also found
+while the greenlet is active:
+
+.. doctest::
+   :pyversion: >= 3.5
+
+   >>> glet = greenlet(run)
+   >>> _ = glet.switch()
+   Deleting cycle vars
+   Collecting garbage
+   (Running finalizer)
+   (Running finalizer)
+   Returning
+
+If we tweak the function to return control to a different
+greenlet (the main greenlet) and then run garbage collection, the
+cycle is also found:
+
+.. doctest::
+   :pyversion: >= 3.5
+
+   >>> glet = greenlet(run)
+   >>> _ = glet.switch(getcurrent().switch)
+   Deleting cycle vars
+   >>> collect_it()
+   Collecting garbage
+   (Running finalizer)
+   (Running finalizer)
+   >>> del glet
