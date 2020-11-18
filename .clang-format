@@ -1,0 +1,29 @@
+# A clang-format style that approximates Python's PEP 7  -*- mode: yaml; -*-
+# Initially based on
+# https://gist.github.com/pganssle/0e3a5f828b4d07d79447f6ced8e7e4db
+BasedOnStyle: Google
+Language: Cpp
+
+AlignAfterOpenBracket: Align
+AllowShortBlocksOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: All
+
+BinPackArguments: false
+BreakBeforeBraces: Stroustrup
+BreakBeforeTernaryOperators: true
+
+ColumnLimit: 79
+DerivePointerAlignment: false
+
+IndentWidth: 4
+IndentPPDirectives: AfterHash
+
+
+PointerAlignment: Left
+ReflowComments: true
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+TabWidth: 4
+UseTab: Never
