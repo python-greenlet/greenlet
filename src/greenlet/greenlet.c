@@ -84,13 +84,10 @@ The running greenlet's stack_start is undefined but not NULL.
 
 extern PyTypeObject PyGreenlet_Type;
 
-/* Defines that customize greenlet module behaviour */
-#ifndef GREENLET_USE_GC
-#define GREENLET_USE_GC 1
-#endif
-
-#ifndef GREENLET_USE_TRACING
-#define GREENLET_USE_TRACING 1
+#if PY_VERSION_HEX >= 0x030700A3
+# define GREENLET_PY37 1
+#else
+# define GREENLET_PY37 0
 #endif
 
 #ifndef Py_SET_REFCNT
@@ -127,35 +124,24 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
 
 static PyObject* ts_curkey;
 static PyObject* ts_delkey;
-#if GREENLET_USE_TRACING
 static PyObject* ts_tracekey;
 static PyObject* ts_event_switch;
 static PyObject* ts_event_throw;
-#endif
 static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
 static PyObject* ts_empty_tuple;
 static PyObject* ts_empty_dict;
 
-#if GREENLET_USE_GC
 #define GREENLET_GC_FLAGS Py_TPFLAGS_HAVE_GC
 #define GREENLET_tp_alloc PyType_GenericAlloc
 #define GREENLET_tp_free PyObject_GC_Del
 #define GREENLET_tp_traverse green_traverse
 #define GREENLET_tp_clear green_clear
 #define GREENLET_tp_is_gc green_is_gc
-#else /* GREENLET_USE_GC */
-#define GREENLET_GC_FLAGS 0
-#define GREENLET_tp_alloc 0
-#define GREENLET_tp_free 0
-#define GREENLET_tp_traverse 0
-#define GREENLET_tp_clear 0
-#define GREENLET_tp_is_gc 0
-#endif /* !GREENLET_USE_GC */
 
 static void green_clear_exc(PyGreenlet* g)
 {
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 	g->exc_info = NULL;
 	g->exc_state.exc_type = NULL;
 	g->exc_state.exc_value = NULL;
@@ -475,10 +461,10 @@ static int g_switchstack(void)
 		PyThreadState* tstate = PyThreadState_GET();
 		current->recursion_depth = tstate->recursion_depth;
 		current->top_frame = tstate->frame;
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 		current->context = tstate->context;
 #endif
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 		current->exc_info = tstate->exc_info;
 		current->exc_state = tstate->exc_state;
 #else
@@ -491,7 +477,7 @@ static int g_switchstack(void)
 	if (err < 0) {   /* error */
 		PyGreenlet* current = ts_current;
 		current->top_frame = NULL;
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 		green_clear_exc(current);
 #else
 		current->exc_type = NULL;
@@ -510,7 +496,7 @@ static int g_switchstack(void)
 		tstate->frame = target->top_frame;
 		target->top_frame = NULL;
 
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 		tstate->context = target->context;
 		target->context = NULL;
 		/* Incrementing this value invalidates the contextvars cache,
@@ -518,7 +504,7 @@ static int g_switchstack(void)
 		tstate->context_ver++;
 #endif
 
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 		tstate->exc_state = target->exc_state;
 		tstate->exc_info = target->exc_info ? target->exc_info : &tstate->exc_state;
 #else
@@ -537,7 +523,7 @@ static int g_switchstack(void)
 	return err;
 }
 
-#if GREENLET_USE_TRACING
+
 static int
 g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin, PyGreenlet* target)
 {
@@ -566,7 +552,7 @@ g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin, PyGreenlet
 	PyErr_Restore(exc_type, exc_val, exc_tb);
 	return 0;
 }
-#endif
+
 
 static PyObject *
 g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
@@ -630,13 +616,11 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 		Py_CLEAR(args);
 	} else {
 		PyGreenlet *origin;
-#if GREENLET_USE_TRACING
 		PyGreenlet *current;
 		PyObject *tracefunc;
-#endif
 		origin = ts_origin;
 		ts_origin = NULL;
-#if GREENLET_USE_TRACING
+
 		current = ts_current;
 		if ((tracefunc = PyDict_GetItem(current->run_info, ts_tracekey)) != NULL) {
 			Py_INCREF(tracefunc);
@@ -647,7 +631,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 			}
 			Py_DECREF(tracefunc);
 		}
-#endif
+
 		Py_DECREF(origin);
 	}
 
@@ -797,9 +781,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 	if (err == 1) {
 		/* in the new greenlet */
 		PyGreenlet* origin;
-#if GREENLET_USE_TRACING
 		PyObject* tracefunc;
-#endif
 		PyObject* result;
 		PyGreenlet* parent;
 		self->stack_start = (char*) 1;  /* running */
@@ -814,7 +796,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 		Py_INCREF(self->run_info);
 		Py_XDECREF(o);
 
-#if GREENLET_USE_TRACING
+
 		if ((tracefunc = PyDict_GetItem(self->run_info, ts_tracekey)) != NULL) {
 			Py_INCREF(tracefunc);
 			if (g_calltrace(tracefunc, args ? ts_event_switch : ts_event_throw, origin, self) < 0) {
@@ -824,7 +806,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 			}
 			Py_DECREF(tracefunc);
 		}
-#endif
+
 		Py_DECREF(origin);
 
 		if (args == NULL) {
@@ -949,7 +931,7 @@ static int kill_greenlet(PyGreenlet* self)
 	}
 }
 
-#if GREENLET_USE_GC
+
 static int
 green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 {
@@ -959,10 +941,10 @@ green_traverse(PyGreenlet *self, visitproc visit, void *arg)
 	   - frames are not visited: alive greenlets are not garbage collected anyway */
 	Py_VISIT((PyObject*)self->parent);
 	Py_VISIT(self->run_info);
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 	Py_VISIT(self->context);
 #endif
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 	Py_VISIT(self->exc_state.exc_type);
 	Py_VISIT(self->exc_state.exc_value);
 	Py_VISIT(self->exc_state.exc_traceback);
@@ -994,10 +976,10 @@ static int green_clear(PyGreenlet* self)
 	   so even if it switches we are relatively safe. */
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 	Py_CLEAR(self->context);
 #endif
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 	Py_CLEAR(self->exc_state.exc_type);
 	Py_CLEAR(self->exc_state.exc_value);
 	Py_CLEAR(self->exc_state.exc_traceback);
@@ -1009,16 +991,14 @@ static int green_clear(PyGreenlet* self)
 	Py_CLEAR(self->dict);
 	return 0;
 }
-#endif
+
 
 static void green_dealloc(PyGreenlet* self)
 {
 	PyObject *error_type, *error_value, *error_traceback;
 	Py_ssize_t refcnt;
 
-#if GREENLET_USE_GC
 	PyObject_GC_UnTrack(self);
-#endif
 
 	if (PyGreenlet_ACTIVE(self) && self->run_info != NULL && !PyGreenlet_MAIN(self)) {
 		/* Hacks hacks hacks copied from instance_dealloc() */
@@ -1060,9 +1040,9 @@ static void green_dealloc(PyGreenlet* self)
 			/* Resurrected! */
 			_Py_NewReference((PyObject*) self);
 			Py_SET_REFCNT(self, refcnt);
-#if GREENLET_USE_GC
+
 			PyObject_GC_Track((PyObject *)self);
-#endif
+
 			_Py_DEC_REFTOTAL;
 #ifdef COUNT_ALLOCS
 			--Py_TYPE(self)->tp_frees;
@@ -1075,10 +1055,10 @@ static void green_dealloc(PyGreenlet* self)
 		PyObject_ClearWeakRefs((PyObject *) self);
 	Py_CLEAR(self->parent);
 	Py_CLEAR(self->run_info);
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 	Py_CLEAR(self->context);
 #endif
-#ifdef GREENLET_USE_EXC_INFO
+#if GREENLET_PY37
 	Py_CLEAR(self->exc_state.exc_type);
 	Py_CLEAR(self->exc_state.exc_value);
 	Py_CLEAR(self->exc_state.exc_traceback);
@@ -1088,7 +1068,7 @@ static void green_dealloc(PyGreenlet* self)
 	Py_CLEAR(self->exc_traceback);
 #endif
 	Py_CLEAR(self->dict);
-	Py_TYPE(self)->tp_free((PyObject*) self);
+	Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static PyObject* single_result(PyObject* results)
@@ -1360,7 +1340,7 @@ static int green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 
 static PyObject* green_getcontext(PyGreenlet* self, void* c)
 {
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 	PyThreadState* tstate = PyThreadState_GET();
 	PyObject* result;
 
@@ -1399,7 +1379,7 @@ static PyObject* green_getcontext(PyGreenlet* self, void* c)
 
 static int green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 {
-#if GREENLET_USE_CONTEXT_VARS
+#if GREENLET_PY37
 	PyThreadState* tstate;
 	PyObject* octx = NULL;
 	if (!STATE_OK) {
@@ -1674,7 +1654,7 @@ static PyObject* mod_getcurrent(PyObject* self)
 	return (PyObject*) ts_current;
 }
 
-#if GREENLET_USE_TRACING
+
 PyDoc_STRVAR(mod_settrace_doc,
 "settrace(callback) -> object\n"
 "\n"
@@ -1721,14 +1701,12 @@ static PyObject* mod_gettrace(PyObject* self)
 	Py_INCREF(tracefunc);
 	return tracefunc;
 }
-#endif
+
 
 static PyMethodDef GreenMethods[] = {
 	{"getcurrent", (PyCFunction)mod_getcurrent, METH_NOARGS, mod_getcurrent_doc},
-#if GREENLET_USE_TRACING
 	{"settrace", (PyCFunction)mod_settrace, METH_VARARGS, mod_settrace_doc},
 	{"gettrace", (PyCFunction)mod_gettrace, METH_NOARGS, mod_gettrace_doc},
-#endif
 	{NULL,     NULL}        /* Sentinel */
 };
 
@@ -1736,10 +1714,8 @@ static char* copy_on_greentype[] = {
 	"getcurrent",
 	"error",
 	"GreenletExit",
-#if GREENLET_USE_TRACING
 	"settrace",
 	"gettrace",
-#endif
 	NULL
 };
 
@@ -1781,22 +1757,17 @@ init_greenlet(void)
 	}
 
 #if PY_MAJOR_VERSION >= 3
-	ts_curkey = PyUnicode_InternFromString("__greenlet_ts_curkey");
-	ts_delkey = PyUnicode_InternFromString("__greenlet_ts_delkey");
-#if GREENLET_USE_TRACING
-	ts_tracekey = PyUnicode_InternFromString("__greenlet_ts_tracekey");
-	ts_event_switch = PyUnicode_InternFromString("switch");
-	ts_event_throw = PyUnicode_InternFromString("throw");
-#endif
+# define Greenlet_Intern PyUnicode_InternFromString
 #else
-	ts_curkey = PyString_InternFromString("__greenlet_ts_curkey");
-	ts_delkey = PyString_InternFromString("__greenlet_ts_delkey");
-#if GREENLET_USE_TRACING
-	ts_tracekey = PyString_InternFromString("__greenlet_ts_tracekey");
-	ts_event_switch = PyString_InternFromString("switch");
-	ts_event_throw = PyString_InternFromString("throw");
+# define Greenlet_Intern PyString_InternFromString
 #endif
-#endif
+	ts_curkey = Greenlet_Intern("__greenlet_ts_curkey");
+	ts_delkey = Greenlet_Intern("__greenlet_ts_delkey");
+	ts_tracekey = Greenlet_Intern("__greenlet_ts_tracekey");
+	ts_event_switch = Greenlet_Intern("switch");
+	ts_event_throw = Greenlet_Intern("throw");
+#undef Greenlet_Intern
+
 	if (ts_curkey == NULL || ts_delkey == NULL)
 	{
 		INITERROR;
@@ -1841,9 +1812,13 @@ init_greenlet(void)
 	PyModule_AddObject(m, "error", PyExc_GreenletError);
 	Py_INCREF(PyExc_GreenletExit);
 	PyModule_AddObject(m, "GreenletExit", PyExc_GreenletExit);
-	PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(GREENLET_USE_GC));
-	PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(GREENLET_USE_TRACING));
-	PyModule_AddObject(m, "GREENLET_USE_CONTEXT_VARS", PyBool_FromLong(GREENLET_USE_CONTEXT_VARS));
+
+	PyModule_AddObject(m, "GREENLET_USE_GC",
+                           PyBool_FromLong(1));
+	PyModule_AddObject(m, "GREENLET_USE_TRACING",
+                           PyBool_FromLong(1));
+	PyModule_AddObject(m, "GREENLET_USE_CONTEXT_VARS",
+                           PyBool_FromLong(GREENLET_PY37));
 
 	/* also publish module-level data as attributes of the greentype. */
 	/* XXX: Why? */
