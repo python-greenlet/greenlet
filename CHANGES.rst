@@ -41,6 +41,9 @@
   alter that at compile time have been removed (no combination other
   than the defaults was ever tested). This helps define a
   stable ABI.
+- The repr of greenlet objects now includes extra information about
+  its state. This is purely informative and the details are subject to
+  change. See `issue 215 <https://github.com/python-greenlet/greenlet/issues/215>`_.
 
 
 0.4.17 (2020-09-22)

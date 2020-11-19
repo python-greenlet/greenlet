@@ -3,14 +3,9 @@ import sys
 import time
 import threading
 import unittest
+from abc import ABCMeta, abstractmethod
 
 from greenlet import greenlet
-
-try:
-    from abc import ABCMeta, abstractmethod
-except ImportError:
-    ABCMeta = None
-    abstractmethod = None
 
 
 class SomeError(Exception):
@@ -469,22 +464,22 @@ class GreenletTests(unittest.TestCase):
             g = greenlet(switchapply)
             self.assertEqual(g.switch(), kwargs)
 
-    if ABCMeta is not None and abstractmethod is not None:
-        def test_abstract_subclasses(self):
-            AbstractSubclass = ABCMeta(
-                'AbstractSubclass',
-                (greenlet,),
-                {'run': abstractmethod(lambda self: None)})
 
-            class BadSubclass(AbstractSubclass):
+    def test_abstract_subclasses(self):
+        AbstractSubclass = ABCMeta(
+            'AbstractSubclass',
+            (greenlet,),
+            {'run': abstractmethod(lambda self: None)})
+
+        class BadSubclass(AbstractSubclass):
+            pass
+
+        class GoodSubclass(AbstractSubclass):
+            def run(self):
                 pass
 
-            class GoodSubclass(AbstractSubclass):
-                def run(self):
-                    pass
-
-            GoodSubclass() # should not raise
-            self.assertRaises(TypeError, BadSubclass)
+        GoodSubclass() # should not raise
+        self.assertRaises(TypeError, BadSubclass)
 
     def test_implicit_parent_with_threads(self):
         if not gc.isenabled():
@@ -540,3 +535,61 @@ class GreenletTests(unittest.TestCase):
         for i in range(5):
             if attempt():
                 break
+
+class TestRepr(unittest.TestCase):
+
+    def assertEndsWith(self, got, suffix):
+        self.assertTrue(got.endswith(suffix), (got, suffix))
+
+    def test_main_while_running(self):
+        r = repr(greenlet.getcurrent())
+        self.assertEndsWith(r, " current active started main>")
+
+    def test_main_in_background(self):
+        main = greenlet.getcurrent()
+        def run():
+            return repr(main)
+
+        g = greenlet(run)
+        r = g.switch()
+        self.assertEndsWith(r, ' suspended active started main>')
+
+    def test_initial(self):
+        r = repr(greenlet())
+        self.assertEndsWith(r, ' pending>')
+
+    def test_main_from_other_thread(self):
+        main = greenlet.getcurrent()
+
+        class T(threading.Thread):
+            original_main = thread_main = None
+            main_glet = None
+            def run(self):
+                self.original_main = repr(main)
+                self.main_glet = greenlet.getcurrent()
+                self.thread_main = repr(self.main_glet)
+
+        t = T()
+        t.start()
+        t.join(10)
+
+        self.assertEndsWith(t.original_main, ' suspended active started main>')
+        self.assertEndsWith(t.thread_main, ' current active started main>')
+
+        r = repr(t.main_glet)
+        # main greenlets, even from dead threads, never really appear dead
+        # TODO: Can we find a better way to differentiate that?
+        assert not t.main_glet.dead
+        self.assertEndsWith(r, ' suspended active started main>')
+
+
+    def test_dead(self):
+        g = greenlet(lambda: None)
+        g.switch()
+        self.assertEndsWith(repr(g), ' dead>')
+        self.assertNotIn('suspended', repr(g))
+        self.assertNotIn('started', repr(g))
+        self.assertNotIn('active', repr(g))
+
+if __name__ == '__main__':
+    unittest.main()
