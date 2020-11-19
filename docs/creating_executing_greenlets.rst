@@ -1,6 +1,9 @@
-==========================================================
- Creating And Executing Greenlets: The Greenlet Lifecycle
-==========================================================
+==================================
+ Creating And Executing Greenlets
+==================================
+
+.. This document is a mess. It's a cross between how-to and API
+   reference.
 
 .. currentmodule:: greenlet
 
@@ -50,6 +53,11 @@ The ``run`` attribute is deleted at that time.
    ...
    AttributeError: run
 
+.. _subclassing_greenlet:
+
+Subclassing greenlet
+====================
+
 You can also subclass :class:`greenlet.greenlet` and define ``run`` as
 a method. This is useful to store additional state with the greenlet.
 
@@ -71,13 +79,16 @@ a method. This is useful to store additional state with the greenlet.
 
 See :ref:`switching` for more information about switching into greenlets.
 
+.. _changing_the_parent:
+
 Changing The Parent
 ===================
 
-When a greenlet finishes, execution resumes with its parent. This
-defaults to the current greenlet when the object was instantiated, but
-can be changed either at that time or any time later. To set it at
-creation time, pass the desired parent as the second argument:
+When a greenlet finishes, :ref:`execution resumes with its parent
+<greenlet_parents>`. This defaults to the current greenlet when the
+object was instantiated, but can be changed either at that time or any
+time later. To set it at creation time, pass the desired parent as the
+second argument:
 
 .. doctest::
 
@@ -91,7 +102,7 @@ creation time, pass the desired parent as the second argument:
    In the child.
    In the parent.
 
-To change it later, assign to the :attr:`greenlet.parent` attribute.
+To change it later, assign to the ``greenlet.parent`` attribute.
 
 .. doctest::
 

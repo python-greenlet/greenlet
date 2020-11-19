@@ -24,7 +24,7 @@ Greenlets
 
       Switches execution to this greenlet. See :ref:`switching`.
 
-   .. automethod:: throw([typ, [val, [tb]]])
+   .. automethod:: throw
 
    .. autoattribute:: dead
 
