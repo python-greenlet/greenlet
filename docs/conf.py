@@ -32,6 +32,7 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
+    'sphinx.ext.extlinks',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
  ]
@@ -267,3 +268,10 @@ autodoc_default_options = {
 }
 autodoc_member_order = 'bysource'
 autoclass_content = 'both'
+
+extlinks = {
+    'issue': ('https://github.com/python-greenlet/greenlet/issues/%s',
+              'issue #'),
+    'pr': ('https://github.com/python-greenlet/greenlet/pull/%s',
+           'pull request #')
+}

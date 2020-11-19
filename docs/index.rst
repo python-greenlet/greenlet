@@ -53,6 +53,7 @@
       contextvars
       greenlet_gc
       tracing
+      caveats
 
 .. rubric:: What are greenlets?
 
