@@ -2,7 +2,7 @@
  Changes
 =========
 
-1.0.0 (unreleased)
+1.0a1 (2020-11-20)
 ==================
 
 - Add the ability to set a greenlet's PEP 567 contextvars context
