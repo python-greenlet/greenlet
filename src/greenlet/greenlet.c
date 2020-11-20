@@ -1301,10 +1301,17 @@ green_setdict(PyGreenlet* self, PyObject* val, void* c)
     return 0;
 }
 
+static int
+_green_not_dead(PyGreenlet* self)
+{
+    return PyGreenlet_ACTIVE(self) || !PyGreenlet_STARTED(self);
+}
+
+
 static PyObject*
 green_getdead(PyGreenlet* self, void* c)
 {
-    if (PyGreenlet_ACTIVE(self) || !PyGreenlet_STARTED(self)) {
+    if (_green_not_dead(self)) {
         Py_RETURN_FALSE;
     }
     else {
@@ -1512,6 +1519,50 @@ green_getstate(PyGreenlet* self)
     return NULL;
 }
 
+static PyObject*
+green_repr(PyGreenlet* self)
+{
+    /*
+      Return a string like
+      <greenlet.greenlet at 0xdeadbeef [current][active started]|dead main>
+
+      The handling of greenlets across threads is not super good.
+      We mostly use the internal definitions of these terms, but they
+      generally should make sense to users as well.
+     */
+    PyObject* result;
+    int never_started = !PyGreenlet_STARTED(self) && !PyGreenlet_ACTIVE(self);
+
+    if (!STATE_OK) {
+        return NULL;
+    }
+
+    if (_green_not_dead(self)) {
+        result = PyUnicode_FromFormat(
+            "<%s object at %p (otid=%p)%s%s%s%s>",
+            Py_TYPE(self)->tp_name,
+            self,
+            self->run_info,
+            ts_current == self
+                ? " current"
+                : (PyGreenlet_STARTED(self) ? " suspended" : ""),
+            PyGreenlet_ACTIVE(self) ? " active" : "",
+            never_started ? " pending" : " started",
+            PyGreenlet_MAIN(self) ? " main" : ""
+        );
+    }
+    else {
+        /* main greenlets never really appear dead. */
+        result = PyUnicode_FromFormat(
+            "<%s object at %p (otid=%p) dead>",
+            Py_TYPE(self)->tp_name,
+            self,
+            self->run_info
+            );
+    }
+    return result;
+}
+
 /*****************************************************************************
  * C interface
  *
@@ -1662,7 +1713,7 @@ PyTypeObject PyGreenlet_Type = {
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
     0,                         /* tp_compare */
-    0,                         /* tp_repr */
+    (reprfunc)green_repr,      /* tp_repr */
     &green_as_number,          /* tp_as _number*/
     0,                         /* tp_as _sequence*/
     0,                         /* tp_as _mapping*/
