@@ -17,39 +17,51 @@
   async environment that became more challenging in 0.4.17. Thanks to
   Joshua Oreman, Mike bayer, and Fantix King, among others. See `PR
   198 <https://github.com/python-greenlet/greenlet/pull/198/>`_.
-- (Packaging) Require setuptools to build from source.
-- (Packaging) Stop asking setuptools to build both .tar.gz and .zip
-  sdists. PyPI has standardized on .tar.gz for all platforms.
-- (Packaging) Stop using a custom distutils command to build
-  extensions. distutils is deprecated.
-- (Packaging) Remove the ability to use the deprecated command
-  ``python setup.py test``. Run greenlet tests with your favorite
-  unittest-compatible test runner, e.g., ``python -m unittest discover
-  greenlet.tests``. See `issue 185 <https://github.com/python-greenlet/greenlet/issues/185>`_.
-- (Packaging) The directory layout and resulting sdists have changed.
-  See `issue 184
-  <https://github.com/python-greenlet/greenlet/issues/184>`_.
+
+- The repr of greenlet objects now includes extra information about
+  its state. This is purely informative and the details are subject to
+  change. See `issue 215 <https://github.com/python-greenlet/greenlet/issues/215>`_.
+
 - The ``greenlet`` module is now a package. There are no API changes,
   so all existing imports, including from C code, should continue to
   work.
+
+- (C API) The undocumented ``GREENLET_VERSION`` macro that defined a string
+  giving the greenlet version is now deprecated and will not be updated.
+
 - (Documentation) Publish the change log to https://greenlet.readthedocs.io
+
+Supported Platforms
+-------------------
+
 - Drop support for Python 2.4, 2.5, 2.6, 3.0, 3.1, 3.2 and 3.4.
   The project metadata now includes the ``python_requires`` data to
   help installation tools understand supported versions.
 - Add partial support for AIX ppc64 and IBM i. Thanks to Jesse
   Gorzinski and Kevin Adler. See `PR 197
   <https://github.com/python-greenlet/greenlet/pull/197>`_.
-- (C API) The undocumented ``GREENLET_VERSION`` macro that defined a string
-  giving the greenlet version is now deprecated and will not be updated.
+
+Packaging Changes
+-----------------
+
+- Require setuptools to build from source.
+- Stop asking setuptools to build both .tar.gz and .zip
+  sdists. PyPI has standardized on .tar.gz for all platforms.
+- Stop using a custom distutils command to build
+  extensions. distutils is deprecated.
+- Remove the ability to use the deprecated command
+  ``python setup.py test``. Run greenlet tests with your favorite
+  unittest-compatible test runner, e.g., ``python -m unittest discover
+  greenlet.tests``. See `issue 185 <https://github.com/python-greenlet/greenlet/issues/185>`_.
+- The directory layout and resulting sdists have changed.
+  See `issue 184
+  <https://github.com/python-greenlet/greenlet/issues/184>`_.
 - greenlet is now always built with support for tracing and garbage
   collection, and, on Python 3.7 and above, support for context
-  variables. The internal and undocumented C preprocessor macros that could be used to
-  alter that at compile time have been removed (no combination other
-  than the defaults was ever tested). This helps define a
-  stable ABI.
-- The repr of greenlet objects now includes extra information about
-  its state. This is purely informative and the details are subject to
-  change. See `issue 215 <https://github.com/python-greenlet/greenlet/issues/215>`_.
+  variables. The internal and undocumented C preprocessor macros that
+  could be used to alter that at compile time have been removed (no
+  combination other than the defaults was ever tested). This helps
+  define a stable ABI.
 
 
 0.4.17 (2020-09-22)
