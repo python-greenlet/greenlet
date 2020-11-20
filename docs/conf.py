@@ -58,7 +58,7 @@ copyright = u'2011, Armin Rigo, Christian Tismer'
 # built documents.
 #
 # The short X.Y version.
-version = '%s.%s' % tuple(map(int, rqmt.version.split('.')[:2]))
+version = '1.0'
 # The full version, including alpha/beta/rc tags.
 release = rqmt.version
 
