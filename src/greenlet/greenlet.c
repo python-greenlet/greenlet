@@ -1537,8 +1537,14 @@ green_repr(PyGreenlet* self)
         return NULL;
     }
 
+#if PY_MAJOR_VERSION >= 3
+# define GNative_FromFormat PyUnicode_FromFormat
+#else
+# define GNative_FromFormat PyString_FromFormat
+#endif
+
     if (_green_not_dead(self)) {
-        result = PyUnicode_FromFormat(
+        result = GNative_FromFormat(
             "<%s object at %p (otid=%p)%s%s%s%s>",
             Py_TYPE(self)->tp_name,
             self,
@@ -1553,13 +1559,15 @@ green_repr(PyGreenlet* self)
     }
     else {
         /* main greenlets never really appear dead. */
-        result = PyUnicode_FromFormat(
+        result = GNative_FromFormat(
             "<%s object at %p (otid=%p) dead>",
             Py_TYPE(self)->tp_name,
             self,
             self->run_info
             );
     }
+#undef GNative_FromFormat
+
     return result;
 }
 

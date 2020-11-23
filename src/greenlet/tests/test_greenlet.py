@@ -48,9 +48,13 @@ class GreenletTests(unittest.TestCase):
 
     def test_parent_equals_None(self):
         g = greenlet(parent=None)
+        self.assertIsNotNone(g)
+        self.assertIs(g.parent, greenlet.getcurrent())
 
     def test_run_equals_None(self):
         g = greenlet(run=None)
+        self.assertIsNotNone(g)
+        self.assertIsNone(g.run)
 
     def test_two_children(self):
         lst = []
@@ -172,7 +176,7 @@ class GreenletTests(unittest.TestCase):
 
     def test_frame(self):
         def f1():
-            f = sys._getframe(0)
+            f = sys._getframe(0) # pylint:disable=protected-access
             self.assertEqual(f.f_back, None)
             greenlet.getcurrent().parent.switch(f)
             return "meaning of life"
@@ -180,9 +184,10 @@ class GreenletTests(unittest.TestCase):
         frame = g.switch()
         self.assertTrue(frame is g.gr_frame)
         self.assertTrue(g)
-        next = g.switch()
+
+        from_g = g.switch()
         self.assertFalse(g)
-        self.assertEqual(next, 'meaning of life')
+        self.assertEqual(from_g, 'meaning of life')
         self.assertEqual(g.gr_frame, None)
 
     def test_thread_bug(self):
@@ -197,17 +202,19 @@ class GreenletTests(unittest.TestCase):
         t2.join()
 
     def test_switch_kwargs(self):
-        def foo(a, b):
+        def run(a, b):
             self.assertEqual(a, 4)
             self.assertEqual(b, 2)
-        greenlet(foo).switch(a=4, b=2)
+            return 42
+        x = greenlet(run).switch(a=4, b=2)
+        self.assertEqual(x, 42)
 
     def test_switch_kwargs_to_parent(self):
-        def foo(x):
+        def run(x):
             greenlet.getcurrent().parent.switch(x=x)
             greenlet.getcurrent().parent.switch(2, x=3)
             return x, x ** 2
-        g = greenlet(foo)
+        g = greenlet(run)
         self.assertEqual({'x': 3}, g.switch(3))
         self.assertEqual(((2,), {'x': 3}), g.switch())
         self.assertEqual((3, 9), g.switch())
@@ -218,18 +225,18 @@ class GreenletTests(unittest.TestCase):
         created_event = threading.Event()
         done_event = threading.Event()
 
-        def foo():
+        def run():
             data['g'] = greenlet(lambda: None)
             created_event.set()
             done_event.wait()
-        thread = threading.Thread(target=foo)
+        thread = threading.Thread(target=run)
         thread.start()
         created_event.wait()
         try:
             data['g'].switch()
         except greenlet.error:
             error = sys.exc_info()[1]
-        self.assertTrue(error != None, "greenlet.error was not raised!")
+        self.assertIsNotNone(error, "greenlet.error was not raised!")
         done_event.set()
         thread.join()
 
@@ -237,7 +244,7 @@ class GreenletTests(unittest.TestCase):
         def f():
             try:
                 raise ValueError('fun')
-            except:
+            except: # pylint:disable=bare-except
                 exc_info = sys.exc_info()
                 greenlet(h).switch()
                 self.assertEqual(exc_info, sys.exc_info())
@@ -269,7 +276,7 @@ class GreenletTests(unittest.TestCase):
         created_event = threading.Event()
         done_event = threading.Event()
 
-        def foo():
+        def run():
             data['g'] = greenlet(lambda: None)
             created_event.set()
             done_event.wait()
@@ -280,7 +287,7 @@ class GreenletTests(unittest.TestCase):
         def setparent(g, value):
             g.parent = value
 
-        thread = threading.Thread(target=foo)
+        thread = threading.Thread(target=run)
         thread.start()
         created_event.wait()
         g = greenlet(blank)
@@ -327,7 +334,7 @@ class GreenletTests(unittest.TestCase):
             def __getattribute__(self, name):
                 try:
                     raise Exception()
-                except:
+                except: # pylint:disable=bare-except
                     pass
                 return greenlet.__getattribute__(self, name)
         g = mygreenlet(lambda: None)
@@ -374,7 +381,7 @@ class GreenletTests(unittest.TestCase):
         class convoluted(greenlet):
             def __getattribute__(self, name):
                 if name == 'run':
-                    self.parent = another[0]
+                    self.parent = another[0] # pylint:disable=attribute-defined-outside-init
                 return greenlet.__getattribute__(self, name)
         g = convoluted(lambda: None)
         self.assertRaises(greenlet.error, g.switch)
@@ -450,20 +457,26 @@ class GreenletTests(unittest.TestCase):
         self.assertTrue(seen)
         self.assertEqual(value, 42)
 
-    if sys.version_info[0] == 2:
-        # There's no apply in Python 3.x
-        def test_tuple_subclass(self):
-            class mytuple(tuple):
-                def __len__(self):
-                    greenlet.getcurrent().switch()
-                    return tuple.__len__(self)
-            args = mytuple()
-            kwargs = dict(a=42)
-            def switchapply():
-                apply(greenlet.getcurrent().parent.switch, args, kwargs)
-            g = greenlet(switchapply)
-            self.assertEqual(g.switch(), kwargs)
 
+
+    def test_tuple_subclass(self):
+        if sys.version_info[0] > 2:
+            # There's no apply in Python 3.x
+            def _apply(func, a, k):
+                func(*a, **k)
+        else:
+            _apply = apply # pylint:disable=undefined-variable
+
+        class mytuple(tuple):
+            def __len__(self):
+                greenlet.getcurrent().switch()
+                return tuple.__len__(self)
+        args = mytuple()
+        kwargs = dict(a=42)
+        def switchapply():
+            _apply(greenlet.getcurrent().parent.switch, args, kwargs)
+        g = greenlet(switchapply)
+        self.assertEqual(g.switch(), kwargs)
 
     def test_abstract_subclasses(self):
         AbstractSubclass = ABCMeta(
@@ -512,7 +525,7 @@ class GreenletTests(unittest.TestCase):
             x = range(N*2)
             current = greenlet.getcurrent()
             g = garbage()
-            for i in x:
+            for _ in x:
                 g = None # lose reference to garbage
                 if recycled[0]:
                     # gc callback called prematurely
@@ -532,7 +545,7 @@ class GreenletTests(unittest.TestCase):
             for g in l:
                 self.assertEqual(g.parent, current)
             return True
-        for i in range(5):
+        for _ in range(5):
             if attempt():
                 break
 
@@ -582,7 +595,6 @@ class TestRepr(unittest.TestCase):
         assert not t.main_glet.dead
         self.assertEndsWith(r, ' suspended active started main>')
 
-
     def test_dead(self):
         g = greenlet(lambda: None)
         g.switch()
@@ -590,6 +602,26 @@ class TestRepr(unittest.TestCase):
         self.assertNotIn('suspended', repr(g))
         self.assertNotIn('started', repr(g))
         self.assertNotIn('active', repr(g))
+
+    def test_formatting_produces_native_str(self):
+        # https://github.com/python-greenlet/greenlet/issues/218
+        # %s formatting on Python 2 was producing unicode, not str.
+
+        g_dead = greenlet(lambda: None)
+        g_not_started = greenlet(lambda: None)
+        g_cur = greenlet.getcurrent()
+
+        for g in g_dead, g_not_started, g_cur:
+
+            self.assertIsInstance(
+                '%s' % (g,),
+                str
+            )
+            self.assertIsInstance(
+                '%r' % (g,),
+                str,
+            )
+
 
 if __name__ == '__main__':
     unittest.main()
