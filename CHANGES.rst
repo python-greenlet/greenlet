@@ -5,7 +5,10 @@
 1.0a2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix %s and %r formatting of a greenlet on Python 2. Previously it
+  would result in a Unicode string instead of a native string. See
+  `issue 218
+  <https://github.com/python-greenlet/greenlet/issues/218>`_.
 
 
 1.0a1 (2020-11-20)
