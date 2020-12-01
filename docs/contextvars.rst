@@ -5,7 +5,7 @@
 .. versionadded:: 1.0.0
 
 On Python versions (3.7 and above) that natively support context
-variables as defined in :pep:`525`, each greenlet runs by default in
+variables as defined in :pep:`567`, each greenlet runs by default in
 its own :class:`contextvars.Context`, enabling
 :class:`~contextvars.ContextVar`\s to be used for "greenlet-local
 storage". (If you need to support earlier Python versions, you can use
