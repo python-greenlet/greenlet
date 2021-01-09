@@ -97,7 +97,7 @@ greenlets. This can eliminate race conditions and greatly simplify the
 programming task.
 
 Also, threads require resources from the operating system (the thread
-stack, and bookeeping in the kernel). Because greenlets are
+stack, and bookkeeping in the kernel). Because greenlets are
 implemented entirely without involving the operating system, they can
 require fewer resources; it is often practical to have many more
 greenlets than it is threads.
