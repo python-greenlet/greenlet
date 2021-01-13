@@ -2,7 +2,7 @@
  Changes
 =========
 
-1.0a2 (unreleased)
+1.0.0 (2021-01-13)
 ==================
 
 - Fix %s and %r formatting of a greenlet on Python 2. Previously it
