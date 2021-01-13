@@ -1,7 +1,7 @@
 .. This file is included into docs/history.rst
 
-.. image:: https://secure.travis-ci.org/python-greenlet/greenlet.png
-   :target: http://travis-ci.org/python-greenlet/greenlet
+.. image:: https://github.com/python-greenlet/greenlet/workflows/tests/badge.svg
+   :target: https://github.com/python-greenlet/greenlet/actions
 
 Greenlets are lightweight coroutines for in-process concurrent
 programming.

@@ -33,6 +33,8 @@ recursive-include appveyor *.cmd
 recursive-include appveyor *.ps1
 recursive-include appveyor *.py
 
+recursive-include .github *.yml
+
 include AUTHORS
 include LICENSE
 include LICENSE.PSF

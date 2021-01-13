@@ -1,0 +1,117 @@
+name: tests
+
+on: [push, pull_request]
+
+env:
+  PYTHONHASHSEED: 1042466059
+  ZOPE_INTERFACE_STRICT_IRO: 1
+  PYTHONUNBUFFERED: 1
+  PYTHONDONTWRITEBYTECODE: 1
+  PIP_UPGRADE_STRATEGY: eager
+  # Don't get warnings about Python 2 support being deprecated. We
+  # know. The env var works for pip 20.
+  PIP_NO_PYTHON_VERSION_WARNING: 1
+  PIP_NO_WARN_SCRIPT_LOCATION: 1
+  # Uploading built wheels for releases.
+  # TWINE_PASSWORD is encrypted and stored directly in the
+  # repo settings.
+  TWINE_USERNAME: __token__
+
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9]
+        os: [ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Pip cache
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.*') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Install dependencies
+      run: |
+        python -m pip install -U pip setuptools wheel
+        python -m pip install -U twine
+    - name: Install greenlet
+      run: |
+        python setup.py bdist_wheel
+        python -m pip install -U -e ".[test,docs]"
+    - name: Check greenlet build
+      run: |
+        ls -l dist
+        twine check dist/*
+    - name: Store greenlet wheel
+      uses: actions/upload-artifact@v2
+      with:
+        name: greenlet-${{ runner.os }}-${{ matrix.python-version }}.whl
+        path: dist/*whl
+    - name: Test
+      run: |
+        python -m unittest discover -v greenlet.tests
+        sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
+    - name: Publish package to PyPI (mac)
+      # We cannot 'uses: pypa/gh-action-pypi-publish@v1.4.1' because
+      # that's apparently a container action, and those don't run on
+      # the Mac.
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags') && startsWith(runner.os, 'Mac')
+      env:
+        TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+      run: |
+        twine upload --skip-existing dist/*
+
+
+  manylinux:
+
+    runs-on: ubuntu-latest
+    # We use a regular Python matrix entry to share as much code as possible.
+    strategy:
+      matrix:
+        python-version: [3.9]
+        image: [manylinux2010_x86_64, manylinux2014_aarch64, manylinux2014_ppc64le]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Enable emulation
+        run: |
+          docker run --rm --privileged hypriot/qemu-register
+        # This one was seen in pyca/bcrypt. What's the difference?
+        # (Other than this one not working.)
+        #run: |
+        #  docker run --rm --privileged multiarch/qemu-user-static:register --reset
+      - name: Build and test greenlet
+        # An alternate way to do this is to run the container directly with a uses:
+        # and then the script runs inside it. That may work better with caching.
+        # See https://github.com/pyca/bcrypt/blob/f6b5ee2eda76d077c531362ac65e16f045cf1f29/.github/workflows/wheel-builder.yml
+        # The 2010 image is the last one that comes with Python 2.7.
+        env:
+          DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
+        run: bash ./make-manylinux
+      - name: Store greenlet wheels
+        uses: actions/upload-artifact@v2
+        with:
+          path: wheelhouse/*whl
+          name: ${{ matrix.image }}_wheels.zip
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.4.1
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        with:
+          user: __token__
+          password: ${{ secrets.TWINE_PASSWORD }}
+          skip_existing: true
+          packages_dir: wheelhouse/
