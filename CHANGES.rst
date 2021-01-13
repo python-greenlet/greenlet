@@ -10,6 +10,8 @@
   `issue 218
   <https://github.com/python-greenlet/greenlet/issues/218>`_.
 
+- Move continuous integration from Travis CI to Github Actions.
+
 
 1.0a1 (2020-11-20)
 ==================
