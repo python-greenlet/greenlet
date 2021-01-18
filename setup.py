@@ -114,7 +114,7 @@ setup(
     url="https://greenlet.readthedocs.io/",
     project_urls={
         'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
-        'Source Code': 'https://github.com/python-greenlet/gevent/',
+        'Source Code': 'https://github.com/python-greenlet/greenlet/',
         'Documentation': 'https://greenlet.readthedocs.io/',
     },
     license="MIT License",
