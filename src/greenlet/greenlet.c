@@ -567,10 +567,10 @@ g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin,
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
     tstate = PyThreadState_GET();
     tstate->tracing++;
-    tstate->use_tracing = 0;
+    tstate->cframe->use_tracing = 0;
     retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
     tstate->tracing--;
-    tstate->use_tracing =
+    tstate->cframe->use_tracing =
         (tstate->tracing <= 0 &&
          ((tstate->c_tracefunc != NULL) || (tstate->c_profilefunc != NULL)));
     if (retval == NULL) {
