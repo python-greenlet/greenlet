@@ -96,6 +96,16 @@ extern PyTypeObject PyGreenlet_Type;
 #    define GREENLET_PY37 0
 #endif
 
+#if PY_VERSION_HEX >= 0x30A00B1
+/*
+Python 3.10 beta 1 changed tstate->use_tracing to a nested cframe member.
+See https://github.com/python/cpython/pull/25276
+*/
+#define TSTATE_USE_TRACING(tstate) (tstate->cframe->use_tracing)
+#else
+#define TSTATE_USE_TRACING(tstate) (tstate->use_tracing)
+#endif
+
 #ifndef Py_SET_REFCNT
 /* Py_REFCNT and Py_SIZE macros are converted to functions
 https://bugs.python.org/issue39573 */
@@ -567,10 +577,10 @@ g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin,
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
     tstate = PyThreadState_GET();
     tstate->tracing++;
-    tstate->use_tracing = 0;
+    TSTATE_USE_TRACING(tstate) = 0;
     retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
     tstate->tracing--;
-    tstate->use_tracing =
+    TSTATE_USE_TRACING(tstate) =
         (tstate->tracing <= 0 &&
          ((tstate->c_tracefunc != NULL) || (tstate->c_profilefunc != NULL)));
     if (retval == NULL) {

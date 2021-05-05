@@ -2,10 +2,11 @@
  Changes
 =========
 
-1.0.1 (unreleased)
+1.1.0 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Add support for Python 3.10. Pre-built binary wheels are not
+  currently available for 3.10.
 
 
 1.0.0 (2021-01-13)
