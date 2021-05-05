@@ -100,10 +100,13 @@ extern PyTypeObject PyGreenlet_Type;
 /*
 Python 3.10 beta 1 changed tstate->use_tracing to a nested cframe member.
 See https://github.com/python/cpython/pull/25276
+We have to save and restore this as well.
 */
 #define TSTATE_USE_TRACING(tstate) (tstate->cframe->use_tracing)
+#define GREENLET_USE_CFRAME 1
 #else
 #define TSTATE_USE_TRACING(tstate) (tstate->use_tracing)
+#define GREENLET_USE_CFRAME 0
 #endif
 
 #ifndef Py_SET_REFCNT
@@ -515,6 +518,9 @@ g_switchstack(void)
         current->exc_value = tstate->exc_value;
         current->exc_traceback = tstate->exc_traceback;
 #endif
+#if GREENLET_USE_CFRAME
+        current->cframe = tstate->cframe;
+#endif
     }
     err = slp_switch();
     if (err < 0) { /* error */
@@ -557,6 +563,10 @@ g_switchstack(void)
         tstate->exc_traceback = target->exc_traceback;
 #endif
         green_clear_exc(target);
+
+#if GREENLET_USE_CFRAME
+        tstate->cframe = target->cframe;
+#endif
 
         assert(ts_origin == NULL);
         Py_INCREF(target);
@@ -907,6 +917,9 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
         }
         Py_INCREF(ts_current);
         ((PyGreenlet*)o)->parent = ts_current;
+#if GREENLET_USE_CFRAME
+        ((PyGreenlet*)o)->cframe = &PyThreadState_GET()->root_cframe;
+#endif
     }
     return o;
 }
@@ -1611,8 +1624,9 @@ PyGreenlet_SetParent(PyGreenlet* g, PyGreenlet* nparent)
 static PyGreenlet*
 PyGreenlet_New(PyObject* run, PyGreenlet* parent)
 {
+    /* XXX: Why doesn't this call green_new()? There's some duplicate
+     code. */
     PyGreenlet* g = NULL;
-
     g = (PyGreenlet*)PyType_GenericAlloc(&PyGreenlet_Type, 0);
     if (g == NULL) {
         return NULL;
@@ -1635,7 +1649,9 @@ PyGreenlet_New(PyObject* run, PyGreenlet* parent)
             return NULL;
         }
     }
-
+#if GREENLET_USE_CFRAME
+    g->cframe = &PyThreadState_GET()->root_cframe;
+#endif
     return g;
 }
 

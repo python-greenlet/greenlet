@@ -72,3 +72,6 @@ class CAPITests(unittest.TestCase):
             str(seen[0]),
             'take that sucka!',
             "message doesn't match")
+
+if __name__ == '__main__':
+    unittest.main()
