@@ -5,8 +5,12 @@
 1.1.0 (unreleased)
 ==================
 
-- Add support for Python 3.10. Pre-built binary wheels are not
-  currently available for 3.10.
+- Add support for Python 3.10. Pre-built binary wheels for 3.10 are
+  not currently available for all platforms. The greenlet ABI is
+  different on Python 3.10 from all previous versions, but as 3.10 was
+  never supported before, and the ABI has not changed on other Python
+  versions, this is not considered a reason to change greenlet's major
+  version.
 
 
 1.0.0 (2021-01-13)
