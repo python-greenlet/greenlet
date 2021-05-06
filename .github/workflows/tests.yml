@@ -23,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9]
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.0-beta.1]
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v2
@@ -77,7 +77,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.9]
-        image: [manylinux2010_x86_64, manylinux2014_aarch64, manylinux2014_ppc64le]
+        image: [manylinux2010_x86_64, manylinux2014_aarch64, manylinux2014_ppc64le, manylinux2014_x86_64]
 
     steps:
       - name: checkout
@@ -95,10 +95,17 @@ jobs:
         #run: |
         #  docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build and test greenlet
+        if: matrix.image == 'manylinux2010_x86_64'
         # An alternate way to do this is to run the container directly with a uses:
         # and then the script runs inside it. That may work better with caching.
         # See https://github.com/pyca/bcrypt/blob/f6b5ee2eda76d077c531362ac65e16f045cf1f29/.github/workflows/wheel-builder.yml
-        # The 2010 image is the last one that comes with Python 2.7.
+        # The 2010 image is the last one that comes with Python 2.7,
+        # and only up through the tag 2021-02-06-3d322a5
+        env:
+          DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}:2021-02-06-3d322a5
+        run: bash ./make-manylinux
+      - name: Build and test greenlet (other)
+        if: matrix.image != 'manylinux2010_x86_64'
         env:
           DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
         run: bash ./make-manylinux
