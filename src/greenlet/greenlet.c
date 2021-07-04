@@ -1116,6 +1116,14 @@ green_dealloc(PyGreenlet* self)
             /* Resurrected! */
             _Py_NewReference((PyObject*)self);
             Py_SET_REFCNT(self, refcnt);
+            /* Better to use tp_finalizer slot (PEP 442) and call PyObject_CallFinalizerFromDealloc,
+             * but that's only supported in Python 3.4+.
+             * The following is copied from iobase.py in CPython 2.7.
+             * When called from a heap type's dealloc, the type will be
+             * decref'ed on return (see e.g. subtype_dealloc in typeobject.c). */
+            if (PyType_HasFeature(Py_TYPE(self), Py_TPFLAGS_HEAPTYPE)) {
+                Py_INCREF(Py_TYPE(self));
+            }
 
             PyObject_GC_Track((PyObject*)self);
 
