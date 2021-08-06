@@ -5,7 +5,10 @@
 1.1.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Provide Windows binary wheels for Python 3.10 (64-bit only).
+
+- Update Python 3.10 wheels to be built against 3.10rc1, where
+  applicable.
 
 
 1.1.0 (2021-05-06)
