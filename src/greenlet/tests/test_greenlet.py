@@ -563,6 +563,7 @@ class TestGreenlet(unittest.TestCase):
         class Greenlet(greenlet):
             pass
 
+        initial_refs = sys.getrefcount(Greenlet)
         # This has to be an instance variable because
         # Python 2 raises a SyntaxError if we delete a local
         # variable referenced in an inner scope.
@@ -579,6 +580,7 @@ class TestGreenlet(unittest.TestCase):
             Greenlet(greenlet_main).switch()
 
         del self.glets
+        self.assertEqual(sys.getrefcount(Greenlet), initial_refs)
 
     def test_issue_245_reference_counting_subclass_threads(self):
         # https://github.com/python-greenlet/greenlet/issues/245
@@ -624,9 +626,10 @@ class TestGreenlet(unittest.TestCase):
         # On Python 3.10 it's often enough to just run 3 threads; on Python 2.7,
         # more threads are needed, and the results are still
         # non-deterministic. Presumably the memory layouts are different
+        initial_refs = sys.getrefcount(MyGreenlet)
         thread_ready_events = []
         for _ in range(
-                sys.getrefcount(MyGreenlet) + 45
+                initial_refs + 45
         ):
             event = Event()
             thread = Thread(target=thread_main, args=(event,))
@@ -640,9 +643,11 @@ class TestGreenlet(unittest.TestCase):
 
         del glets[:]
         ref_cleared.set()
-        # Let any other thread run; it will crash the interpreter. A
-        time.sleep(3)
-
+        # Let any other thread run; it will crash the interpreter
+        # if not fixed (or silently corrupt memory and we possibly crash
+        # later).
+        time.sleep(1)
+        self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
 
 
 class TestRepr(unittest.TestCase):
