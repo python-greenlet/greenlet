@@ -23,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.0-beta.1]
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.0-rc.1]
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v2
@@ -58,6 +58,11 @@ jobs:
     - name: Test
       run: |
         python -m unittest discover -v greenlet.tests
+    - name: Doctest
+      # FIXME: This conditional can go away when a Sphinx greater than 4.1.2
+      # is released. See https://github.com/sphinx-doc/sphinx/issues/9512
+      if: matrix.python-version != '3.10.0-rc.1'
+      run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
     - name: Publish package to PyPI (mac)
       # We cannot 'uses: pypa/gh-action-pypi-publish@v1.4.1' because
