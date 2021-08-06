@@ -19,6 +19,7 @@ environment:
     CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\appveyor\\run_with_env.cmd"
     # Use a fixed hash seed for reproducability
     PYTHONHASHSEED: 8675309
+    PYTHONDEVMODE: 1
     # Don't get warnings about Python 2 support being deprecated. We
     # know.
     PIP_NO_PYTHON_VERSION_WARNING: 1
