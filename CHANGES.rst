@@ -2,7 +2,7 @@
  Changes
 =========
 
-1.1.1 (unreleased)
+1.1.1 (2021-08-06)
 ==================
 
 - Provide Windows binary wheels for Python 3.10 (64-bit only).
