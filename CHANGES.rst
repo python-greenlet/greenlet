@@ -5,7 +5,12 @@
 1.1.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix a potential crash due to a reference counting error when Python
+  subclasses of ``greenlet.greenlet`` were deallocated. The crash
+  became more common on Python 3.10; on earlier versions, silent
+  memory corruption could result. See `issue 245
+  <https://github.com/python-greenlet/greenlet/issues/245>`_. Patch by
+  fygao-wish.
 
 
 1.1.1 (2021-08-06)

@@ -7,6 +7,8 @@ from abc import ABCMeta, abstractmethod
 
 from greenlet import greenlet
 
+# We manually manage locks in many tests
+# pylint:disable=consider-using-with
 
 class SomeError(Exception):
     pass
@@ -30,7 +32,7 @@ def send_exception(g, exc):
     g1.switch(exc)
 
 
-class GreenletTests(unittest.TestCase):
+class TestGreenlet(unittest.TestCase):
     def test_simple(self):
         lst = []
 
@@ -548,6 +550,105 @@ class GreenletTests(unittest.TestCase):
         for _ in range(5):
             if attempt():
                 break
+
+    def test_issue_245_reference_counting_subclass_no_threads(self):
+        # https://github.com/python-greenlet/greenlet/issues/245
+        # Before the fix, this crashed pretty reliably on
+        # Python 3.10, at least on macOS; but much less reliably on other
+        # interpreters (memory layout must have changed).
+        # The threaded test crashed more reliably on more interpreters.
+        from greenlet import getcurrent
+        from greenlet import GreenletExit
+
+        class Greenlet(greenlet):
+            pass
+
+        initial_refs = sys.getrefcount(Greenlet)
+        # This has to be an instance variable because
+        # Python 2 raises a SyntaxError if we delete a local
+        # variable referenced in an inner scope.
+        self.glets = [] # pylint:disable=attribute-defined-outside-init
+
+        def greenlet_main():
+            try:
+                getcurrent().parent.switch()
+            except GreenletExit:
+                self.glets.append(getcurrent())
+
+        # Before the
+        for _ in range(10):
+            Greenlet(greenlet_main).switch()
+
+        del self.glets
+        self.assertEqual(sys.getrefcount(Greenlet), initial_refs)
+
+    def test_issue_245_reference_counting_subclass_threads(self):
+        # https://github.com/python-greenlet/greenlet/issues/245
+        from threading import Thread
+        from threading import Event
+
+        from greenlet import getcurrent
+
+        class MyGreenlet(greenlet):
+            pass
+
+        glets = []
+        ref_cleared = Event()
+
+        def greenlet_main():
+            getcurrent().parent.switch()
+
+        def thread_main(greenlet_running_event):
+            mine = MyGreenlet(greenlet_main)
+            glets.append(mine)
+            # The greenlets being deleted must be active
+            mine.switch()
+            # Don't keep any reference to it in this thread
+            del mine
+            # Let main know we published our greenlet.
+            greenlet_running_event.set()
+            # Wait for main to let us know the references are
+            # gone and the greenlet objects no longer reachable
+            ref_cleared.wait()
+            # The creating thread must call getcurrent() (or a few other
+            # greenlet APIs) because that's when the thread-local list of dead
+            # greenlets gets cleared.
+            getcurrent()
+
+        # We start with 3 references to the subclass:
+        # - This module
+        # - Its __mro__
+        # - The __subclassess__ attribute of greenlet
+        # - (If we call gc.get_referents(), we find four entries, including
+        #   some other tuple ``(greenlet)`` that I'm not sure about but must be part
+        #   of the machinery.)
+        #
+        # On Python 3.10 it's often enough to just run 3 threads; on Python 2.7,
+        # more threads are needed, and the results are still
+        # non-deterministic. Presumably the memory layouts are different
+        initial_refs = sys.getrefcount(MyGreenlet)
+        thread_ready_events = []
+        for _ in range(
+                initial_refs + 45
+        ):
+            event = Event()
+            thread = Thread(target=thread_main, args=(event,))
+            thread_ready_events.append(event)
+            thread.start()
+
+
+        for done_event in thread_ready_events:
+            done_event.wait()
+
+
+        del glets[:]
+        ref_cleared.set()
+        # Let any other thread run; it will crash the interpreter
+        # if not fixed (or silently corrupt memory and we possibly crash
+        # later).
+        time.sleep(1)
+        self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
+
 
 class TestRepr(unittest.TestCase):
 
