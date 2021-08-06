@@ -166,7 +166,8 @@ build_script:
 
 test_script:
   - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests"
-  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
+# XXX: Doctest disabled pending sphinx release for 3.10; see tests.yml.
+#  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 
 after_test:
   - "%CMD_IN_ENV% python setup.py bdist_wheel"
