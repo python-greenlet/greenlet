@@ -86,7 +86,7 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
-    def test_issue251_killing_cross_thread_leaks_list(self):
+    def test_issue251_killing_cross_thread_leaks_list(self, manually_collect_background=True):
         # See https://github.com/python-greenlet/greenlet/issues/251
         # Killing a greenlet (probably not the main one)
         # in one thread from another thread would
@@ -96,7 +96,7 @@ class TestLeaks(unittest.TestCase):
         # GC
         assert gc.is_tracked([])
 
-        def count_lists():
+        def count_objects(kind=list):
             # pylint:disable=unidiomatic-typecheck
             # Collect the garbage.
             for _ in range(3):
@@ -105,8 +105,14 @@ class TestLeaks(unittest.TestCase):
             return sum(
                 1
                 for x in gc.get_objects()
-                if type(x) is list
+                if type(x) is kind
             )
+
+        # XXX: The main greenlet of a dead thread is only released
+        # when one of the proper greenlet APIs is used from a different
+        # running thread. See #252 (https://github.com/python-greenlet/greenlet/issues/252)
+        greenlet.getcurrent()
+        greenlets_before = count_objects(greenlet.greenlet)
 
         background_glet_running = threading.Event()
         background_glet_killed = threading.Event()
@@ -123,16 +129,18 @@ class TestLeaks(unittest.TestCase):
             del glet # Delete one reference from the thread it runs in.
             background_glet_running.set()
             background_glet_killed.wait()
-            # To trigger the background collection of the dead greenlet,
-            # we need to run some APIs. See issue 252.
-            greenlet.getcurrent()
+            # To trigger the background collection of the dead
+            # greenlet, thus clearing out the contents of the list, we
+            # need to run some APIs. See issue 252.
+            if manually_collect_background:
+                greenlet.getcurrent()
 
 
         t = threading.Thread(target=background_thread)
         t.start()
         background_glet_running.wait()
 
-        lists_before = count_lists()
+        lists_before = count_objects()
 
         assert len(background_greenlets) == 1
         self.assertFalse(background_greenlets[0].dead)
@@ -144,6 +152,27 @@ class TestLeaks(unittest.TestCase):
 
         # Now wait for the background thread to die.
         t.join(10)
+        del t
 
-        lists_after = count_lists()
-        self.assertEqual(lists_before, lists_after)
+        # Free the background main greenlet by forcing greenlet to notice a difference.
+        greenlet.getcurrent()
+        greenlets_after = count_objects(greenlet.greenlet)
+
+        lists_after = count_objects()
+        # On 2.7, we observe that lists_after is smaller than
+        # lists_before. No idea what lists got cleaned up. All the
+        # Python 3 versions match exactly.
+        self.assertLessEqual(lists_after, lists_before)
+
+        self.assertEqual(greenlets_before, greenlets_after)
+
+    @unittest.expectedFailure
+    def test_issue251_issue252_need_to_collect_in_background(self):
+        # This still fails because the leak of the list
+        # still exists when we don't call a greenlet API before exiting the
+        # thread. The proximate cause is that neither of the two greenlets
+        # from the background thread are actually being destroyed, even though
+        # the GC is in fact visiting both objects.
+        # It's not clear where that leak is? For some reason the thread-local dict
+        # holding it isn't being cleaned up.
+        self.test_issue251_killing_cross_thread_leaks_list(manually_collect_background=False)
