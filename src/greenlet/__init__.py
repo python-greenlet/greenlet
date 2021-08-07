@@ -48,7 +48,8 @@ try:
     from ._greenlet import settrace
 except ImportError:
     # Tracing wasn't supported.
-    # TODO: Remove the option to disable it.
+    # XXX: The option to disable it was removed in 1.0,
+    # so this branch should be dead code.
     pass
 
 ###
