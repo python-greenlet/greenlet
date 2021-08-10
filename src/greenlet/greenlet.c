@@ -254,6 +254,11 @@ green_updatecurrent_retry:
        it stores them in the thread dict; delete them now. */
     deleteme = PyDict_GetItem(tstate->dict, ts_delkey);
     if (deleteme != NULL) {
+        /* The only reference to these greenlets should be in this list, so
+           clearing the list should let them be deleted again, triggering
+           calls to green_dealloc() in the correct thread. This may run
+           arbitrary Python code?
+         */
         PyList_SetSlice(deleteme, 0, INT_MAX, NULL);
     }
 
@@ -267,7 +272,6 @@ green_updatecurrent_retry:
 
     /* release an extra reference */
     Py_DECREF(current);
-
     /* restore current exception */
     PyErr_Restore(exc, val, tb);
 
@@ -276,7 +280,6 @@ green_updatecurrent_retry:
     if (ts_current->run_info != tstate->dict) {
         goto green_updatecurrent_restart;
     }
-
     return 0;
 }
 
@@ -988,10 +991,16 @@ kill_greenlet(PyGreenlet* self)
         lst = PyDict_GetItem(self->run_info, ts_delkey);
         if (lst == NULL) {
             lst = PyList_New(0);
-            if (lst == NULL ||
-                PyDict_SetItem(self->run_info, ts_delkey, lst) < 0) {
+            if (lst == NULL
+                || PyDict_SetItem(self->run_info, ts_delkey, lst) < 0) {
                 return -1;
             }
+            /* PyDict_SetItem now holds a strong reference. PyList_New also
+               returned a fresh reference. We need to DECREF it now and let
+               the dictionary keep sole ownership. Frow now on, we're working
+               with a borrowed reference that will go away when the thread
+               dies. */
+            Py_DECREF(lst);
         }
         if (PyList_Append(lst, (PyObject*)self) < 0) {
             return -1;
@@ -1581,6 +1590,13 @@ green_repr(PyGreenlet* self)
 #endif
 
     if (_green_not_dead(self)) {
+        /* XXX: The otid= is almost useless becasue you can't correlate it to
+         any thread identifier exposed to Python. We could use
+         PyThreadState_GET()->thread_id, but we'd need to save that in the
+         greenlet, or save the whole PyThreadState object itself.
+
+         As it stands, its only useful for identifying greenlets from the same thread.
+        */
         result = GNative_FromFormat(
             "<%s object at %p (otid=%p)%s%s%s%s>",
             Py_TYPE(self)->tp_name,
