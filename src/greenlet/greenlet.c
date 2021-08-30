@@ -195,6 +195,7 @@ green_create_main(void)
     }
     gmain->stack_start = (char*)1;
     gmain->stack_stop = (char*)-1;
+    /* GetDict() returns a borrowed reference. Make it strong. */
     gmain->run_info = dict;
     Py_INCREF(dict);
     return gmain;
@@ -681,10 +682,8 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
         PyObject* tracefunc;
         origin = ts_origin;
         ts_origin = NULL;
-
         current = ts_current;
-        if ((tracefunc = PyDict_GetItem(current->run_info, ts_tracekey)) !=
-            NULL) {
+        if ((tracefunc = PyDict_GetItem(current->run_info, ts_tracekey)) != NULL) {
             Py_INCREF(tracefunc);
             if (g_calltrace(tracefunc,
                             args ? ts_event_switch : ts_event_throw,
@@ -768,7 +767,15 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     PyGreenlet* self = ts_target;
     PyObject* args = ts_passaround_args;
     PyObject* kwargs = ts_passaround_kwargs;
-
+#if GREENLET_USE_CFRAME
+    /*
+      See green_new(). This is a stack-allocated variable used
+      while *self* is in PyObject_Call().
+      We want to defer copying the state info until we're sure
+      we need it and are in a stable place to do so.
+    */
+    CFrame trace_info;
+#endif
     /* save exception in case getattr clears it */
     PyErr_Fetch(&exc, &val, &tb);
     /* self.run is the object to call in the new greenlet */
@@ -809,6 +816,17 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
         return 1;
     }
 
+#if GREENLET_USE_CFRAME
+    /* OK, we need it, we're about to switch greenlets, save the state. */
+    trace_info = *PyThreadState_GET()->cframe;
+    /* Make the target greenlet refer to the stack value. */
+    self->cframe = &trace_info;
+    /*
+      And restore the link to the previous frame so this one gets
+      unliked appropriately.
+    */
+    self->cframe->previous = &PyThreadState_GET()->root_cframe;
+#endif
     /* start the greenlet */
     self->stack_start = NULL;
     self->stack_stop = (char*)mark;
@@ -832,8 +850,8 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     err = g_switchstack();
 
     /* returns twice!
-       The 1st time with err=1: we are in the new greenlet
-       The 2nd time with err=0: back in the caller's greenlet
+       The 1st time with ``err == 1``: we are in the new greenlet
+       The 2nd time with ``err <= 0``: back in the caller's greenlet
     */
     if (err == 1) {
         /* in the new greenlet */
@@ -853,8 +871,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
         Py_INCREF(self->run_info);
         Py_XDECREF(o);
 
-        if ((tracefunc = PyDict_GetItem(self->run_info, ts_tracekey)) !=
-            NULL) {
+        if ((tracefunc = PyDict_GetItem(self->run_info, ts_tracekey)) != NULL) {
             Py_INCREF(tracefunc);
             if (g_calltrace(tracefunc,
                             args ? ts_event_switch : ts_event_throw,
@@ -921,6 +938,47 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
         Py_INCREF(ts_current);
         ((PyGreenlet*)o)->parent = ts_current;
 #if GREENLET_USE_CFRAME
+        /*
+          The PyThreadState->cframe pointer usually points to memory on the
+          stack, alloceted in a call into PyEval_EvalFrameDefault.
+
+          Initially, before any evaluation begins, it points to the initial
+          PyThreadState object's ``root_cframe`` object, which is statically
+          allocated for the lifetime of the thread.
+
+          A greenlet can last for longer than a call to
+          PyEval_EvalFrameDefault, so we can't set its ``cframe`` pointer to
+          be the current ``PyThreadState->cframe``; nor could we use one from
+          the greenlet parent for the same reason. Yet a further no: we can't
+          allocate one scoped to the greenlet and then destroy it when the
+          greenlet is deallocated, because inside the interpreter the CFrame
+          objects form a linked list, and that too can result in accessing
+          memory beyond its dynamic lifetime (if the greenlet doesn't actually
+          finish before it dies, its entry could still be in the list).
+
+          Using the ``root_cframe`` is problematic, though, because its
+          members are never modified by the interpreter and are set to 0,
+          meaning that its ``use_tracing`` flag is never updated. We don't
+          want to modify that value in the ``root_cframe`` ourself: it
+          *shouldn't* matter much because we should probably never get back to
+          the point where that's the only cframe on the stack; even if it did
+          matter, the major consequence of an incorrect value for
+          ``use_tracing`` is that if its true the interpreter does some extra
+          work --- however, it's just good code hygiene.
+
+          Our solution: before a greenlet runs, after its initial creation,
+          it uses the ``root_cframe`` just to have something to put there.
+          However, once the greenlet is actually switched to for the first
+          time, ``g_initialstub`` (which doesn't actually "return" while the
+          greenlet is running) stores a new CFrame on its local stack, and
+          copies the appropriate values from the currently running CFrame;
+          this is then made the CFrame for the newly-minted greenlet.
+          ``g_initialstub`` then proceeds to call ``glet.run()``, which
+          results in ``PyEval_...`` adding the CFrame to the list. Switches
+          continue as normal. Finally, when the greenlet finishes, the call to
+          ``glet.run()`` returns and the CFrame is taken out of the linked
+          list and the stack value is now unused and free to expire.
+        */
         ((PyGreenlet*)o)->cframe = &PyThreadState_GET()->root_cframe;
 #endif
     }
