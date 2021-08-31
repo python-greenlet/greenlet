@@ -136,6 +136,11 @@ static PyGreenlet* volatile ts_current = NULL;
 static PyObject* volatile ts_passaround_args = NULL;
 static PyObject* volatile ts_passaround_kwargs = NULL;
 
+/* Used internally in ``g_switchstack()`` */
+#if GREENLET_USE_CFRAME
+static int volatile ts__g_switchstack_use_tracing = 0;
+#endif
+
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
 
@@ -485,26 +490,37 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
     return 0;
 }
 
+/**
+   Perform a stack switch according to some global variables
+   that must be set before calling this function. Those variables
+   are:
+
+   - ts_current: current greenlet (holds a reference)
+   - ts_target: greenlet to switch to (weak reference)
+   - ts_passaround_args: NULL if PyErr_Occurred(),
+     else a tuple of args sent to ts_target (holds a reference)
+   - ts_passaround_kwargs: switch kwargs (holds a reference)
+
+   Because the stack switch happens in this function, this function can't use
+   its own stack (local) variables, set before the switch, and then accessed after the
+   switch. Global variables beginning with ``ts__g_switchstack`` are used
+   internally instead.
+
+   On return results are passed via global variables as well:
+
+   - ts_origin: originating greenlet (holds a reference)
+   - ts_current: current greenlet (holds a reference)
+   - ts_passaround_args: NULL if PyErr_Occurred(),
+     else a tuple of args sent to ts_current (holds a reference)
+   - ts_passaround_kwargs: switch kwargs (holds a reference)
+
+   It is very important that stack switch is 'atomic', i.e. no
+   calls into other Python code allowed (except very few that
+   are safe), because global variables are very fragile.
+*/
 static int
 g_switchstack(void)
 {
-    /* Perform a stack switch according to some global variables
-       that must be set before:
-       - ts_current: current greenlet (holds a reference)
-       - ts_target: greenlet to switch to (weak reference)
-       - ts_passaround_args: NULL if PyErr_Occurred(),
-           else a tuple of args sent to ts_target (holds a reference)
-       - ts_passaround_kwargs: switch kwargs (holds a reference)
-       On return results are passed via global variables as well:
-       - ts_origin: originating greenlet (holds a reference)
-       - ts_current: current greenlet (holds a reference)
-       - ts_passaround_args: NULL if PyErr_Occurred(),
-           else a tuple of args sent to ts_current (holds a reference)
-       - ts_passaround_kwargs: switch kwargs (holds a reference)
-       It is very important that stack switch is 'atomic', i.e. no
-       calls into other Python code allowed (except very few that
-       are safe), because global variables are very fragile.
-    */
     int err;
     { /* save state */
         PyGreenlet* current = ts_current;
@@ -523,10 +539,23 @@ g_switchstack(void)
         current->exc_traceback = tstate->exc_traceback;
 #endif
 #if GREENLET_USE_CFRAME
+        /*
+         IMPORTANT: ``cframe`` is a pointer into the STACK.
+         Thus, because the call to ``slp_switch()``
+         changes the contents of the stack, you cannot read from
+         ``ts_current->cframe`` after that call and necessarily
+         get the same values you get from reading it here. Anything
+         you need to restore from now to then must be saved
+         in a global variable (because we can't use stack variables
+         here either).
+         */
         current->cframe = tstate->cframe;
+        ts__g_switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
     }
+
     err = slp_switch();
+
     if (err < 0) { /* error */
         PyGreenlet* current = ts_current;
         current->top_frame = NULL;
@@ -570,6 +599,13 @@ g_switchstack(void)
 
 #if GREENLET_USE_CFRAME
         tstate->cframe = target->cframe;
+        /*
+          If we were tracing, we need to keep tracing.
+          There should never be the possibility of hitting the
+          root_cframe here. See note above about why we can't
+          just copy this from ``origin->cframe->use_tracing``.
+        */
+        tstate->cframe->use_tracing = ts__g_switchstack_use_tracing;
 #endif
 
         assert(ts_origin == NULL);
