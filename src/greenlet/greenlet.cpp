@@ -141,6 +141,16 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
 static int volatile ts__g_switchstack_use_tracing = 0;
 #endif
 
+class _GState {
+public:
+    ~_GState()
+    {
+        fprintf(stderr, "Destructing thread\n");
+    };
+};
+
+static thread_local _GState thing;
+
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
 
@@ -186,6 +196,7 @@ green_create_main(void)
 {
     PyGreenlet* gmain;
     PyObject* dict = PyThreadState_GetDict();
+    fprintf(stderr, "Thing in this thread: %p\n", &thing);
     if (dict == NULL) {
         if (!PyErr_Occurred()) {
             PyErr_NoMemory();
@@ -340,8 +351,8 @@ static int GREENLET_NOINLINE(g_initialstub)(void*);
         } while (0)
 #else
 /* force compiler to call functions via pointers */
-/* XXX: JAM: Debugging. Temp. */
-#error Noinline not supported
+/* XXX: Do we even want/need to support such compilers? This code path
+   is untested on CI. */
 extern "C" {
 static void (*slp_restore_state)(void);
 static int (*slp_save_state)(char*);

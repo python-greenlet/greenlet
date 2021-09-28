@@ -30,6 +30,7 @@
   work as expected. See `issue 256
   <https://github.com/python-greenlet/greenlet/issues/256>`_, reported
   by Joe Rickerby.
+- Drop support for very old versions of GCC and MSVC.
 
 1.1.1 (2021-08-06)
 ==================
