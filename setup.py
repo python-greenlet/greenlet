@@ -22,6 +22,9 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or (sys.platform == "linux" and platform.machine() == "ppc")):
     os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
 
+if (sys.platform == 'darwin'):
+    # The clang compiler doesn't use --std=c++11 by default
+    os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "--std=gnu++11")).lstrip()
 
 def readfile(filename):
     with open(filename, 'r') as f:

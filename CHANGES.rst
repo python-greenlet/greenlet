@@ -31,6 +31,8 @@
   <https://github.com/python-greenlet/greenlet/issues/256>`_, reported
   by Joe Rickerby.
 - Drop support for very old versions of GCC and MSVC.
+- Drop support for Python 2.7 *on Windows only*. The compiler required
+  to build extensions on that platform doesn't support the necessary features.
 
 1.1.1 (2021-08-06)
 ==================
