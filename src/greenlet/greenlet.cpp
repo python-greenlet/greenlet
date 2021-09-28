@@ -314,32 +314,40 @@ green_statedict(PyGreenlet* g)
      own stack frame, leading to incomplete stack save/restore
 */
 
-#if defined(__GNUC__) && \
-    (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4))
+#if defined(__GNUC__) || defined(__clang__)
+/* We used to check for GCC 4+ or 3.4+, but those compilers are
+   laughably out of date. Just assume they support it. */
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __attribute__((noinline)) name
-#elif defined(_MSC_VER) && (_MSC_VER >= 1300)
+#elif defined(_MSC_VER)
+/* We used to check for  && (_MSC_VER >= 1300) but that's also out of date. */
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __declspec(noinline) name
 #endif
 
 #ifdef GREENLET_NOINLINE_SUPPORTED
 /* add forward declarations */
+extern "C" {
 static void GREENLET_NOINLINE(slp_restore_state)(void);
 static int GREENLET_NOINLINE(slp_save_state)(char*);
 #    if !(defined(MS_WIN64) && defined(_M_X64))
 static int GREENLET_NOINLINE(slp_switch)(void);
 #    endif
 static int GREENLET_NOINLINE(g_initialstub)(void*);
+};
 #    define GREENLET_NOINLINE_INIT() \
         do {                         \
         } while (0)
 #else
 /* force compiler to call functions via pointers */
+/* XXX: JAM: Debugging. Temp. */
+#error Noinline not supported
+extern "C" {
 static void (*slp_restore_state)(void);
 static int (*slp_save_state)(char*);
 static int (*slp_switch)(void);
 static int (*g_initialstub)(void*);
+};
 #    define GREENLET_NOINLINE(name) cannot_inline_##name
 #    define GREENLET_NOINLINE_INIT()                                  \
         do {                                                          \
@@ -380,7 +388,7 @@ static int (*g_initialstub)(void*);
  * The token include file for the given platform should enable the
  * EXTERNAL_ASM define so that this is included.
  */
-
+extern "C" {
 intptr_t
 slp_save_state_asm(intptr_t* ref)
 {
@@ -397,7 +405,7 @@ slp_restore_state_asm(void)
 
 extern int
 slp_switch(void);
-
+};
 #endif
 
 /***********************************************************/
@@ -1031,9 +1039,14 @@ green_init(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
     PyObject* run = NULL;
     PyObject* nparent = NULL;
-    static char* kwlist[] = {"run", "parent", 0};
+    static const char* const kwlist[] = {
+        "run",
+        "parent",
+        NULL
+    };
+
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "|OO:green", kwlist, &run, &nparent)) {
+            args, kwargs, "|OO:green", (char**)kwlist, &run, &nparent)) {
         return -1;
     }
 
@@ -1092,7 +1105,7 @@ kill_greenlet(PyGreenlet* self)
             /* PyDict_SetItem now holds a strong reference. PyList_New also
                returned a fresh reference. We need to DECREF it now and let
                the dictionary keep sole ownership. Frow now on, we're working
-               with a borrowed reference that will go away when the thread
+               with a borrowed reference that will go away when the thread (dict)
                dies. */
             Py_DECREF(lst);
         }
@@ -1844,6 +1857,11 @@ static PyGetSetDef green_getsets[] = {
     {"_stack_saved", (getter)green_get_stack_saved, NULL, /*XXX*/ NULL},
     {NULL}};
 
+static PyMemberDef green_members[] = {
+    {"_thread_state_dict", T_OBJECT, offsetof(PyGreenlet, run_info), READONLY, NULL},
+    {NULL}
+};
+
 static PyNumberMethods green_as_number = {
     NULL, /* nb_add */
     NULL, /* nb_subtract */
@@ -1895,7 +1913,7 @@ PyTypeObject PyGreenlet_Type = {
     0,                                  /* tp_iter */
     0,                                  /* tp_iternext */
     green_methods,                      /* tp_methods */
-    0,                                  /* tp_members */
+    green_members,                      /* tp_members */
     green_getsets,                      /* tp_getset */
     0,                                  /* tp_base */
     0,                                  /* tp_dict */
@@ -1992,7 +2010,7 @@ static PyMethodDef GreenMethods[] = {
     {NULL, NULL} /* Sentinel */
 };
 
-static char* copy_on_greentype[] = {
+static const char* const copy_on_greentype[] = {
     "getcurrent", "error", "GreenletExit", "settrace", "gettrace", NULL};
 
 #if PY_MAJOR_VERSION >= 3
@@ -2016,7 +2034,7 @@ init_greenlet(void)
 #endif
 {
     PyObject* m = NULL;
-    char** p = NULL;
+    const char* const*  p = NULL;
     PyObject* c_api_object;
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
 

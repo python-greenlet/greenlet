@@ -62,7 +62,8 @@ else:
     ext_modules = [
         Extension(
             name='greenlet._greenlet',
-            sources=[GREENLET_SRC_DIR + 'greenlet.c'],
+            sources=[GREENLET_SRC_DIR + 'greenlet.cpp'],
+            language='c++',
             extra_objects=extra_objects,
             extra_compile_args=extra_compile_args,
             depends=[
