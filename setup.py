@@ -112,6 +112,11 @@ setup(
     long_description=readfile("README.rst"),
     long_description_content_type="text/x-rst",
     url="https://greenlet.readthedocs.io/",
+    keywords="greenlet coroutine concurrency threads cooperative",
+    author="Alexey Borzenkov",
+    author_email="snaury@gmail.com",
+    maintainer='Jason Madden',
+    maintainer_email='jason@nextthought.com',
     project_urls={
         'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
         'Source Code': 'https://github.com/python-greenlet/greenlet/',
@@ -125,6 +130,7 @@ setup(
     headers=headers,
     ext_modules=ext_modules,
     classifiers=[
+        "Development Status :: 5 - Production/Stable",
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
