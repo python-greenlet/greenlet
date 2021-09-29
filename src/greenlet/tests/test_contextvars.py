@@ -1,3 +1,4 @@
+from __future__ import print_function
 import unittest
 import gc
 import sys
@@ -102,14 +103,21 @@ class ContextVarsTests(unittest.TestCase):
         self._new_ctx_run(self._test_context, "share")
 
     def test_break_ctxvars(self):
+        print(file=sys.stderr)
+        print("Creating 1", file=sys.stderr)
         let1 = greenlet(copy_context().run)
+        print("Creating 2", file=sys.stderr)
         let2 = greenlet(copy_context().run)
+        print("Switching to 1", file=sys.stderr)
         let1.switch(getcurrent().switch)
+        print("Switching to 2", file=sys.stderr)
         let2.switch(getcurrent().switch)
         # Since let2 entered the current context and let1 exits its own, the
         # interpreter emits:
         # RuntimeError: cannot exit context: thread state references a different context object
+        print("Switching back to 1", file=sys.stderr)
         let1.switch()
+        print("Done", file=sys.stderr)
 
     def test_not_broken_if_using_attribute_instead_of_context_run(self):
         let1 = greenlet(getcurrent().switch)

@@ -753,11 +753,11 @@ g_switchstack(void)
          ``ts_current->cframe`` after that call and necessarily
          get the same values you get from reading it here. Anything
          you need to restore from now to then must be saved
-         in a global variable (because we can't use stack variables
+         in a global/threadlocal variable (because we can't use stack variables
          here either).
          */
         current->cframe = tstate->cframe;
-        g_thread_state_global.switchstack_use_tracing = tstate->cframe->use_tracing;
+        state.switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
     }
 
