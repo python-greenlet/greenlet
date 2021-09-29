@@ -201,7 +201,9 @@ public:
         switch_kwargs_w(0),
         origin_greenlet_s(0),
         switchstack_use_tracing(0)
-    {};
+    {
+        fprintf(stderr, "Initialized thread state %p\n", this);
+    };
 
     // Only one of these, auto created per thread
     _GThreadState(const _GThreadState& other) = delete;
@@ -209,7 +211,7 @@ public:
 
     ~_GThreadState()
     {
-        //fprintf(stderr, "Destructing thread %p\n", this);
+        fprintf(stderr, "Destructing thread state %p\n", this);
     };
 
     inline PyGreenlet* borrow_current() const
@@ -730,8 +732,8 @@ g_switchstack(void)
 {
 fprintf(stderr, "g_switchstack: enter\n");
     int err;
-    _GThreadState& state = g_thread_state_global;
     { /* save state */
+        _GThreadState& state = g_thread_state_global;
         PyGreenlet* current = state.borrow_current();
         PyThreadState* tstate = PyThreadState_GET();
         current->recursion_depth = tstate->recursion_depth;
@@ -766,6 +768,7 @@ fprintf(stderr, "g_switchstack: mark 1\n");
     err = slp_switch();
 fprintf(stderr, "g_switchstack: mark 2\n");
     if (err < 0) { /* error */
+        _GThreadState& state = g_thread_state_global;
         PyGreenlet* current = state.borrow_current();
         current->top_frame = NULL;
 #if GREENLET_PY37
@@ -782,6 +785,7 @@ fprintf(stderr, "g_switchstack: mark 2\n");
     else {
 fprintf(stderr, "g_switchstack: mark 3\n");
         // XXX: The ownership rules can be simplified here.
+        _GThreadState& state = g_thread_state_global;
         PyGreenlet* target = state.borrow_target();
         PyGreenlet* origin = state.borrow_current();
         PyThreadState* tstate = PyThreadState_GET();
@@ -1814,11 +1818,15 @@ static int
 green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 {
 #if GREENLET_PY37
-    PyThreadState* tstate;
-    PyObject* octx = NULL;
+/* XXX: Should not be necessary, we don't access the current greenlet
+   other than to compare it to ourself and its fine if that's null.
+ */
+/*
     if (!STATE_OK) {
         return -1;
     }
+*/
+fprintf(stderr, "green_setcontext: enter\n");
     if (nctx == NULL) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
         return -1;
@@ -1833,11 +1841,16 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
                         "contextvars.Context or None");
         return -1;
     }
-    tstate = PyThreadState_GET();
+fprintf(stderr, "green_setcontext: mark 1\n");
+    PyThreadState* tstate = PyThreadState_GET();
+    PyObject* octx = NULL;
+
     if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
+        fprintf(stderr, "green_setcontext: mark 2 %p\n", &g_thread_state_global);
         if (g_thread_state_global.is_current(self)) {
+fprintf(stderr, "green_setcontext: mark 3\n");
             octx = tstate->context;
             tstate->context = nctx;
             tstate->context_ver++;
@@ -1851,7 +1864,8 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
         }
     }
     else {
-        /* Greenlet is not running: just set context. */
+        /* Greenlet is not running: just set context. Note that the
+           greenlet may be dead.*/
         octx = self->context;
         self->context = nctx;
         Py_XINCREF(nctx);
