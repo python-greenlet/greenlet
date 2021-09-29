@@ -141,15 +141,58 @@ static PyObject* volatile ts_passaround_kwargs = NULL;
 static int volatile ts__g_switchstack_use_tracing = 0;
 #endif
 
-class _GState {
+/**
+ * Thread-local state of greenlets.
+ *
+ * The first time the static variable of this type is accessed in any
+ * given thread, a new instance is created for that thread. The
+ * instance is destructed automatically when the thread exits.
+ *
+ * Previously, we kept thread-local state mostly in a bunch of
+ * ``static volatile`` variables in this file. This had the problem of
+ * requiring extra checks, loops, and great care accessing these
+ * variables if we potentially invoked any Python code that could
+ * relaese the GIL, because the state could change out from under us.
+ * Making the variables thread-local solves this problem.
+ *
+ * When we detected that a greenlet API accessing the current greenlet
+ * was invoked from a different thread than the greenlet belonged to,
+ * we stored a reference to the greenlet in the Python thread
+ * dictionary for the thread the greenlet belonged to. This could lead
+ * to memory leaks if the thread then exited (because of a reference
+ * cycle, as greenlets referred to the thread dictionary).
+ *
+ * To solve this problem, we need a reliable way to know that a thread
+ * is done and we should clean up. On POSIX, we can use the destructor
+ * function of ``pthread_key_create``, but there's nothing similar on
+ * Windows; a C++11 thread local object reliably invokes its
+ * destructor when the thread it belongs to exits (non-C++11 compilers
+ * offer ``__thread`` or ``declspec(thread)`` to create thread-local
+ * variables, but they can't hold C++ objects that invoke destructors;
+ * the C++11 version is the most portable solution I found). When the
+ * thread exits, we can drop references and otherwise manipulate
+ * greenlets that we know can no longer be switched to. The only
+ * wrinkle is that when the thread exits, it is too late to actually
+ * invoke Python APIs: the Python thread state is gone, and the GIL is
+ * released. To solve *this* problem, our destructor uses
+ * ``Py_InvokePending`` to transfer the destruction work to the main
+ * thread.
+ */
+class _GThreadState {
 public:
-    ~_GState()
+    ~_GThreadState()
     {
         fprintf(stderr, "Destructing thread\n");
     };
 };
 
-static thread_local _GState thing;
+#if defined(_MSC_VER) && _MSC_VER <= 1500
+# define GTHREAD_LOCAL __declspec(thread)
+#else
+# define GTHREAD_LOCAL thread_local
+#endif
+
+static GTHREAD_LOCAL _GThreadState thing;
 
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */

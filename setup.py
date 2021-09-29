@@ -10,6 +10,15 @@ from setuptools import setup
 from setuptools import Extension
 from setuptools import find_packages
 
+# Extra compiler arguments passed to *all* extensions.
+global_compile_args = []
+
+# Extra compiler arguments passed to C++ extensions
+cpp_compile_args = []
+
+# Extra compiler arguments passed to the main extension
+main_compile_args = []
+
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 # https://github.com/python-greenlet/greenlet/issues/4
@@ -20,11 +29,13 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
     or ("SunOS" in platform.platform() and platform.machine() == "sun4v")
     or (sys.platform == "linux" and platform.machine() == "ppc")):
-    os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
+    global_compile_args.append("-Os")
 
-if (sys.platform == 'darwin'):
+
+if sys.platform == 'darwin':
     # The clang compiler doesn't use --std=c++11 by default
-    os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "--std=gnu++11")).lstrip()
+    cpp_compile_args.append("--std=gnu++11")
+
 
 def readfile(filename):
     with open(filename, 'r') as f:
@@ -56,11 +67,9 @@ else:
         extra_objects = []
 
     if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
-        extra_compile_args = ['/MT']
+        main_compile_args.append('/MT')
     elif hasattr(os, 'uname') and os.uname()[4] in ['ppc64el', 'ppc64le']:
-        extra_compile_args = ['-fno-tree-dominator-opts']
-    else:
-        extra_compile_args = []
+        main_compile_args.append('-fno-tree-dominator-opts')
 
     ext_modules = [
         Extension(
@@ -68,7 +77,7 @@ else:
             sources=[GREENLET_SRC_DIR + 'greenlet.cpp'],
             language='c++',
             extra_objects=extra_objects,
-            extra_compile_args=extra_compile_args,
+            extra_compile_args=global_compile_args + main_compile_args + cpp_compile_args,
             depends=[
                 GREENLET_HEADER,
                 GREENLET_SRC_DIR + 'slp_platformselect.h',
@@ -85,7 +94,8 @@ else:
         Extension(
             name='greenlet.tests._test_extension',
             sources=[GREENLET_TEST_DIR + '_test_extension.c'],
-            include_dirs=[GREENLET_HEADER_DIR]
+            include_dirs=[GREENLET_HEADER_DIR],
+            extra_compile_args=global_compile_args,
         ),
     ]
 
@@ -95,7 +105,9 @@ else:
                 name='greenlet.tests._test_extension_cpp',
                 sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
                 language="c++",
-                include_dirs=[GREENLET_HEADER_DIR]),
+                include_dirs=[GREENLET_HEADER_DIR],
+                extra_compile_args=global_compile_args + cpp_compile_args,
+            )
         )
 
 
