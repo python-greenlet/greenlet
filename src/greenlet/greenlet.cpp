@@ -727,6 +727,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
 static int
 g_switchstack(void)
 {
+fprintf(stderr, "g_switchstack: enter\n");
     int err;
     _GThreadState& state = g_thread_state_global;
     { /* save state */
@@ -760,9 +761,9 @@ g_switchstack(void)
         state.switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
     }
-
+fprintf(stderr, "g_switchstack: mark 1\n");
     err = slp_switch();
-
+fprintf(stderr, "g_switchstack: mark 2\n");
     if (err < 0) { /* error */
         PyGreenlet* current = state.borrow_current();
         current->top_frame = NULL;
@@ -778,6 +779,7 @@ g_switchstack(void)
         state.wref_target(NULL);
     }
     else {
+fprintf(stderr, "g_switchstack: mark 3\n");
         // XXX: The ownership rules can be simplified here.
         PyGreenlet* target = state.borrow_target();
         PyGreenlet* origin = state.borrow_current();
@@ -785,7 +787,7 @@ g_switchstack(void)
         tstate->recursion_depth = target->recursion_depth;
         tstate->frame = target->top_frame;
         target->top_frame = NULL;
-
+fprintf(stderr, "g_switchstack: mark 4\n");
 #if GREENLET_PY37
         tstate->context = target->context;
         target->context = NULL;
@@ -804,7 +806,7 @@ g_switchstack(void)
         tstate->exc_traceback = target->exc_traceback;
 #endif
         green_clear_exc(target);
-
+fprintf(stderr, "g_switchstack: mark 5\n");
 #if GREENLET_USE_CFRAME
         tstate->cframe = target->cframe;
         /*
@@ -815,11 +817,12 @@ g_switchstack(void)
         */
         tstate->cframe->use_tracing = state.switchstack_use_tracing;
 #endif
-
+fprintf(stderr, "g_switchstack: mark 6\n");
         assert(state.borrow_origin() == NULL);
         Py_INCREF(target); // XXX: Simplify ownership rules
         state.release_ownership_of_current_and_steal_new_current(target);
         state.steal_ownership_as_origin(origin);
+fprintf(stderr, "g_switchstack: mark 7\n");
         state.wref_target(NULL);
     }
     return err;
