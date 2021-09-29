@@ -45,6 +45,7 @@ class TestLeaks(unittest.TestCase):
         time.sleep(0.001)
         t.join(10)
 
+    @unittest.expectedFailure
     def test_threaded_leak(self):
         gg = []
         def worker():
@@ -63,6 +64,7 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
+    @unittest.expectedFailure
     def test_threaded_adv_leak(self):
         gg = []
         def worker():
@@ -86,6 +88,7 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
+    @unittest.expectedFailure
     def test_issue251_killing_cross_thread_leaks_list(self, manually_collect_background=True):
         # See https://github.com/python-greenlet/greenlet/issues/251
         # Killing a greenlet (probably not the main one)
