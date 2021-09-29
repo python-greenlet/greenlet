@@ -731,10 +731,14 @@ static int
 g_switchstack(void)
 {
 fprintf(stderr, "g_switchstack: enter\n");
+    // Because of the rule above, this is one place we can't
+    // save the reference to g_thread_state_global; we must access it
+    // directly each time.
+    // TODO: The after branches where this matters we could/should
+    // move to a new noinline function.
     int err;
     { /* save state */
-        _GThreadState& state = g_thread_state_global;
-        PyGreenlet* current = state.borrow_current();
+        PyGreenlet* current = g_thread_state_global.borrow_current();
         PyThreadState* tstate = PyThreadState_GET();
         current->recursion_depth = tstate->recursion_depth;
         current->top_frame = tstate->frame;
@@ -761,15 +765,14 @@ fprintf(stderr, "g_switchstack: enter\n");
          here either).
          */
         current->cframe = tstate->cframe;
-        state.switchstack_use_tracing = tstate->cframe->use_tracing;
+        g_thread_state_global.switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
     }
 fprintf(stderr, "g_switchstack: mark 1\n");
     err = slp_switch();
 fprintf(stderr, "g_switchstack: mark 2\n");
     if (err < 0) { /* error */
-        _GThreadState& state = g_thread_state_global;
-        PyGreenlet* current = state.borrow_current();
+        PyGreenlet* current = g_thread_state_global.borrow_current();
         current->top_frame = NULL;
 #if GREENLET_PY37
         green_clear_exc(current);
@@ -779,15 +782,14 @@ fprintf(stderr, "g_switchstack: mark 2\n");
         current->exc_traceback = NULL;
 #endif
 
-        assert(state.borrow_origin() == NULL);
-        state.wref_target(NULL);
+        assert(g_thread_state_global.borrow_origin() == NULL);
+        g_thread_state_global.wref_target(NULL);
     }
     else {
 fprintf(stderr, "g_switchstack: mark 3\n");
         // XXX: The ownership rules can be simplified here.
-        _GThreadState& state = g_thread_state_global;
-        PyGreenlet* target = state.borrow_target();
-        PyGreenlet* origin = state.borrow_current();
+        PyGreenlet* target = g_thread_state_global.borrow_target();
+        PyGreenlet* origin = g_thread_state_global.borrow_current();
         PyThreadState* tstate = PyThreadState_GET();
         tstate->recursion_depth = target->recursion_depth;
         tstate->frame = target->top_frame;
@@ -820,15 +822,15 @@ fprintf(stderr, "g_switchstack: mark 5\n");
           root_cframe here. See note above about why we can't
           just copy this from ``origin->cframe->use_tracing``.
         */
-        tstate->cframe->use_tracing = state.switchstack_use_tracing;
+        tstate->cframe->use_tracing = g_thread_state_global.switchstack_use_tracing;
 #endif
 fprintf(stderr, "g_switchstack: mark 6\n");
-        assert(state.borrow_origin() == NULL);
+        assert(g_thread_state_global.borrow_origin() == NULL);
         Py_INCREF(target); // XXX: Simplify ownership rules
-        state.release_ownership_of_current_and_steal_new_current(target);
-        state.steal_ownership_as_origin(origin);
+        g_thread_state_global.release_ownership_of_current_and_steal_new_current(target);
+        g_thread_state_global.steal_ownership_as_origin(origin);
 fprintf(stderr, "g_switchstack: mark 7\n");
-        state.wref_target(NULL);
+        g_thread_state_global.wref_target(NULL);
     }
     return err;
 }
