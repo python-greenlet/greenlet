@@ -202,7 +202,7 @@ public:
         origin_greenlet_s(0),
         switchstack_use_tracing(0)
     {
-        fprintf(stderr, "Initialized thread state %p\n", this);
+        //fprintf(stderr, "Initialized thread state %p\n", this);
     };
 
     // Only one of these, auto created per thread
@@ -211,7 +211,7 @@ public:
 
     ~_GThreadState()
     {
-        fprintf(stderr, "Destructing thread state %p\n", this);
+        //fprintf(stderr, "Destructing thread state %p\n", this);
     };
 
     inline PyGreenlet* borrow_current() const
@@ -702,7 +702,6 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
 static void
 GREENLET_NOINLINE(_g_switchstack_success)(void)
 {
-    fprintf(stderr, "g_switchstack_success: mark 1\n");
     // XXX: The ownership rules can be simplified here.
     _GThreadState& state = g_thread_state_global;
     PyGreenlet* target = state.borrow_target();
@@ -711,7 +710,6 @@ GREENLET_NOINLINE(_g_switchstack_success)(void)
     tstate->recursion_depth = target->recursion_depth;
     tstate->frame = target->top_frame;
     target->top_frame = NULL;
-    fprintf(stderr, "g_switchstack_success: mark 2\n");
 #if GREENLET_PY37
     tstate->context = target->context;
     target->context = NULL;
@@ -730,7 +728,6 @@ GREENLET_NOINLINE(_g_switchstack_success)(void)
     tstate->exc_traceback = target->exc_traceback;
 #endif
     green_clear_exc(target);
-    fprintf(stderr, "g_switchstack_success: mark 3\n");
 #if GREENLET_USE_CFRAME
     tstate->cframe = target->cframe;
     /*
@@ -741,53 +738,51 @@ GREENLET_NOINLINE(_g_switchstack_success)(void)
     */
     tstate->cframe->use_tracing = state.switchstack_use_tracing;
 #endif
-    fprintf(stderr, "g_switchstack_success: mark 4\n");
     assert(state.borrow_origin() == NULL);
     Py_INCREF(target); // XXX: Simplify ownership rules
     state.release_ownership_of_current_and_steal_new_current(target);
     state.steal_ownership_as_origin(origin);
-    fprintf(stderr, "g_switchstack_success: mark 5\n");
     state.wref_target(NULL);
 }
 
 /**
-   Perform a stack switch according to some global variables
-   that must be set before calling this function. Those variables
-   are:
+   Perform a stack switch according to some thread-local variables
+   that must be set in ``g_thread_state_global`` before calling this
+   function. Those variables are:
 
-   - ts_current: current greenlet (holds a reference)
-   - ts_target: greenlet to switch to (weak reference)
-   - ts_passaround_args: NULL if PyErr_Occurred(),
-     else a tuple of args sent to ts_target (holds a reference)
-   - ts_passaround_kwargs: switch kwargs (holds a reference)
+   - current greenlet (holds a reference)
+   - target greenlet: greenlet to switch to (weak reference)
+   - switch_args: NULL if PyErr_Occurred(),
+     else a tuple of args sent to ts_target (weak reference)
+   - switch_kwargs: switch kwargs (weak reference)
 
-   Because the stack switch happens in this function, this function can't use
-   its own stack (local) variables, set before the switch, and then accessed after the
-   switch. Global variables beginning with ``ts__g_switchstack`` are used
-   internally instead.
+   Because the stack switch happens in this function, this function
+   can't use its own stack (local) variables, set before the switch,
+   and then accessed after the switch.
 
-   On return results are passed via global variables as well:
+   Further, you con't even access ``g_thread_state_global`` before and
+   after the switch from the global variable. Because it is thread
+   local (and hard to declare as volatile), some compilers cache it in
+   a register/on the stack, notably new versions of MSVC; this breaks
+   with strange crashes sometime later, because writing to anything in
+   ``g_thread_state_global`` after the switch is actually writing to
+   random memory. For this reason, we call a non-inlined function to
+   finish the operation.
 
-   - ts_origin: originating greenlet (holds a reference)
-   - ts_current: current greenlet (holds a reference)
-   - ts_passaround_args: NULL if PyErr_Occurred(),
-     else a tuple of args sent to ts_current (holds a reference)
-   - ts_passaround_kwargs: switch kwargs (holds a reference)
+
+   On return results are passed via those same global variables, plus:
+
+   - origin: originating greenlet (holds a reference)
 
    It is very important that stack switch is 'atomic', i.e. no
    calls into other Python code allowed (except very few that
-   are safe), because global variables are very fragile.
+   are safe), because global variables are very fragile. (This should
+   no longer be the case with thread-local variables.)
 */
 static int
 g_switchstack(void)
 {
-fprintf(stderr, "g_switchstack: enter\n");
-    // Because of the rule above, this is one place we can't
-    // save the reference to g_thread_state_global; we must access it
-    // directly each time.
-    // TODO: The after branches where this matters we could/should
-    // move to a new noinline function.
-    int err;
+
     { /* save state */
         _GThreadState& state = g_thread_state_global;
         PyGreenlet* current = state.borrow_current();
@@ -820,9 +815,9 @@ fprintf(stderr, "g_switchstack: enter\n");
         state.switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
     }
-fprintf(stderr, "g_switchstack: mark 1\n");
-    err = slp_switch();
-fprintf(stderr, "g_switchstack: mark 2\n");
+
+    int err = slp_switch();
+
     if (err < 0) { /* error */
         PyGreenlet* current = g_thread_state_global.borrow_current();
         current->top_frame = NULL;
@@ -840,7 +835,6 @@ fprintf(stderr, "g_switchstack: mark 2\n");
     else {
         _g_switchstack_success();
     }
-    fprintf(stderr, "g_switchstack: exit\n");
     return err;
 }
 
@@ -1779,23 +1773,23 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 static PyObject*
 green_getcontext(PyGreenlet* self, void* c)
 {
-fprintf(stderr, "green_getcontext: enter\n");
 #if GREENLET_PY37
-    PyThreadState* tstate = PyThreadState_GET();
-    PyObject* result;
-fprintf(stderr, "green_getcontext: mark 1\n");
+/* XXX: Should not be necessary, we don't access the current greenlet
+   other than to compare it to ourself and its fine if that's null.
+ */
+/*
     if (!STATE_OK) {
         return NULL;
     }
-fprintf(stderr, "green_getcontext: mark 2\n");
+*/
+    PyThreadState* tstate = PyThreadState_GET();
+    PyObject* result = NULL;
+
     if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
-fprintf(stderr, "green_getcontext: mark 3\n");
         if (g_thread_state_global.is_current(self)) {
-fprintf(stderr, "green_getcontext: mark 4\n");
             result = tstate->context;
-fprintf(stderr, "green_getcontext: mark 5\n");
         }
         else {
             PyErr_SetString(PyExc_ValueError,
@@ -1805,17 +1799,13 @@ fprintf(stderr, "green_getcontext: mark 5\n");
         }
     }
     else {
-fprintf(stderr, "green_getcontext: mark 6\n");
         /* Greenlet is not running: just return context. */
         result = self->context;
-fprintf(stderr, "green_getcontext: mark 7\n");
     }
     if (result == NULL) {
         result = Py_None;
     }
-fprintf(stderr, "green_getcontext: mark 8\n");
     Py_INCREF(result);
-fprintf(stderr, "green_getcontext: mark 9\n");
     return result;
 #else
     PyErr_SetString(PyExc_AttributeError,
@@ -1837,7 +1827,6 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
         return -1;
     }
 */
-fprintf(stderr, "green_setcontext: enter\n");
     if (nctx == NULL) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
         return -1;
@@ -1852,16 +1841,14 @@ fprintf(stderr, "green_setcontext: enter\n");
                         "contextvars.Context or None");
         return -1;
     }
-fprintf(stderr, "green_setcontext: mark 1\n");
+
     PyThreadState* tstate = PyThreadState_GET();
     PyObject* octx = NULL;
 
     if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
-        fprintf(stderr, "green_setcontext: mark 2 %p\n", &g_thread_state_global);
         if (g_thread_state_global.is_current(self)) {
-fprintf(stderr, "green_setcontext: mark 3\n");
             octx = tstate->context;
             tstate->context = nctx;
             tstate->context_ver++;
