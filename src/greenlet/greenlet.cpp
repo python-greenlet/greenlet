@@ -275,6 +275,7 @@ public:
         }
         /* green_dealloc() cannot delete greenlets from other threads, so
            it stores them in the thread dict; delete them now. */
+        /* XXX: We only used to do this when we specifically detected a thread change. */
         assert(this->current_greenlet_s->run_info == PyThreadState_GET()->dict);
         PyObject* deleteme = PyDict_GetItem(this->current_greenlet_s->run_info,
                                             ts_delkey);
@@ -1763,18 +1764,23 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
 static PyObject*
 green_getcontext(PyGreenlet* self, void* c)
 {
+fprintf(stderr, "green_getcontext: enter\n");
 #if GREENLET_PY37
     PyThreadState* tstate = PyThreadState_GET();
     PyObject* result;
-
+fprintf(stderr, "green_getcontext: mark 1\n");
     if (!STATE_OK) {
         return NULL;
     }
+fprintf(stderr, "green_getcontext: mark 2\n");
     if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
+fprintf(stderr, "green_getcontext: mark 3\n");
         if (g_thread_state_global.is_current(self)) {
+fprintf(stderr, "green_getcontext: mark 4\n");
             result = tstate->context;
+fprintf(stderr, "green_getcontext: mark 5\n");
         }
         else {
             PyErr_SetString(PyExc_ValueError,
@@ -1784,13 +1790,17 @@ green_getcontext(PyGreenlet* self, void* c)
         }
     }
     else {
+fprintf(stderr, "green_getcontext: mark 6\n");
         /* Greenlet is not running: just return context. */
         result = self->context;
+fprintf(stderr, "green_getcontext: mark 7\n");
     }
     if (result == NULL) {
         result = Py_None;
     }
+fprintf(stderr, "green_getcontext: mark 8\n");
     Py_INCREF(result);
+fprintf(stderr, "green_getcontext: mark 9\n");
     return result;
 #else
     PyErr_SetString(PyExc_AttributeError,
