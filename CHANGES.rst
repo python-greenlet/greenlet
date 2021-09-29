@@ -14,9 +14,11 @@
 - Fix a leak of a list object when the last reference to a greenlet
   was deleted from some other thread than the one to which it
   belonged. For this to work correctly, you must call a greenlet API
-  like ``getcurrent()`` before the thread owning the greenlet exits;
-  we hope to lift this limitation. Note that in some cases this may
-  also fix leaks of greenlet objects themselves. See `issue 251
+  like ``getcurrent()`` before the thread owning the greenlet exits:
+  this is a long-standing limitation that can also lead to the leak of
+  a thread's main greenlet if not called; we hope to lift this
+  limitation. Note that in some cases this may also fix leaks of
+  greenlet objects themselves. See `issue 251
   <https://github.com/python-greenlet/greenlet/issues/251>`_.
 - Python 3.10: Tracing or profiling into a spawned greenlet didn't
   work as expected. See `issue 256
