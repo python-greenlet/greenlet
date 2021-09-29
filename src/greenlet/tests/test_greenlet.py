@@ -105,7 +105,7 @@ class TestGreenlet(unittest.TestCase):
         for th in ths:
             th.start()
         for th in ths:
-            th.join()
+            th.join(10)
         self.assertEqual(len(success), len(ths))
 
     def test_exception(self):
@@ -174,7 +174,7 @@ class TestGreenlet(unittest.TestCase):
         lock.acquire()
         self.assertEqual(seen, [greenlet.GreenletExit])
         lock2.release()
-        t.join()
+        t.join(10)
 
     def test_frame(self):
         def f1():
@@ -200,8 +200,8 @@ class TestGreenlet(unittest.TestCase):
         t2 = threading.Thread(target=runner, args=(0.3,))
         t1.start()
         t2.start()
-        t1.join()
-        t2.join()
+        t1.join(10)
+        t2.join(10)
 
     def test_switch_kwargs(self):
         def run(a, b):
@@ -240,7 +240,7 @@ class TestGreenlet(unittest.TestCase):
             error = sys.exc_info()[1]
         self.assertIsNotNone(error, "greenlet.error was not raised!")
         done_event.set()
-        thread.join()
+        thread.join(10)
 
     def test_exc_state(self):
         def f():
@@ -296,7 +296,7 @@ class TestGreenlet(unittest.TestCase):
         g.switch()
         self.assertRaises(ValueError, setparent, g, data['g'])
         done_event.set()
-        thread.join()
+        thread.join(10)
 
     def test_deepcopy(self):
         import copy
@@ -352,7 +352,7 @@ class TestGreenlet(unittest.TestCase):
             result.append(g)
         t = threading.Thread(target=creator)
         t.start()
-        t.join()
+        t.join(10)
         self.assertRaises(greenlet.error, result[0].throw, SomeError())
 
     def test_recursive_startup(self):
@@ -379,7 +379,7 @@ class TestGreenlet(unittest.TestCase):
             g.switch()
         t = threading.Thread(target=worker)
         t.start()
-        t.join()
+        t.join(10)
         class convoluted(greenlet):
             def __getattribute__(self, name):
                 if name == 'run':
@@ -433,7 +433,7 @@ class TestGreenlet(unittest.TestCase):
         # to randomly crash if it's not anyway.
         self.assertEqual(greenlet.getcurrent(), main)
         # wait for another thread to complete, just in case
-        t.join()
+        t.join(10)
 
     def test_dealloc_switch_args_not_lost(self):
         seen = []
@@ -531,7 +531,7 @@ class TestGreenlet(unittest.TestCase):
                 g = None # lose reference to garbage
                 if recycled[0]:
                     # gc callback called prematurely
-                    t.join()
+                    t.join(10)
                     return False
                 last = greenlet()
                 if recycled[0]:
@@ -541,7 +541,7 @@ class TestGreenlet(unittest.TestCase):
                 # gc callback not called when expected
                 gc.collect()
                 if recycled[0]:
-                    t.join()
+                    t.join(10)
                 return False
             self.assertEqual(last.parent, current)
             for g in l:

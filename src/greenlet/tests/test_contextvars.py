@@ -241,7 +241,7 @@ class ContextVarsTests(unittest.TestCase):
         gr.gr_context = None
 
         should_exit.set()
-        thread.join()
+        thread.join(10)
 
         self.assertEqual(holder, [gr, None])
 

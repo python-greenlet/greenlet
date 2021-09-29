@@ -43,7 +43,7 @@ class TestLeaks(unittest.TestCase):
         t = threading.Thread(target=worker)
         t.start()
         time.sleep(0.001)
-        t.join()
+        t.join(10)
 
     def test_threaded_leak(self):
         gg = []
@@ -53,7 +53,7 @@ class TestLeaks(unittest.TestCase):
         for _ in range(2):
             t = threading.Thread(target=worker)
             t.start()
-            t.join()
+            t.join(10)
             del t
         greenlet.getcurrent() # update ts_current
         self.recycle_threads()
@@ -76,7 +76,7 @@ class TestLeaks(unittest.TestCase):
         for _ in range(2):
             t = threading.Thread(target=worker)
             t.start()
-            t.join()
+            t.join(10)
             del t
         greenlet.getcurrent() # update ts_current
         self.recycle_threads()
