@@ -2,7 +2,7 @@
  Changes
 =========
 
-1.1.2 (unreleased)
+1.1.2 (2021-09-29)
 ==================
 
 - Fix a potential crash due to a reference counting error when Python
