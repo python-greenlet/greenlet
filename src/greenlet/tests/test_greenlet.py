@@ -230,10 +230,10 @@ class TestGreenlet(unittest.TestCase):
         def run():
             data['g'] = greenlet(lambda: None)
             created_event.set()
-            done_event.wait()
+            done_event.wait(10)
         thread = threading.Thread(target=run)
         thread.start()
-        created_event.wait()
+        created_event.wait(10)
         try:
             data['g'].switch()
         except greenlet.error:
@@ -281,7 +281,7 @@ class TestGreenlet(unittest.TestCase):
         def run():
             data['g'] = greenlet(lambda: None)
             created_event.set()
-            done_event.wait()
+            done_event.wait(10)
 
         def blank():
             greenlet.getcurrent().parent.switch()
@@ -291,7 +291,7 @@ class TestGreenlet(unittest.TestCase):
 
         thread = threading.Thread(target=run)
         thread.start()
-        created_event.wait()
+        created_event.wait(10)
         g = greenlet(blank)
         g.switch()
         self.assertRaises(ValueError, setparent, g, data['g'])
@@ -609,7 +609,7 @@ class TestGreenlet(unittest.TestCase):
             greenlet_running_event.set()
             # Wait for main to let us know the references are
             # gone and the greenlet objects no longer reachable
-            ref_cleared.wait()
+            ref_cleared.wait(10)
             # The creating thread must call getcurrent() (or a few other
             # greenlet APIs) because that's when the thread-local list of dead
             # greenlets gets cleared.
@@ -638,7 +638,7 @@ class TestGreenlet(unittest.TestCase):
 
 
         for done_event in thread_ready_events:
-            done_event.wait()
+            done_event.wait(10)
 
 
         del glets[:]

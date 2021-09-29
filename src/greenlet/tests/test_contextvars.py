@@ -206,7 +206,7 @@ class ContextVarsTests(unittest.TestCase):
         def greenlet_in_thread_fn():
             var.set(1)
             is_running.set()
-            should_suspend.wait()
+            should_suspend.wait(10)
             var.set(2)
             getcurrent().parent.switch()
             holder.append(var.get())
@@ -217,12 +217,12 @@ class ContextVarsTests(unittest.TestCase):
             holder.append(gr)
             gr.switch()
             did_suspend.set()
-            should_exit.wait()
+            should_exit.wait(10)
             gr.switch()
 
         thread = threading.Thread(target=thread_fn, daemon=True)
         thread.start()
-        is_running.wait()
+        is_running.wait(10)
         gr = holder[0]
 
         # Can't access or modify context if the greenlet is running
@@ -233,7 +233,7 @@ class ContextVarsTests(unittest.TestCase):
             gr.gr_context = None
 
         should_suspend.set()
-        did_suspend.wait()
+        did_suspend.wait(10)
 
         # OK to access and modify context if greenlet is suspended
         self.assertIs(gr.gr_context, ctx)

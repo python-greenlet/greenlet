@@ -128,7 +128,7 @@ class TestLeaks(unittest.TestCase):
             # Control is ours again.
             del glet # Delete one reference from the thread it runs in.
             background_glet_running.set()
-            background_glet_killed.wait()
+            background_glet_killed.wait(10)
             # To trigger the background collection of the dead
             # greenlet, thus clearing out the contents of the list, we
             # need to run some APIs. See issue 252.
@@ -138,7 +138,7 @@ class TestLeaks(unittest.TestCase):
 
         t = threading.Thread(target=background_thread)
         t.start()
-        background_glet_running.wait()
+        background_glet_running.wait(10)
 
         lists_before = count_objects()
 
