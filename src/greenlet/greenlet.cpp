@@ -675,27 +675,42 @@ green_statedict(PyGreenlet* g)
    * g_initialstub, when inlined would receive a pointer into its
      own stack frame, leading to incomplete stack save/restore
 */
+// CAUTION: MSVC is stupidly picky:
+//
+// "The compiler ignores, without warning, any __declspec keywords
+// placed after * or & and in front of the variable identifier in a
+// declaration."
+// (https://docs.microsoft.com/en-us/cpp/cpp/declspec?view=msvc-160)
+//
+// So pointer return types must be handled differently (because of the
+// trailing *), or you get inscrutable compiler warnings like "error
+// C2059: syntax error: ''"
 
 #if defined(__GNUC__) || defined(__clang__)
 /* We used to check for GCC 4+ or 3.4+, but those compilers are
    laughably out of date. Just assume they support it. */
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __attribute__((noinline)) name
+#    define GREENLET_NOINLINE_P(rtype, name) rtype __attribute__((noinline)) name
 #elif defined(_MSC_VER)
 /* We used to check for  && (_MSC_VER >= 1300) but that's also out of date. */
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __declspec(noinline) name
+#    define GREENLET_NOINLINE_P(rtype, name) __declspec(noinline) rtype name
 #endif
 
 #ifdef GREENLET_NOINLINE_SUPPORTED
 /* add forward declarations */
-extern "C" {
-static void GREENLET_NOINLINE(slp_restore_state)(void);
-static int GREENLET_NOINLINE(slp_save_state)(char*);
-#    if !(defined(MS_WIN64) && defined(_M_X64))
-static int GREENLET_NOINLINE(slp_switch)(void);
-#    endif
+static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int);
 static int GREENLET_NOINLINE(g_initialstub)(void*);
+static void GREENLET_NOINLINE(g_switchstack_success)(void);
+
+extern "C" {
+    static void GREENLET_NOINLINE(slp_restore_state)(void);
+    static int GREENLET_NOINLINE(slp_save_state)(char*);
+#    if !(defined(MS_WIN64) && defined(_M_X64))
+    static int GREENLET_NOINLINE(slp_switch)(void);
+#    endif
 };
 #    define GREENLET_NOINLINE_INIT() \
         do {                         \
@@ -704,19 +719,25 @@ static int GREENLET_NOINLINE(g_initialstub)(void*);
 /* force compiler to call functions via pointers */
 /* XXX: Do we even want/need to support such compilers? This code path
    is untested on CI. */
-extern "C" {
-static void (*slp_restore_state)(void);
-static int (*slp_save_state)(char*);
-static int (*slp_switch)(void);
 static int (*g_initialstub)(void*);
+static PyObject* (*g_switch_finish)(int err);
+static void (*g_switchstack_success)(void);
+
+extern "C" {
+    static void (*slp_restore_state)(void);
+    static int (*slp_save_state)(char*);
+    static int (*slp_switch)(void);
 };
 #    define GREENLET_NOINLINE(name) cannot_inline_##name
+#    define GREENLET_NOINLINE_P(rtype, name) rtype cannot_inline_##name
 #    define GREENLET_NOINLINE_INIT()                                  \
         do {                                                          \
             slp_restore_state = GREENLET_NOINLINE(slp_restore_state); \
             slp_save_state = GREENLET_NOINLINE(slp_save_state);       \
             slp_switch = GREENLET_NOINLINE(slp_switch);               \
             g_initialstub = GREENLET_NOINLINE(g_initialstub);         \
+            g_switch_finish = GREENLET_NOINLINE(g_switch_finish);           \
+            g_switchstack_success = GREENLET_NOINLINE(g_switchstack_success);           \
         } while (0)
 #endif
 
@@ -862,8 +883,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
     return 0;
 }
 
-static void
-GREENLET_NOINLINE(_g_switchstack_success)(void)
+static void GREENLET_NOINLINE(g_switchstack_success)(void)
 {
     // XXX: The ownership rules can be simplified here.
     _GThreadState& state = g_thread_state_global;
@@ -996,7 +1016,7 @@ g_switchstack(void)
         g_thread_state_global.wref_target(NULL);
     }
     else {
-        _g_switchstack_success();
+        g_switchstack_success();
     }
     return err;
 }
@@ -1032,8 +1052,7 @@ g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin,
     return 0;
 }
 
-static PyObject*
-GREENLET_NOINLINE(_g_switch_finish)(const int err)
+static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
 {
     /* For a very short time, immediately after the 'atomic'
        g_switchstack() call, global variables are in a known state.
@@ -1167,7 +1186,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
         }
         target = target->parent;
     }
-    return _g_switch_finish(err);
+    return g_switch_finish(err);
 }
 
 static PyObject*

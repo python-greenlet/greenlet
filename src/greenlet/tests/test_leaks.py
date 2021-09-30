@@ -118,6 +118,8 @@ class TestLeaks(unittest.TestCase):
         background_glet_running = threading.Event()
         background_glet_killed = threading.Event()
         background_greenlets = []
+        # To toggle debugging off and on.
+        print = lambda *args, **kwargs: None
         class JustDelMe(object):
             def __del__(self):
                 print("DELETING OBJECT")
@@ -225,4 +227,13 @@ class TestLeaks(unittest.TestCase):
         # the GC is in fact visiting both objects.
         # It's not clear where that leak is? For some reason the thread-local dict
         # holding it isn't being cleaned up.
+        #
+        # The leak, I think, is in the CPYthon internal function that calls into
+        # green_switch(). The argument tuple is still on the C stack somewhere
+        # and can't be reached? That doesn't make sense, because the tuple should be
+        # collectable when this object goes away.
+        #
+        # Note that this test sometimes spuriously passes on Linux, for some reason,
+        # but I've never seen it pass on macOS.
         self.test_issue251_killing_cross_thread_leaks_list(manually_collect_background=False)
+        self.fail("If we made it here, the test actually passed")
