@@ -23,7 +23,10 @@ typedef struct _greenlet {
     struct _greenlet* stack_prev;
     struct _greenlet* parent;
     PyObject* run_info;
-    struct _frame* top_frame;
+    // XXX: Adding this field is a breaker, unless we can
+    // get rid of the run_info field completely.
+    PyObject* run_callable;
+    struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
     int recursion_depth;
     PyObject* weakreflist;
 #if PY_VERSION_HEX >= 0x030700A3

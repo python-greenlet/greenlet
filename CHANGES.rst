@@ -230,9 +230,9 @@ Packaging Changes
 =====
 * Greenlet has an instance dictionary now, which means it can be
   used for implementing greenlet local storage, etc. However, this
-  might introduce incompatibility if subclasses have __dict__ in their
-  __slots__. Classes like that will fail, because greenlet already
-  has __dict__ out of the box.
+  might introduce incompatibility if subclasses have ``__dict__`` in their
+  ``__slots__``. Classes like that will fail, because greenlet already
+  has ``__dict__`` out of the box.
 * Greenlet no longer leaks memory after thread termination, as long as
   terminated thread has no running greenlets left at the time.
 * Add support for debian sparc and openbsd5-sparc64

@@ -273,6 +273,17 @@ class TestGreenlet(unittest.TestCase):
         self.assertRaises(TypeError, deldict, g)
         self.assertRaises(TypeError, setdict, g, 42)
 
+    def test_running_greenlet_has_no_run(self):
+        has_run = []
+        def func():
+            has_run.append(
+                hasattr(greenlet.getcurrent(), 'run')
+            )
+
+        g = greenlet(func)
+        g.switch()
+        self.assertEqual(has_run, [False])
+
     def test_threaded_reparent(self):
         data = {}
         created_event = threading.Event()
@@ -380,13 +391,66 @@ class TestGreenlet(unittest.TestCase):
         t = threading.Thread(target=worker)
         t.start()
         t.join(10)
+        # The first time we switch (running g_initialstub(), which is
+        # when we look up the run attribute) we attempt to change the
+        # parent to one from another thread (which also happens to be
+        # dead). ``g_initialstub()`` should detect this and raise a
+        # greenlet error.
+        #
+        # EXCEPT: With the fix for #252, this is actually detected
+        # sooner, when setting the parent itself. Prior to that fix,
+        # the main greenlet from the background thread kept a valid
+        # value for ``run_info``, and appeared to be a valid parent
+        # until we actually started the greenlet. But now that it's
+        # cleared, this test is catching whether ``green_setparent``
+        # can detect the dead thread.
+        #
+        # NOTE: This depends on ``Py_AddPendingCall``, which means we may
+        # need to force ceval.c to go around its loop, which we do
+        # by sleeping.
+        time.sleep(0.001)
+
         class convoluted(greenlet):
             def __getattribute__(self, name):
                 if name == 'run':
                     self.parent = another[0] # pylint:disable=attribute-defined-outside-init
                 return greenlet.__getattribute__(self, name)
         g = convoluted(lambda: None)
-        self.assertRaises(greenlet.error, g.switch)
+        with self.assertRaises(ValueError) as exc:
+            g.switch()
+        self.assertEqual(str(exc.exception), "parent must not be garbage collected")
+
+    def test_unexpected_reparenting_thread_running(self):
+        # Like ``test_unexpected_reparenting``, except the background thread is
+        # actually still alive.
+        another = []
+        switched_to_greenlet = threading.Event()
+        keep_main_alive = threading.Event()
+        def worker():
+            g = greenlet(lambda: None)
+            another.append(g)
+            g.switch()
+            switched_to_greenlet.set()
+            keep_main_alive.wait(10)
+        class convoluted(greenlet):
+            def __getattribute__(self, name):
+                if name == 'run':
+                    self.parent = another[0] # pylint:disable=attribute-defined-outside-init
+                return greenlet.__getattribute__(self, name)
+
+        t = threading.Thread(target=worker)
+        t.start()
+
+        switched_to_greenlet.wait(10)
+        try:
+            g = convoluted(lambda: None)
+
+            with self.assertRaises(greenlet.error) as exc:
+                g.switch()
+            self.assertEqual(str(exc.exception), "cannot switch to a different thread")
+        finally:
+            keep_main_alive.set()
+            t.join(10)
 
     def test_threaded_updatecurrent(self):
         # released when main thread should execute

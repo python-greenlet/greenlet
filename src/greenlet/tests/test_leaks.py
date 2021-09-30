@@ -1,3 +1,4 @@
+from __future__ import print_function, absolute_import, division
 import unittest
 import sys
 import gc
@@ -45,7 +46,6 @@ class TestLeaks(unittest.TestCase):
         time.sleep(0.001)
         t.join(10)
 
-    @unittest.expectedFailure
     def test_threaded_leak(self):
         gg = []
         def worker():
@@ -64,7 +64,6 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
-    @unittest.expectedFailure
     def test_threaded_adv_leak(self):
         gg = []
         def worker():
@@ -88,7 +87,6 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
-    @unittest.expectedFailure
     def test_issue251_killing_cross_thread_leaks_list(self, manually_collect_background=True):
         # See https://github.com/python-greenlet/greenlet/issues/251
         # Killing a greenlet (probably not the main one)
@@ -120,18 +118,48 @@ class TestLeaks(unittest.TestCase):
         background_glet_running = threading.Event()
         background_glet_killed = threading.Event()
         background_greenlets = []
+        class JustDelMe(object):
+            def __del__(self):
+                print("DELETING OBJECT")
+
         def background_greenlet():
             # Throw control back to the main greenlet.
-            greenlet.getcurrent().parent.switch()
+            jd = JustDelMe()
+            print("\n\tIn bg glet", jd, file=sys.stderr)
+            show_bg_main("\t")
+            greenlet.getcurrent().parent.switch([jd])
+
+        bg_main_wrefs = []
+        def show_bg_main(pfx=''):
+            print(pfx+"BG Refcount :", sys.getrefcount(bg_main_wrefs[0]()), file=sys.stderr)
+            print(pfx+"BG Main Refs:", gc.get_referrers(bg_main_wrefs[0]()), file=sys.stderr)
 
         def background_thread():
+            print(file=sys.stderr)
+            print("Begin thread", file=sys.stderr)
+            print("BG Refcount :", sys.getrefcount(greenlet.getcurrent()), file=sys.stderr)
+            print("BG Main Refs:", gc.get_referrers(greenlet.getcurrent()), file=sys.stderr)
+
             glet = greenlet.greenlet(background_greenlet)
+            print("Main:", glet.parent, file=sys.stderr)
+            print("Secondary", glet, file=sys.stderr)
+            bg_main_wrefs.append(weakref.ref(glet.parent))
+            show_bg_main()
+
             background_greenlets.append(glet)
             glet.switch() # Be sure it's active.
+            print("Allowed to finish", glet, file=sys.stderr)
             # Control is ours again.
+            print("Before deleting glet", file=sys.stderr)
+            show_bg_main("\t")
             del glet # Delete one reference from the thread it runs in.
+            print("After deleting glet", file=sys.stderr)
+            show_bg_main("\t")
             background_glet_running.set()
             background_glet_killed.wait(10)
+            print("End thread", file=sys.stderr)
+            show_bg_main()
+
             # To trigger the background collection of the dead
             # greenlet, thus clearing out the contents of the list, we
             # need to run some APIs. See issue 252.
@@ -142,7 +170,11 @@ class TestLeaks(unittest.TestCase):
         t = threading.Thread(target=background_thread)
         t.start()
         background_glet_running.wait(10)
-
+        print("Waited, back in main", file=sys.stderr)
+        show_bg_main("\t")
+        print("Getting current", file=sys.stderr)
+        greenlet.getcurrent()
+        show_bg_main("\t")
         lists_before = count_objects()
 
         assert len(background_greenlets) == 1
@@ -150,18 +182,33 @@ class TestLeaks(unittest.TestCase):
         # Delete the last reference to the background greenlet
         # from a different thread. This puts it in the background thread's
         # ts_delkey list.
+        print("\nBefore delete", file=sys.stderr)
+        show_bg_main("\t")
         del background_greenlets[:]
+        print("Before setting", file=sys.stderr)
+        show_bg_main("\t")
         background_glet_killed.set()
 
         # Now wait for the background thread to die.
         t.join(10)
         del t
+        # As part of the fix for 252, we need to cycle the ceval.c
+        # interpreter loop to be sure it has had a chance to process
+        # the pending call.
 
-        # Free the background main greenlet by forcing greenlet to notice a difference.
-        greenlet.getcurrent()
+        time.sleep(0.001)
+        if bg_main_wrefs[0]() is not None:
+            print("After dead", file=sys.stderr)
+            gc.collect()
+            show_bg_main()
+
+        #print("checking", file=sys.stderr) Free the background main
+        #greenlet by forcing greenlet to notice a difference.
+        #greenlet.getcurrent()
         greenlets_after = count_objects(greenlet.greenlet)
-
+        #print("counting", file=sys.stderr)
         lists_after = count_objects()
+        #print("counted", file=sys.stderr)
         # On 2.7, we observe that lists_after is smaller than
         # lists_before. No idea what lists got cleaned up. All the
         # Python 3 versions match exactly.
