@@ -14,6 +14,10 @@ extern "C" {
 /* This is deprecated and undocumented. It does not change. */
 #define GREENLET_VERSION "1.0.0"
 
+#ifndef GREENLET_MODULE
+#define state_ptr_t void*
+#endif
+
 typedef struct _greenlet {
     PyObject_HEAD
     char* stack_start;
@@ -22,10 +26,8 @@ typedef struct _greenlet {
     intptr_t stack_saved;
     struct _greenlet* stack_prev;
     struct _greenlet* parent;
-    PyObject* run_info;
-    // XXX: Adding this field is a breaker, unless we can
-    // get rid of the run_info field completely.
-    PyObject* run_callable;
+    /* strong reference, set when the greenlet begins to run. */
+    struct _greenlet* main_greenlet_s;
     struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
     int recursion_depth;
     PyObject* weakreflist;
@@ -44,6 +46,12 @@ typedef struct _greenlet {
 #if PY_VERSION_HEX >= 0x30A00B1
     CFrame* cframe;
 #endif
+    // XXX: Adding these fields is a breaker, unless we can
+    // get rid of the run_info field completely.
+    // If we can get it down to just one pointer, we could
+    // re-purpose an existing field.
+    PyObject* run_callable;
+    state_ptr_t thread_state;
 } PyGreenlet;
 
 #define PyGreenlet_Check(op) PyObject_TypeCheck(op, &PyGreenlet_Type)

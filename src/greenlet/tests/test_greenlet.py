@@ -145,10 +145,11 @@ class TestGreenlet(unittest.TestCase):
     def test_dealloc_other_thread(self):
         seen = []
         someref = []
-        lock = threading.Lock()
-        lock.acquire()
-        lock2 = threading.Lock()
-        lock2.acquire()
+
+        bg_glet_created_running_and_no_longer_ref_in_bg = threading.Event()
+        fg_ref_released = threading.Event()
+        bg_should_be_clear = threading.Event()
+        ok_to_exit_bg_thread = threading.Event()
 
         def f():
             g1 = greenlet(fmain)
@@ -156,24 +157,27 @@ class TestGreenlet(unittest.TestCase):
             someref.append(g1)
             del g1
             gc.collect()
-            lock.release()
-            lock2.acquire()
+            bg_glet_created_running_and_no_longer_ref_in_bg.set()
+            fg_ref_released.wait(10)
+            print("Triggering")
             greenlet()   # trigger release
-            lock.release()
-            lock2.acquire()
+            bg_should_be_clear.set()
+            ok_to_exit_bg_thread.wait(10)
+            print("Exiting")
         t = threading.Thread(target=f)
         t.start()
-        lock.acquire()
+        bg_glet_created_running_and_no_longer_ref_in_bg.wait(10)
+
         self.assertEqual(seen, [])
         self.assertEqual(len(someref), 1)
         del someref[:]
         gc.collect()
         # g1 is not released immediately because it's from another thread
         self.assertEqual(seen, [])
-        lock2.release()
-        lock.acquire()
+        fg_ref_released.set()
+        bg_should_be_clear.wait(10)
         self.assertEqual(seen, [greenlet.GreenletExit])
-        lock2.release()
+        ok_to_exit_bg_thread.set()
         t.join(10)
 
     def test_frame(self):
