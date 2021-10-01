@@ -170,9 +170,10 @@ static int
 _GThreadDestructor_Destroy(void* arg)
 {
     _GThreadDestructor* dest = reinterpret_cast<_GThreadDestructor*>(arg);
-    _GDPrint("Destroying in pending call.\n");
-    _GDPrint("\tCurrent greenlet: %p Refcount: %ld\n",
-            dest->current_greenlet_s,
+    _GDPrint("Destroying in pending call. Destructor: %p\n", arg);
+    _GDPrint("\tCurrent greenlet: %p",
+             dest->current_greenlet_s);
+    _GDPrint("Refcount: %ld\n",
             Py_REFCNT(dest->current_greenlet_s));
     PyGreenlet* g = reinterpret_cast<PyGreenlet*>(dest->current_greenlet_s);
     _GDPrint("\tRun info: %p Refcount: %ld\n\t\t",
@@ -247,27 +248,33 @@ _GThreadDestructor_Destroy(void* arg)
         _GDPoPrint(deleteme);
         _GDPrint("\n");
     }
-    _GDPrint("\t\tRun info: %p Refcount: %ld\n",
-            g->run_info,
-            Py_REFCNT(g->run_info)
-            );
-    _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
-            dest->current_greenlet_s,
-            Py_REFCNT(dest->current_greenlet_s));
     // XXX: We need to make sure this greenlet appears to be dead,
     // because otherwise it will try to go in a list in the run info,
     // which is no good because we can never get back to this thread.
+    _GDPrint("\t\tAbout to decref run info: %p Refcount: %ld\n",
+            g->run_info,
+            Py_REFCNT(g->run_info)
+            );
     Py_CLEAR(g->run_info);
-    Py_DECREF(dest->current_greenlet_s);
-    _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
+
+    Py_ssize_t cnt = Py_REFCNT(dest->current_greenlet_s);
+    _GDPrint("\t\tAbout to decref current greenlet: %p Refcount: %ld\n",
             dest->current_greenlet_s,
-            Py_REFCNT(dest->current_greenlet_s));
+             cnt);
+
+    Py_DECREF(dest->current_greenlet_s);
+    if (cnt - 1 <= 0) {
+        _GDPrint("\t\tCurrent greenlet destroyed\n");
+    }
+    else {
+        _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
+                 dest->current_greenlet_s,
+                 Py_REFCNT(dest->current_greenlet_s));
+    }
     delete dest;
     return 0;
 }
 
-#define _GDPoPrint(o)
-#define fprintf(...)
 
 /**
  * Thread-local state of greenlets.
@@ -358,6 +365,8 @@ public:
         // be in progress as the thread dies.
         assert(this->origin_greenlet_s == nullptr);
         _GThreadDestructor* dest = new _GThreadDestructor();
+        _GDPrint("\tQueueing destructor %p\n", dest);
+        // Transfer ownership of our strong reference.
         dest->current_greenlet_s = reinterpret_cast<PyObject*>(this->current_greenlet_s);
         dest->tracefunc_s = this->tracefunc_s;
         Py_AddPendingCall(_GThreadDestructor_Destroy, dest);
@@ -519,6 +528,10 @@ public:
         this->tracefunc_s = tracefunc;
     }
 };
+
+#define _GDPoPrint(o)
+#define fprintf(...)
+
 
 // The intent when this is used multiple times in a function is to
 // take a reference to it in a local variable, to avoid the
