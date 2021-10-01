@@ -407,8 +407,10 @@ class TestGreenlet(unittest.TestCase):
         #
         # NOTE: This depends on ``Py_AddPendingCall``, which means we may
         # need to force ceval.c to go around its loop, which we do
-        # by sleeping.
-        time.sleep(0.001)
+        # by sleeping. XXX: This is not reliable; we need a method call
+        # to force this.
+        for _ in range(5):
+            time.sleep(0.001)
 
         class convoluted(greenlet):
             def __getattribute__(self, name):

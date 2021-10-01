@@ -173,18 +173,26 @@ _GThreadDestructor_Destroy(void* arg)
     _GDPrint("Destroying in pending call. Destructor: %p\n", arg);
     _GDPrint("\tCurrent greenlet: %p",
              dest->current_greenlet_s);
-    _GDPrint("Refcount: %ld\n",
-            Py_REFCNT(dest->current_greenlet_s));
-    PyGreenlet* g = reinterpret_cast<PyGreenlet*>(dest->current_greenlet_s);
-    _GDPrint("\tRun info: %p Refcount: %ld\n\t\t",
-            g->run_info,
-            Py_REFCNT(g->run_info)
-            );
-    PyObject_Print(g->run_info, stderr, 0);
-    _GDPrint("\n");
+    PyObject* deleteme = NULL;
+    if (dest->current_greenlet_s) {
+        _GDPrint("Refcount: %ld\n",
+                 Py_REFCNT(dest->current_greenlet_s));
+        PyGreenlet* g = reinterpret_cast<PyGreenlet*>(dest->current_greenlet_s);
+        _GDPrint("\tRun info: %p Refcount: %ld\n    \t\t",
+                 g->run_info,
+                 Py_REFCNT(g->run_info)
+                 );
+        PyObject_Print(g->run_info, stderr, 0);
+        _GDPrint("\n");
+        deleteme = PyDict_GetItem(g->run_info,
+                                  ts_delkey);
+
+    }
+    else {
+        _GDPrint("WHOA NO CURRENT GREENLET!\n");
+    }
     Py_CLEAR(dest->tracefunc_s);
-    PyObject* deleteme = PyDict_GetItem(g->run_info,
-                                        ts_delkey);
+
     if (deleteme != NULL) {
         _GDPrint("\tDestructor: delkey still active.\n\t");
         _GDPoPrint(deleteme);
@@ -251,25 +259,28 @@ _GThreadDestructor_Destroy(void* arg)
     // XXX: We need to make sure this greenlet appears to be dead,
     // because otherwise it will try to go in a list in the run info,
     // which is no good because we can never get back to this thread.
-    _GDPrint("\t\tAbout to decref run info: %p Refcount: %ld\n",
-            g->run_info,
-            Py_REFCNT(g->run_info)
-            );
-    Py_CLEAR(g->run_info);
+    if (dest->current_greenlet_s) {
+        PyGreenlet* g = reinterpret_cast<PyGreenlet*>(dest->current_greenlet_s);
+        _GDPrint("\t\tAbout to decref r un info: %p Refcount: %ld\n",
+                 g->run_info,
+                 Py_REFCNT(g->run_info)
+                 );
+        Py_CLEAR(g->run_info);
 
-    Py_ssize_t cnt = Py_REFCNT(dest->current_greenlet_s);
-    _GDPrint("\t\tAbout to decref current greenlet: %p Refcount: %ld\n",
-            dest->current_greenlet_s,
-             cnt);
-
-    Py_DECREF(dest->current_greenlet_s);
-    if (cnt - 1 <= 0) {
-        _GDPrint("\t\tCurrent greenlet destroyed\n");
-    }
-    else {
-        _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
+        Py_ssize_t cnt = Py_REFCNT(dest->current_greenlet_s);
+        _GDPrint("\t\tAbout to  decref current greenlet: %p Refcount: %ld\n",
                  dest->current_greenlet_s,
-                 Py_REFCNT(dest->current_greenlet_s));
+                 cnt);
+
+        Py_DECREF(dest->current_greenlet_s);
+        if (cnt - 1 <= 0) {
+            _GDPrint("\t\tCurrent greenlet destroyed\n");
+        }
+        else {
+            _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
+                     dest->current_greenlet_s,
+                     Py_REFCNT(dest->current_greenlet_s));
+        }
     }
     delete dest;
     return 0;
