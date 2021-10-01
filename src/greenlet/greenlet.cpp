@@ -135,9 +135,8 @@ static PyObject* PyExc_GreenletExit;
 static PyObject* ts_empty_tuple;
 static PyObject* ts_empty_dict;
 
-#define fprintf(...)
-#define PyObject_Print(...)
-
+#define _GDPoPrint(o) PyObject_Print(o, stderr, 0)
+#define _GDPrint(...) fprintf(stderr, __VA_ARGS__)
 
 /**
  * Dynamically allocated argument for Py_AddPendingCall when a thread
@@ -154,24 +153,24 @@ static int
 _GThreadDestructor_Destroy(void* arg)
 {
     _GThreadDestructor* dest = reinterpret_cast<_GThreadDestructor*>(arg);
-    fprintf(stderr, "Destroying in pending call.\n");
-    fprintf(stderr, "\tCurrent greenlet: %p Refcount: %ld\n",
+    _GDPrint("Destroying in pending call.\n");
+    _GDPrint("\tCurrent greenlet: %p Refcount: %ld\n",
             dest->current_greenlet_s,
             Py_REFCNT(dest->current_greenlet_s));
     PyGreenlet* g = reinterpret_cast<PyGreenlet*>(dest->current_greenlet_s);
-    fprintf(stderr, "\tRun info: %p Refcount: %ld\n\t\t",
+    _GDPrint("\tRun info: %p Refcount: %ld\n\t\t",
             g->run_info,
             Py_REFCNT(g->run_info)
             );
     PyObject_Print(g->run_info, stderr, 0);
-    fprintf(stderr, "\n");
+    _GDPrint("\n");
     Py_CLEAR(dest->tracefunc_s);
     PyObject* deleteme = PyDict_GetItem(g->run_info,
                                         ts_delkey);
     if (deleteme != NULL) {
-        fprintf(stderr, "\tDestructor: delkey still active.\n\t");
-        PyObject_Print(deleteme, stderr, 0);
-        fprintf(stderr, "\n");
+        _GDPrint("\tDestructor: delkey still active.\n\t");
+        _GDPoPrint(deleteme);
+        _GDPrint("\n");
 
         // The only reference to these greenlets should be in
         // this list, so clearing the list should let them be
@@ -179,9 +178,9 @@ _GThreadDestructor_Destroy(void* arg)
         // in the correct thread. This may run arbitrary Python
         // code?
         for(Py_ssize_t i = 0; i < PyList_GET_SIZE(deleteme); i++) {
-            fprintf(stderr, "\t\tItem at %ld: ", i);
+            _GDPrint("\t\tItem at %ld: ", i);
             PyObject_Print(PyList_GET_ITEM(deleteme, i), stderr, 0);
-            fprintf(stderr, "\n\t\tRefcount: %ld\n", Py_REFCNT(PyList_GET_ITEM(deleteme, i)));
+            _GDPrint("\n\t\tRefcount: %ld\n", Py_REFCNT(PyList_GET_ITEM(deleteme, i)));
             // Force each greenlet to appear dead; we can't raise an
             // exception into it anymore anyway.
             PyGreenlet* to_del = reinterpret_cast<PyGreenlet*>(PyList_GET_ITEM(deleteme, i));
@@ -192,9 +191,9 @@ _GThreadDestructor_Destroy(void* arg)
                 assert(!PyGreenlet_ACTIVE(to_del));
                 PyFrameObject* fo = (PyFrameObject*)to_del->top_frame;
                 PyFrame_FastToLocals(fo);
-                fprintf(stderr, "\n\t\t\t");
+                _GDPrint("\n\t\t\t");
                 PyObject_Print((PyObject*)to_del->top_frame, stderr, 0);
-                fprintf(stderr, "\n\t\t\tLocals: ");
+                _GDPrint("\n\t\t\tLocals: ");
                 PyObject_Print(fo->f_locals, stderr, 0);
                 // We're holding a borrowed reference to the last
                 // frome we executed. Since we borrowed it, the normal
@@ -202,40 +201,40 @@ _GThreadDestructor_Destroy(void* arg)
                 // meaning it leaks. So here, we *do* clear it.
 
                 // for (int i = 0; i < fo->f_stackdepth; i++) {
-                //     fprintf(stderr, "\n\t\t\t");
+                //     _GDPrint("\n\t\t\t");
                 //     PyObject_Print(fo->f_valuestack[i], stderr, 0);
                 // }
                 /*
                 if (fo->f_stacktop != NULL) {
                     for (PyObject** p = fo->f_valuestack; p < fo->f_stacktop; p++) {
-                        fprintf(stderr, "\n\t\t\t");
+                        _GDPrint("\n\t\t\t");
                         PyObject_Print(fo->f_valuestack[i], stderr, 0);
 
                     }
                 }
                 */
-                fprintf(stderr, "\n");
+                _GDPrint("\n");
                 Py_CLEAR(to_del->top_frame);
             }
 
-            fprintf(stderr, "\t\tCleared Item at %ld: ", i);
+            _GDPrint("\t\tCleared Item at %ld: ", i);
             PyObject_Print(PyList_GET_ITEM(deleteme, i), stderr, 0);
-            fprintf(stderr, "\n\t\tRefcount: %ld\n", Py_REFCNT(PyList_GET_ITEM(deleteme, i)));
+            _GDPrint("\n\t\tRefcount: %ld\n", Py_REFCNT(PyList_GET_ITEM(deleteme, i)));
 
         }
         if (PyList_SetSlice(deleteme, 0, INT_MAX, NULL) < 0) {
             PyErr_WriteUnraisable(dest->current_greenlet_s);
             PyErr_Clear();
         }
-        fprintf(stderr, "\tDestructor: delkey after clear.\n\t");
-        PyObject_Print(deleteme, stderr, 0);
-        fprintf(stderr, "\n");
+        _GDPrint("\tDestructor: delkey after clear.\n\t");
+        _GDPoPrint(deleteme);
+        _GDPrint("\n");
     }
-    fprintf(stderr, "\t\tRun info: %p Refcount: %ld\n",
+    _GDPrint("\t\tRun info: %p Refcount: %ld\n",
             g->run_info,
             Py_REFCNT(g->run_info)
             );
-    fprintf(stderr, "\t\tCurrent greenlet: %p Refcount: %ld\n",
+    _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
             dest->current_greenlet_s,
             Py_REFCNT(dest->current_greenlet_s));
     // XXX: We need to make sure this greenlet appears to be dead,
@@ -243,7 +242,7 @@ _GThreadDestructor_Destroy(void* arg)
     // which is no good because we can never get back to this thread.
     Py_CLEAR(g->run_info);
     Py_DECREF(dest->current_greenlet_s);
-    fprintf(stderr, "\t\tCurrent greenlet: %p Refcount: %ld\n",
+    _GDPrint("\t\tCurrent greenlet: %p Refcount: %ld\n",
             dest->current_greenlet_s,
             Py_REFCNT(dest->current_greenlet_s));
     delete dest;
@@ -319,7 +318,7 @@ public:
         tracefunc_s(0),
         switchstack_use_tracing(0)
     {
-        //fprintf(stderr, "Initialized thread state %p\n", this);
+        //_GDPrint("Initialized thread state %p\n", this);
     };
 
     // Only one of these, auto created per thread
@@ -328,12 +327,12 @@ public:
 
     ~_GThreadState()
     {
-        fprintf(stderr, "Destructing thread state %p\n", this);
+        _GDPrint("Destructing thread state %p\n", this);
         if (!PyInterpreterState_Head()) {
-            fprintf(stderr, "\tInterp torn down\n");
+            _GDPrint("\tInterp torn down\n");
             return;
         }
-        fprintf(stderr, "\tCurrent: %p Origin: %p\n", this->current_greenlet_s, this->origin_greenlet_s);
+        _GDPrint("\tCurrent: %p Origin: %p\n", this->current_greenlet_s, this->origin_greenlet_s);
         // We should not have an "origin" greenlet; that only exists
         // for the temporary time during a switch, which should not
         // be in progress as the thread dies.
@@ -1068,9 +1067,9 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
     PyObject* args = state.borrow_switch_args();
     PyObject* kwargs = state.borrow_switch_kwargs();
     state.wref_switch_args_kwargs(NULL, NULL);
-    fprintf(stderr, "Finishing switch into: ");
+    _GDPrint("Finishing switch into: ");
     PyObject_Print((PyObject*)state.borrow_current(), stderr, 0);
-    fprintf(stderr, "\n\tRefcount: %ld\n", Py_REFCNT(state.borrow_current()));
+    _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(state.borrow_current()));
     if (err < 0) {
         /* Turn switch errors into switch throws */
         assert(state.borrow_origin() == NULL);
@@ -1096,9 +1095,9 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
 
         Py_DECREF(origin);
 
-        fprintf(stderr, "Finished switch into: ");
+        _GDPrint("Finished switch into: ");
         PyObject_Print((PyObject*)state.borrow_current(), stderr, 0);
-        fprintf(stderr, "\n\tRefcount: %ld\n", Py_REFCNT(state.borrow_current()));
+        _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(state.borrow_current()));
 
     }
 
@@ -1169,9 +1168,9 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     while (target) {
         if (PyGreenlet_ACTIVE(target)) {
             state.wref_target(target);
-            fprintf(stderr, "Found target: ");
+            _GDPrint("Found target: ");
             PyObject_Print((PyObject*)target, stderr, 0);
-            fprintf(stderr, "\n\tRefcount: %ld\n", Py_REFCNT(target));
+            _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(target));
             err = g_switchstack();
             break;
         }
@@ -1568,9 +1567,9 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
     Py_VISIT(self->exc_value);
     Py_VISIT(self->exc_traceback);
 #endif
-    fprintf(stderr, "Visiting ");
+    _GDPrint("Visiting ");
     PyObject_Print(self->dict, stderr, 0);
-    fprintf(stderr, "\n");
+    _GDPrint("\n");
 
     Py_VISIT(self->dict);
     return 0;
@@ -1579,7 +1578,7 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 static int
 green_is_gc(PyGreenlet* self)
 {
-    fprintf(stderr, "\t\tIs GC? ");
+    _GDPrint("\t\tIs GC? ");
     PyObject_Print((PyObject*)self, stderr, 0);
     int result = 0;
     /* Main greenlet can be garbage collected since it can only
@@ -1588,8 +1587,8 @@ green_is_gc(PyGreenlet* self)
     if (PyGreenlet_MAIN(self) || !PyGreenlet_ACTIVE(self)) {
         result = 1;
     }
-    fprintf(stderr, "%s\n", result ? "YES" : "NO");
-    fprintf(stderr, "\t\t\tRefcount: %ld Frame count: %ld\n",
+    _GDPrint("%s\n", result ? "YES" : "NO");
+    _GDPrint("\t\t\tRefcount: %ld Frame count: %ld\n",
             Py_REFCNT(self), self->top_frame ? Py_REFCNT(self->top_frame) : -1);
     return result;
 }
@@ -1602,9 +1601,9 @@ green_clear(PyGreenlet* self)
        be sure that, even if they are deallocated during clear,
        nothing they reference is in unreachable or finalizers,
        so even if it switches we are relatively safe. */
-    fprintf(stderr, "Clearing ");
+    _GDPrint("Clearing ");
     PyObject_Print((PyObject*)self, stderr, 0);
-    fprintf(stderr, "\n");
+    _GDPrint("\n");
     Py_CLEAR(self->parent);
     Py_CLEAR(self->run_info);
     Py_CLEAR(self->run_callable);
@@ -1730,9 +1729,9 @@ single_result(PyObject* results)
         Py_DECREF(results);
         return result;
     }
-    fprintf(stderr, "single_result: current: ");
+    _GDPrint("single_result: current: ");
     PyObject_Print((PyObject*)g_thread_state_global.borrow_current(), stderr, 0);
-    fprintf(stderr, "\n\tRefcount: %ld\n", Py_REFCNT(g_thread_state_global.borrow_current()));
+    _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(g_thread_state_global.borrow_current()));
     return results;
 }
 
@@ -1772,9 +1771,9 @@ PyDoc_STRVAR(
 static PyObject*
 green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
-    fprintf(stderr, "Switching to: ");
+    _GDPrint("Switching to: ");
     PyObject_Print((PyObject*)self, stderr, 0);
-    fprintf(stderr, "\t\n Refcount: %ld\n", Py_REFCNT((PyObject*)self));
+    _GDPrint("\t\n Refcount: %ld\n", Py_REFCNT((PyObject*)self));
 
     Py_INCREF(args);
     Py_XINCREF(kwargs);
@@ -1978,9 +1977,9 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
             PyErr_SetString(PyExc_ValueError, "cyclic parent chain");
             return -1;
         }
-        fprintf(stderr, "Examining parent ");
+        _GDPrint("Examining parent ");
         PyObject_Print((PyObject*)p, stderr, 0);
-        fprintf(stderr, "\n\tActive? %d Run info: %p\n", PyGreenlet_ACTIVE(p), p->run_info);
+        _GDPrint("\n\tActive? %d Run info: %p\n", PyGreenlet_ACTIVE(p), p->run_info);
         run_info = PyGreenlet_ACTIVE(p) ? p->run_info : NULL;
     }
     if (run_info == NULL) {
@@ -2586,6 +2585,3 @@ init_greenlet(void)
 #ifdef __clang__
 #    pragma clang diagnostic pop
 #endif
-
-#undef fprintf
-#undef PyObject_Print
