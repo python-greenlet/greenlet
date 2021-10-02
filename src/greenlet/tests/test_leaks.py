@@ -218,7 +218,7 @@ class TestLeaks(unittest.TestCase):
 
         self.assertEqual(greenlets_before, greenlets_after)
 
-    @unittest.expectedFailure
+    #@unittest.expectedFailure
     def test_issue251_issue252_need_to_collect_in_background(self):
         # This still fails because the leak of the list
         # still exists when we don't call a greenlet API before exiting the
@@ -236,4 +236,3 @@ class TestLeaks(unittest.TestCase):
         # Note that this test sometimes spuriously passes on Linux, for some reason,
         # but I've never seen it pass on macOS.
         self.test_issue251_killing_cross_thread_leaks_list(manually_collect_background=False)
-        self.fail("If we made it here, the test actually passed")

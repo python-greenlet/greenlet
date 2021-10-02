@@ -159,11 +159,11 @@ class TestGreenlet(unittest.TestCase):
             gc.collect()
             bg_glet_created_running_and_no_longer_ref_in_bg.set()
             fg_ref_released.wait(10)
-            print("Triggering")
+            #print("Triggering")
             greenlet()   # trigger release
             bg_should_be_clear.set()
             ok_to_exit_bg_thread.wait(10)
-            print("Exiting")
+            #print("Exiting")
         t = threading.Thread(target=f)
         t.start()
         bg_glet_created_running_and_no_longer_ref_in_bg.wait(10)
