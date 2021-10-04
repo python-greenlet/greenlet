@@ -12,6 +12,10 @@ class _GThreadState;
 
 #include <vector>
 #include <memory>
+// TODO: IF we're not an a C++ 11 compiler (old MSVC) we need to use
+// platform native APIs for lock management.
+#include <thread>
+#include <mutex>
 #include "greenlet.h"
 
 #include "structmember.h"
@@ -28,7 +32,6 @@ class _GThreadState;
 #    pragma GCC diagnostic ignored "-Wwrite-strings"
 #endif
 
-static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
 
 /***********************************************************
 
@@ -139,6 +142,7 @@ https://bugs.python.org/issue39573 */
 #endif
 
 static PyGreenlet* green_create_main();
+static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
 static PyObject* ts_event_switch;
 static PyObject* ts_event_throw;
 static PyObject* PyExc_GreenletError;
@@ -182,7 +186,8 @@ static void _GDPoPrint(void* o)
 #define UNUSED(expr) do { (void)(expr); } while (0)
 
 // This allocator is stateless; all instances are identical.
-
+// It can *ONLY* be used when we're sure we're holding the GIL
+// (Python's allocators require the GIL).
 template <class T>
 struct PythonAllocator : public std::allocator<T> {
     // As a reminder: the `delete` expression first executes
@@ -780,10 +785,6 @@ public:
 
 };
 
-#undef _GDPrint
-#define _GDPrint(...)
-#define _GDPoPrint(...)
-
 
 //#define _GDPoPrint(o)
 
@@ -800,6 +801,9 @@ public:
 // RECALL: legacy thread-local objects (__thread on GCC, __declspec(thread) on
 // MSVC) can't have destructors.
 
+static std::mutex g_cleanup_queue_lock;
+static std::vector<PyGreenlet*> g_cleanup_queue;
+
 static int
 _ThreadStateCreator_Destroy(void* arg)
 {
@@ -815,6 +819,29 @@ _ThreadStateCreator_Destroy(void* arg)
     main->thread_state = NULL;
     _GDPrint("\tSet thread state to null\n");
     delete s; // Deleting this runs the constructor, DECREFs the main greenlet.
+    return 0;
+}
+
+static int
+_ThreadStateCreator_DestroyAll(void* arg)
+{
+    // We're holding the GIL here, so no Python code should be able to
+    // run to call ``os.fork()``. (It's important not to be holding
+    // this lock when some other thread forks, so try to keep it short.)
+    while (1) {
+        PyGreenlet* to_destroy;
+        {
+            const std::lock_guard<std::mutex> cleanup_lock(g_cleanup_queue_lock);
+            _GDPrint("Processing %ld cleanups\n", g_cleanup_queue.size());
+            if (g_cleanup_queue.empty()) {
+                break;
+            }
+            to_destroy = g_cleanup_queue.back();
+            g_cleanup_queue.pop_back();
+        }
+        // Drop the lock while we do the actual deletion.
+        _ThreadStateCreator_Destroy(to_destroy);
+    }
     return 0;
 }
 
@@ -835,7 +862,17 @@ public:
 
     ~_GThreadStateCreator()
     {
+        // We are *NOT* holding the GIL. Our thread is in the middle
+        // of dieing and the Python thread state is already gone so we
+        // can't use most Python APIs. One that is safe is There is a
+        // limited number of calls that can be queued: 32
+        // (NPENDINGCALLS) in CPython 3.10. We should probably look
+        // into some way to coalesce these calls.
+
+        const std::lock_guard<std::mutex> cleanup_lock(g_cleanup_queue_lock);
+
         if (this->_state && this->_state->borrow_main_greenlet()) {
+            // Because we don't have the GIL, this is a race condition.
             if (!PyInterpreterState_Head()) {
                 _GDPrint("\tInterp torn down\n");
                 // We have to leak the thread state, if the
@@ -845,15 +882,19 @@ public:
                 return;
             }
 
-            // Need to schedule the destruction; can't do it now
-            // because the Python thread state is gone, and this
-            // lower-level thread is about to die too.
-            // XXX: There is a limited number of calls that can be queued:
-            // 32 (NPENDINGCALLS) in CPython 3.10. We should probably look
-            // into some way to coalesce these calls.
-
-            Py_AddPendingCall(_ThreadStateCreator_Destroy,
-                              this->_state->borrow_main_greenlet());
+            g_cleanup_queue.push_back(this->_state->borrow_main_greenlet());
+            if (g_cleanup_queue.size() == 1) {
+                // We added the first item to the queue. We need to schedule
+                // the cleanup.
+                int result = Py_AddPendingCall(_ThreadStateCreator_DestroyAll,
+                                               NULL);
+                if (result < 0) {
+                    _GDPrint("OH NO FAILED TO ADD PENDING CLEANUP.\n");
+                }
+            }
+            else {
+                _GDPrint("NEAT. Added to existing pending call.");
+            }
         }
     }
 
@@ -899,6 +940,12 @@ public:
 };
 
 static thread_local _GThreadStateCreator g_thread_state_global;
+
+#undef _GDPrint
+#define _GDPrint(...)
+#define _GDPoPrint(...)
+
+
 
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
@@ -1938,7 +1985,7 @@ kill_greenlet(PyGreenlet* self)
         self->main_greenlet_s->thread_state->delete_when_thread_running(self);
     }
     else {
-        fprintf(stderr, "Killing greenlet %p after its thread done. Buffer: %p; just dealloc.\n", self, self->top_frame);
+        fprintf(stderr, "Killing greenlet %p after its thread done. Top frame: %p; just dealloc.\n", self, self->top_frame);
         // We need to make it look non-active, though, so that dealloc
         // finishes killing it.
         self->stack_start = NULL;
@@ -2905,6 +2952,19 @@ mod_set_thread_local(PyObject* mod, PyObject* args)
     return result;
 }
 
+PyDoc_STRVAR(mod_get_pending_cleanup_count_doc,
+             "get_pending_cleanup_count() -> Integer\n"
+             "\n"
+             "Get the number of greenlet cleanup operations pending. Testing only.\n");
+
+
+static PyObject*
+mod_get_pending_cleanup_count(PyObject* mod)
+{
+    const std::lock_guard<std::mutex> cleanup_lock(g_cleanup_queue_lock);
+    return PyLong_FromSize_t(g_cleanup_queue.size());
+}
+
 static PyMethodDef GreenMethods[] = {
     {"getcurrent",
      (PyCFunction)mod_getcurrent,
@@ -2913,6 +2973,7 @@ static PyMethodDef GreenMethods[] = {
     {"settrace", (PyCFunction)mod_settrace, METH_VARARGS, mod_settrace_doc},
     {"gettrace", (PyCFunction)mod_gettrace, METH_NOARGS, mod_gettrace_doc},
     {"set_thread_local", (PyCFunction)mod_set_thread_local, METH_VARARGS, mod_set_thread_local_doc},
+    {"get_pending_cleanup_count", (PyCFunction)mod_get_pending_cleanup_count, METH_NOARGS, mod_get_pending_cleanup_count_doc},
     {NULL, NULL} /* Sentinel */
 };
 

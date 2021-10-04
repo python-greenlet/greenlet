@@ -9,7 +9,9 @@ import threading
 
 import greenlet
 
-class TestLeaks(unittest.TestCase):
+from . import Cleanup
+
+class TestLeaks(Cleanup, unittest.TestCase):
 
     def test_arg_refs(self):
         args = ('a', 'b', 'c')
@@ -104,7 +106,6 @@ class TestLeaks(unittest.TestCase):
             # Collect the garbage.
             for _ in range(3):
                 gc.collect()
-            gc.collect()
             return sum(
                 1
                 for x in gc.get_objects()
@@ -123,10 +124,13 @@ class TestLeaks(unittest.TestCase):
         # To toggle debugging off and on.
         #print = lambda *args, **kwargs: None
         class JustDelMe(object):
+            EXTANT_INSTANCES = set()
             def __init__(self, msg):
                 self.msg = msg
+                self.EXTANT_INSTANCES.add(id(self))
             def __del__(self):
                 print(id(self), self.msg, file=sys.stderr)
+                self.EXTANT_INSTANCES.remove(id(self))
             def __repr__(self):
                 return "<JustDelMe at 0x%x %r>" % (
                     id(self), self.msg
@@ -137,7 +141,9 @@ class TestLeaks(unittest.TestCase):
             jd = JustDelMe("DELETING STACK OBJECT")
             print("\n\tIn bg glet", jd, file=sys.stderr)
             show_bg_main("\t")
-            greenlet._greenlet.set_thread_local('test_leaks_key', JustDelMe("DELETING THREAD STATE"))
+            greenlet._greenlet.set_thread_local(
+                'test_leaks_key',
+                JustDelMe("DELETING THREAD STATE"))
             # Explicitly keeping 'switch' in a local variable
             # breaks this test in all versions
             if explicit_reference_to_switch:
@@ -149,12 +155,13 @@ class TestLeaks(unittest.TestCase):
 
         bg_main_wrefs = []
         def show_bg_main(pfx=''):
-            print(pfx+"BG Refcount :", sys.getrefcount(bg_main_wrefs[0]()), file=sys.stderr)
-            print(pfx+"BG Main Refs:", gc.get_referrers(bg_main_wrefs[0]()), file=sys.stderr)
+            print(pfx + "BG Refcount :", sys.getrefcount(bg_main_wrefs[0]()), file=sys.stderr)
+            print(pfx + "BG Main Refs:", gc.get_referrers(bg_main_wrefs[0]()), file=sys.stderr)
 
         def background_thread():
             print(file=sys.stderr)
             print("Begin thread", file=sys.stderr)
+            print("BG Main greenlet:", greenlet.getcurrent(), file=sys.stderr)
             print("BG Refcount :", sys.getrefcount(greenlet.getcurrent()), file=sys.stderr)
             print("BG Main Refs:", gc.get_referrers(greenlet.getcurrent()), file=sys.stderr)
 
@@ -213,8 +220,8 @@ class TestLeaks(unittest.TestCase):
         # As part of the fix for 252, we need to cycle the ceval.c
         # interpreter loop to be sure it has had a chance to process
         # the pending call.
+        self.wait_for_pending_cleanups()
 
-        time.sleep(0.001)
         if bg_main_wrefs[0]() is not None:
             print("After dead", file=sys.stderr)
             gc.collect()
@@ -223,9 +230,11 @@ class TestLeaks(unittest.TestCase):
         #print("checking", file=sys.stderr) Free the background main
         #greenlet by forcing greenlet to notice a difference.
         #greenlet.getcurrent()
-        greenlets_after = count_objects(greenlet.greenlet)
-        #print("counting", file=sys.stderr)
+
         lists_after = count_objects()
+        greenlets_after = count_objects(greenlet.greenlet)
+
+        #print("counting", file=sys.stderr)
         #print("counted", file=sys.stderr)
         # On 2.7, we observe that lists_after is smaller than
         # lists_before. No idea what lists got cleaned up. All the
@@ -233,23 +242,33 @@ class TestLeaks(unittest.TestCase):
         self.assertLessEqual(lists_after, lists_before)
         # On versions after 3.6, we've successfully cleaned up the greenlet references;
         # prior to that, there is a reference path through the ``greenlet.switch`` method
-        # still on the stack that we can't reach to clean up.
-        # XXX: Why not? We see it when we traverse. How is the thread state not
-        # getting cleaned up?
+        # still on the stack that we can't reach to clean up. The C code goes through
+        # terrific lengths to clean that up.
 
-        # On linux, we've observed that the greenlets_after
-        # can be less than the greenlets before. Probably due to the
-        # delayed cleanup of Py_AddPendingCall and a previous test?
         if not explicit_reference_to_switch:
-            self.assertLessEqual(greenlets_after, greenlets_before)
+            self.assertEqual(greenlets_after, greenlets_before)
+            if manually_collect_background:
+                # TODO: Figure out how to make this work!
+                # The one on the stack is still leaking somehow
+                # in the non-manually-collect state.
+                self.assertEqual(JustDelMe.EXTANT_INSTANCES, set())
         else:
             # The explicit reference prevents us from collecting it
-            # and it isn't found by the GC either for some reason. The
-            # entire frame is leaked somehow, on some platforms (e.g.,
-            # MacPorts builds of Python (all versions!)), but not on
-            # other platforms (the linux and windows builds on GitHub
-            # actions and Appveyor)
-            self.assertGreaterEqual(greenlets_after, greenlets_before)
+            # and it isn't always found by the GC either for some
+            # reason. The entire frame is leaked somehow, on some
+            # platforms (e.g., MacPorts builds of Python (all
+            # versions!)), but not on other platforms (the linux and
+            # windows builds on GitHub actions and Appveyor). So we'd
+            # like to write a test that proves that the main greenlet
+            # sticks around, and we can on may machine (macOS 11.6,
+            # MacPorts builds of everything) but we can't write that
+            # same test on other platforms
+            if greenlets_after < greenlets_before:
+                for x in (y for y in gc.get_objects() if isinstance(x, greenlet.greenlet)):
+                    print(x)
+            pass
+
+
 
     def test_issue251_issue252_need_to_collect_in_background(self):
         # This still fails because the leak of the list

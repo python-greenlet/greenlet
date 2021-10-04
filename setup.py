@@ -24,11 +24,12 @@ main_compile_args = []
 # https://github.com/python-greenlet/greenlet/issues/4
 # https://github.com/python-greenlet/greenlet/issues/94
 # pylint:disable=too-many-boolean-expressions
+is_linux = sys.platform.startswith('linux') # could be linux or linux2
 if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or ("-with-redhat-3." in platform.platform() and platform.machine() == 'i686')
     or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
     or ("SunOS" in platform.platform() and platform.machine() == "sun4v")
-    or (sys.platform == "linux" and platform.machine() == "ppc")):
+    or (is_linux and platform.machine() == "ppc")):
     global_compile_args.append("-Os")
 
 

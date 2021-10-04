@@ -6,6 +6,7 @@ import unittest
 from abc import ABCMeta, abstractmethod
 
 from greenlet import greenlet
+from . import Cleanup
 
 # We manually manage locks in many tests
 # pylint:disable=consider-using-with
@@ -32,7 +33,7 @@ def send_exception(g, exc):
     g1.switch(exc)
 
 
-class TestGreenlet(unittest.TestCase):
+class TestGreenlet(Cleanup, unittest.TestCase):
     def test_simple(self):
         lst = []
 
@@ -720,7 +721,7 @@ class TestGreenlet(unittest.TestCase):
         self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
 
 
-class TestRepr(unittest.TestCase):
+class TestRepr(Cleanup, unittest.TestCase):
 
     def assertEndsWith(self, got, suffix):
         self.assertTrue(got.endswith(suffix), (got, suffix))

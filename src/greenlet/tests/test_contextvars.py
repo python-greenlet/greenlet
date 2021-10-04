@@ -7,7 +7,7 @@ from functools import partial
 
 from greenlet import greenlet
 from greenlet import getcurrent
-
+from . import Cleanup
 
 try:
     from contextvars import Context
@@ -18,7 +18,7 @@ except ImportError:
 
 # We don't support testing if greenlet's built-in context var support is disabled.
 @unittest.skipUnless(Context is not None, "ContextVar not supported")
-class ContextVarsTests(unittest.TestCase):
+class ContextVarsTests(Cleanup, unittest.TestCase):
     def _new_ctx_run(self, *args, **kwargs):
         return copy_context().run(*args, **kwargs)
 
