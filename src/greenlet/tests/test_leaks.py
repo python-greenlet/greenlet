@@ -245,8 +245,11 @@ class TestLeaks(unittest.TestCase):
         else:
             # The explicit reference prevents us from collecting it
             # and it isn't found by the GC either for some reason. The
-            # entire frame is leaked somehow
-            self.assertGreater(greenlets_after, greenlets_before)
+            # entire frame is leaked somehow, on some platforms (e.g.,
+            # MacPorts builds of Python (all versions!)), but not on
+            # other platforms (the linux and windows builds on GitHub
+            # actions and Appveyor)
+            self.assertGreaterEqual(greenlets_after, greenlets_before)
 
     def test_issue251_issue252_need_to_collect_in_background(self):
         # This still fails because the leak of the list
