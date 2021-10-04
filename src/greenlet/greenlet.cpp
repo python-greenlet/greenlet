@@ -20,8 +20,12 @@ class _GThreadState;
 #    pragma clang diagnostic push
 #    pragma clang diagnostic ignored "-Wunused-parameter"
 #    pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic push
+//  warning: ISO C++ forbids converting a string constant to ‘char*’
+// (The python APIs aren't const correct and accept writable char*)
+#    pragma GCC diagnostic ignored "-Wwrite-strings"
 #endif
-
 /***********************************************************
 
 A PyGreenlet is a range of C stack addresses that must be
@@ -170,9 +174,6 @@ static void _GDPoPrint(void* o)
     }
 }
 
-#undef _GDPrint
-#define _GDPrint(...)
-#define _GDPoPrint(...)
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
 
@@ -636,6 +637,9 @@ public:
             PyGreenlet* old_main_greenlet = this->main_greenlet_s;
             Py_ssize_t cnt = Py_REFCNT(this->main_greenlet_s);
             Py_CLEAR(this->main_greenlet_s);
+            _GDPrint("Destructor: Init refcount: %ld Current: %ld\n",
+                     cnt, cnt > 1 ? Py_REFCNT(old_main_greenlet) : -1
+                     );
             if (cnt == 2 && Py_REFCNT(old_main_greenlet) == 1) {
                 // Highly likely that the reference is somewhere on
                 // the stack, not reachable by GC. Verify.
@@ -651,8 +655,14 @@ public:
                         // We found nothing! So we left a dangling
                         // reference. Clean it up.
                         Py_DECREF(old_main_greenlet);
+                        _GDPrint("\tDecrefed main greenlet\n");
                     }
                 }
+                _GDPrint("\tRefs to main greenlet? %p ", refs);
+                if (refs) {
+                    _GDPoPrint(refs);
+                }
+                _GDPrint("\n");
                 Py_XDECREF(gc);
                 Py_XDECREF(refs);
                 Py_XDECREF(get_referrers);
@@ -727,6 +737,9 @@ public:
 
 };
 
+#undef _GDPrint
+#define _GDPrint(...)
+#define _GDPoPrint(...)
 
 
 //#define _GDPoPrint(o)
@@ -2962,4 +2975,6 @@ init_greenlet(void)
 
 #ifdef __clang__
 #    pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic pop
 #endif
