@@ -87,7 +87,9 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
-    def test_issue251_killing_cross_thread_leaks_list(self, manually_collect_background=True):
+    def test_issue251_killing_cross_thread_leaks_list(self,
+                                                      manually_collect_background=True,
+                                                      explicit_reference_to_switch=False):
         # See https://github.com/python-greenlet/greenlet/issues/251
         # Killing a greenlet (probably not the main one)
         # in one thread from another thread would
@@ -121,15 +123,29 @@ class TestLeaks(unittest.TestCase):
         # To toggle debugging off and on.
         #print = lambda *args, **kwargs: None
         class JustDelMe(object):
+            def __init__(self, msg):
+                self.msg = msg
             def __del__(self):
-                print("DELETING OBJECT")
+                print(id(self), self.msg, file=sys.stderr)
+            def __repr__(self):
+                return "<JustDelMe at 0x%x %r>" % (
+                    id(self), self.msg
+                )
 
         def background_greenlet():
             # Throw control back to the main greenlet.
-            jd = JustDelMe()
+            jd = JustDelMe("DELETING STACK OBJECT")
             print("\n\tIn bg glet", jd, file=sys.stderr)
             show_bg_main("\t")
-            greenlet.getcurrent().parent.switch([jd])
+            greenlet._greenlet.set_thread_local('test_leaks_key', JustDelMe("DELETING THREAD STATE"))
+            # Explicitly keeping 'switch' in a local variable
+            # breaks this test in all versions
+            if explicit_reference_to_switch:
+                s = greenlet.getcurrent().parent.switch
+                s([jd])
+            else:
+                greenlet.getcurrent().parent.switch([jd])
+
 
         bg_main_wrefs = []
         def show_bg_main(pfx=''):
@@ -215,10 +231,22 @@ class TestLeaks(unittest.TestCase):
         # lists_before. No idea what lists got cleaned up. All the
         # Python 3 versions match exactly.
         self.assertLessEqual(lists_after, lists_before)
+        # On versions after 3.6, we've successfully cleaned up the greenlet references;
+        # prior to that, there is a reference path through the ``greenlet.switch`` method
+        # still on the stack that we can't reach to clean up.
+        # XXX: Why not? We see it when we traverse. How is the thread state not
+        # getting cleaned up?
+
         # On linux, we've observed that the greenlets_after
         # can be less than the greenlets before. Probably due to the
         # delayed cleanup of Py_AddPendingCall and a previous test?
-        self.assertLessEqual(greenlets_after, greenlets_before)
+        if not explicit_reference_to_switch:
+            self.assertLessEqual(greenlets_after, greenlets_before)
+        else:
+            # The explicit reference prevents us from collecting it
+            # and it isn't found by the GC either for some reason. The
+            # entire frame is leaked somehow
+            self.assertGreater(greenlets_after, greenlets_before)
 
     def test_issue251_issue252_need_to_collect_in_background(self):
         # This still fails because the leak of the list
@@ -237,3 +265,8 @@ class TestLeaks(unittest.TestCase):
         # Note that this test sometimes spuriously passes on Linux, for some reason,
         # but I've never seen it pass on macOS.
         self.test_issue251_killing_cross_thread_leaks_list(manually_collect_background=False)
+
+    def test_issue251_issue252_explicit_reference_not_collectable(self):
+        self.test_issue251_killing_cross_thread_leaks_list(
+            manually_collect_background=False,
+            explicit_reference_to_switch=True)

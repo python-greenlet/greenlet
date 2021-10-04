@@ -20,12 +20,16 @@ class _GThreadState;
 #    pragma clang diagnostic push
 #    pragma clang diagnostic ignored "-Wunused-parameter"
 #    pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#    pragma clang diagnostic ignored "-Wwritable-strings"
 #elif defined(__GNUC__)
 #    pragma GCC diagnostic push
 //  warning: ISO C++ forbids converting a string constant to ‘char*’
 // (The python APIs aren't const correct and accept writable char*)
 #    pragma GCC diagnostic ignored "-Wwrite-strings"
 #endif
+
+static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
+
 /***********************************************************
 
 A PyGreenlet is a range of C stack addresses that must be
@@ -653,9 +657,48 @@ public:
                     refs = PyObject_CallFunctionObjArgs(get_referrers, old_main_greenlet, NULL);
                     if (refs && !PyList_GET_SIZE(refs)) {
                         // We found nothing! So we left a dangling
-                        // reference. Clean it up.
+                        // reference: Probably the last thing some
+                        // other greenlet did was call
+                        // 'getcurrent().parent.switch()' to switch
+                        // back to us. Clean it up. This will be the
+                        // case on CPython 3.7 and newer, as they use
+                        // an internal calling convertion that avoids
+                        // creating method objects and storing them on
+                        // the stack.
                         Py_DECREF(old_main_greenlet);
                         _GDPrint("\tDecrefed main greenlet\n");
+                    }
+                    else if (refs
+                             && PyList_GET_SIZE(refs) == 1
+                             && PyCFunction_Check(PyList_GET_ITEM(refs, 0))
+                             && Py_REFCNT(PyList_GET_ITEM(refs, 0)) == 2) {
+                        // Ok, we found a C method that refers to the
+                        // main greenlet, and its only referenced
+                        // twice, once in the list we just created,
+                        // once from...somewhere else. If we can't
+                        // find where else, then this is a leak.
+                        // This happens in older versions of CPython
+                        // that create a bound method object somewhere
+                        // on the stack that we'll never get back to.
+                        _GDPrint("\tFOUND A C METHOD Refcount: %ld.\n",
+                                 Py_REFCNT(PyList_GET_ITEM(refs, 0)));
+
+                        if (PyCFunction_GetFunction(PyList_GET_ITEM(refs, 0)) == (PyCFunction)green_switch) {
+                            _GDPrint("\tIt IS switch\n");
+                            PyObject* function_w = PyList_GET_ITEM(refs, 0);
+                            Py_DECREF(refs);
+                            // back to one reference. Can *it* be
+                            // found?
+                            refs = PyObject_CallFunctionObjArgs(get_referrers, function_w, NULL);
+                            _GDPrint("\tRefs to function: %p Size %ld\n", refs, refs ? PyList_GET_SIZE(refs) : -1);
+                            if (refs && !PyList_GET_SIZE(refs)) {
+                                // Nope, it can't be found so it won't
+                                // ever be GC'd. Drop it.
+                                Py_CLEAR(function_w);
+                            }
+
+                        }
+
                     }
                 }
                 _GDPrint("\tRefs to main greenlet? %p ", refs);
@@ -1096,6 +1139,8 @@ extern "C" {
             g_switchstack_success = GREENLET_NOINLINE(g_switchstack_success);           \
         } while (0)
 #endif
+
+
 
 /*
  * the following macros are spliced into the OS/compiler
@@ -2835,6 +2880,31 @@ mod_gettrace(PyObject* self)
     return tracefunc;
 }
 
+PyDoc_STRVAR(mod_set_thread_local_doc,
+             "set_thread_local(key, value) -> None\n"
+             "\n"
+             "Set a value in the current thread-local dictionary. Debbuging only.\n");
+
+static PyObject*
+mod_set_thread_local(PyObject* mod, PyObject* args)
+{
+    PyObject* key;
+    PyObject* value;
+    PyObject* result = NULL;
+    // PyArg borrows refs, do not decrement.
+    if (PyArg_UnpackTuple(args, "set_thread_local", 2, 2, &key, &value)) {
+        if(PyDict_SetItem(
+                          PyThreadState_GetDict(), // borrow
+                          key,
+                          value) == 0 ) {
+            // success
+            Py_INCREF(Py_None);
+            result = Py_None;
+        }
+    }
+    return result;
+}
+
 static PyMethodDef GreenMethods[] = {
     {"getcurrent",
      (PyCFunction)mod_getcurrent,
@@ -2842,6 +2912,7 @@ static PyMethodDef GreenMethods[] = {
      mod_getcurrent_doc},
     {"settrace", (PyCFunction)mod_settrace, METH_VARARGS, mod_settrace_doc},
     {"gettrace", (PyCFunction)mod_gettrace, METH_NOARGS, mod_gettrace_doc},
+    {"set_thread_local", (PyCFunction)mod_set_thread_local, METH_VARARGS, mod_set_thread_local_doc},
     {NULL, NULL} /* Sentinel */
 };
 
