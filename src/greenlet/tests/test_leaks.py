@@ -119,7 +119,7 @@ class TestLeaks(unittest.TestCase):
         background_glet_killed = threading.Event()
         background_greenlets = []
         # To toggle debugging off and on.
-        print = lambda *args, **kwargs: None
+        #print = lambda *args, **kwargs: None
         class JustDelMe(object):
             def __del__(self):
                 print("DELETING OBJECT")
@@ -215,10 +215,11 @@ class TestLeaks(unittest.TestCase):
         # lists_before. No idea what lists got cleaned up. All the
         # Python 3 versions match exactly.
         self.assertLessEqual(lists_after, lists_before)
+        # On linux, we've observed that the greenlets_after
+        # can be less than the greenlets before. Probably due to the
+        # delayed cleanup of Py_AddPendingCall and a previous test?
+        self.assertLessEqual(greenlets_after, greenlets_before)
 
-        self.assertEqual(greenlets_before, greenlets_after)
-
-    #@unittest.expectedFailure
     def test_issue251_issue252_need_to_collect_in_background(self):
         # This still fails because the leak of the list
         # still exists when we don't call a greenlet API before exiting the
