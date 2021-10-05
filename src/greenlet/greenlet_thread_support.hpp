@@ -46,15 +46,16 @@
 #else
 #    if defined(_MSC_VER)
 #        define G_THREAD_LOCAL_VAR __declspec(thread)
-#    elif defined(__GNUC__) || defined(__clang__)
-#        define G_THREAD_LOCAL_VAR __thread
+#        include <afxmt.h>
+#        define G_MUTEX_TYPE
+#        define G_MUTEX_ACQUIRE(Mutex) CSingleLock cleanup_lock(&Mutex, TRUE)
+#        define G_MUTEX_RELEASE(Mutex) do {} while (0)
+//#    elif defined(__GNUC__) || defined(__clang__)
+//#        define G_THREAD_LOCAL_VAR __thread
 #    else
 #        error Don't know how to declare thread-local variables.
 #    endif
-// XXX: Actually need to implement these, plus implement the memory deletion.
-#    define G_MUTEX_TYPE int
-#    define G_MUTEX_ACQUIRE(Mutex) do {} while (0)
-#    define G_MUTEX_RELEASE(Mutex) do {} while (0)
+// XXX: Actually need to implement the memory deletion.
 #endif
 
 #endif /* GREENLET_THREAD_SUPPORT_HPP */
