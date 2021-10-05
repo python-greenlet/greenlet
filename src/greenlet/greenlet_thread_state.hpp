@@ -75,6 +75,11 @@ private:
        references, but you need to manually INCREF/DECREF as you use
        them. */
     greenlet::g_deleteme_t deleteme;
+#if G_HAS_METHOD_DELETE == 0
+    ThreadState(const ThreadState& other);
+    ThreadState& operator=(const ThreadState& other);
+#endif
+
 public:
 
     /* Used internally in ``g_switchstack()`` when
@@ -95,9 +100,11 @@ public:
         //_GDPrint("Size of thread state: %ld\n", sizeof(_GThreadState));
     };
 
+#if G_HAS_METHOD_DELETE
     // Only one of these, auto created per thread
-    ThreadState(const ThreadState& other) = G_DELETED_METHOD;
-    ThreadState& operator=(const ThreadState& other) = G_DELETED_METHOD;
+    ThreadState(const ThreadState& other) = delete;
+    ThreadState& operator=(const ThreadState& other) = delete;
+#endif
 
     inline bool has_main_greenlet()
     {

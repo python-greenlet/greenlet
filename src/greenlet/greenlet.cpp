@@ -261,11 +261,17 @@ class ThreadStateCreator
 {
 private:
     ThreadState* _state;
+#if G_HAS_METHOD_DELETE == 0
+    ThreadStateCreator(const ThreadStateCreator& other);
+    ThreadStateCreator& operator=(const ThreadStateCreator& other);
+#endif
 public:
 
     // Only one of these, auto created per thread
-    ThreadStateCreator(const ThreadStateCreator& other) = G_DELETED_METHOD;
-    ThreadStateCreator& operator=(const ThreadStateCreator& other) = G_DELETED_METHOD;
+#if G_HAS_METHOD_DELETE == 1
+    ThreadStateCreator(const ThreadStateCreator& other) = delete;
+    ThreadStateCreator& operator=(const ThreadStateCreator& other) = delete;
+#endif
 
     ThreadStateCreator() :
         _state(0)
