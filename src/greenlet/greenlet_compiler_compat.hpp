@@ -9,14 +9,16 @@
 
 /* The compiler used for Python 2.7 on Windows doesn't include
    either stdint.h or cstdint.h. Nor does it understand nullptr or have
-   std::shared_ptr. Sigh. */
+   std::shared_ptr. = delete, etc Sigh. */
 #if defined(_MSC_VER) &&  _MSC_VER <= 1500
 typedef unsigned long long uint64_t;
 typedef signed long long int64_t;
 typedef unsigned int uint32_t;
 #define nullptr NULL
+#define G_DELETED_METHOD 0
 #else
 #include <cstdint>
+#define G_DELETED_METHOD delete
 #endif
 
 // CAUTION: MSVC is stupidly picky:

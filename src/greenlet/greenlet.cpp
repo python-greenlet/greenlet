@@ -264,8 +264,8 @@ private:
 public:
 
     // Only one of these, auto created per thread
-    ThreadStateCreator(const ThreadStateCreator& other) = delete;
-    ThreadStateCreator& operator=(const ThreadStateCreator& other) = delete;
+    ThreadStateCreator(const ThreadStateCreator& other) = G_DELETED_METHOD;
+    ThreadStateCreator& operator=(const ThreadStateCreator& other) = G_DELETED_METHOD;
 
     ThreadStateCreator() :
         _state(0)

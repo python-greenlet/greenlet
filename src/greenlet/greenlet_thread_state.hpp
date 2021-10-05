@@ -96,8 +96,8 @@ public:
     };
 
     // Only one of these, auto created per thread
-    ThreadState(const ThreadState& other) = delete;
-    ThreadState& operator=(const ThreadState& other) = delete;
+    ThreadState(const ThreadState& other) = G_DELETED_METHOD;
+    ThreadState& operator=(const ThreadState& other) = G_DELETED_METHOD;
 
     inline bool has_main_greenlet()
     {
