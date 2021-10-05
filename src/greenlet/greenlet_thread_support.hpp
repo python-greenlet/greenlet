@@ -43,13 +43,15 @@
 #    define G_MUTEX_TYPE std::mutex
 #    define G_MUTEX_ACQUIRE(Mutex) const std::lock_guard<std::mutex> cleanup_lock(Mutex)
 #    define G_MUTEX_RELEASE(Mutex) do {} while (0)
+#    define G_MUTEX_INIT(Mutex) do {} while(0)
 #else
 #    if defined(_MSC_VER)
 #        define G_THREAD_LOCAL_VAR __declspec(thread)
-#        include <afxmt.h>
-#        define G_MUTEX_TYPE
-#        define G_MUTEX_ACQUIRE(Mutex) CSingleLock cleanup_lock(&Mutex, TRUE)
-#        define G_MUTEX_RELEASE(Mutex) do {} while (0)
+#        include <windows.h>
+#        define G_MUTEX_TYPE CRITICAL_SECTION
+#        define G_MUTEX_ACQUIRE(Mutex) EnterCriticalSection(&Mutex)
+#        define G_MUTEX_RELEASE(Mutex) LeaveCriticalSection(&Mutex)
+#        define G_MUTEX_INIT(Mutex) InitializeCriticalSection(&Mutex)
 //#    elif defined(__GNUC__) || defined(__clang__)
 //#        define G_THREAD_LOCAL_VAR __thread
 #    else

@@ -2380,6 +2380,7 @@ init_greenlet(void)
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
 
     GREENLET_NOINLINE_INIT();
+    G_MUTEX_INIT(g_cleanup_queue_lock);
 
 #if PY_MAJOR_VERSION >= 3
     m = PyModule_Create(&greenlet_module_def);
