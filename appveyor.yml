@@ -54,15 +54,15 @@ environment:
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
 
-    # - PYTHON: "C:\\Python27"
-    #   PYTHON_ARCH: "32"
-    #   PYTHON_VERSION: "2.7.x"
-    #   PYTHON_EXE: python
+    - PYTHON: "C:\\Python27"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "2.7.x"
+      PYTHON_EXE: python
 
-    # - PYTHON: "C:\\Python27-x64"
-    #   PYTHON_ARCH: "64"
-    #   PYTHON_VERSION: "2.7.x"
-    #   PYTHON_EXE: python
+    - PYTHON: "C:\\Python27-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "2.7.x"
+      PYTHON_EXE: python
 
     - PYTHON: "C:\\Python35"
       PYTHON_ARCH: "32"

@@ -99,6 +99,10 @@ public:
     ThreadState(const ThreadState& other) = delete;
     ThreadState& operator=(const ThreadState& other) = delete;
 
+    inline bool has_main_greenlet()
+    {
+        return this->main_greenlet_s != nullptr;
+    }
 
     inline PyGreenlet* borrow_main_greenlet()
     {
