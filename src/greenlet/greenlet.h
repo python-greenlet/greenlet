@@ -27,6 +27,7 @@ typedef struct _greenlet {
     struct _greenlet* stack_prev;
     struct _greenlet* parent;
     /* strong reference, set when the greenlet begins to run. */
+    /* Used to be called run_info */
     struct _greenlet* main_greenlet_s;
     struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
     int recursion_depth;

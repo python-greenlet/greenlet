@@ -4,6 +4,7 @@
 recursive-include src *.py
 recursive-include src *.c
 recursive-include src *.cpp
+recursive-include src *.hpp
 recursive-include src *.h
 recursive-include src *.cmd
 recursive-include src *.asm
