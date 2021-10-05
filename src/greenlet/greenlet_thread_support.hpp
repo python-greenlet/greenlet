@@ -51,11 +51,9 @@
 #    else
 #        error Don't know how to declare thread-local variables.
 #    endif
-// XXX: these are a trap
-#include <thread>
-#include <mutex>
-#    define G_MUTEX_TYPE std::mutex
-#    define G_MUTEX_ACQUIRE(Mutex) const std::lock_guard<std::mutex> cleanup_lock(Mutex)
+// XXX: Actually need to implement these, plus implement the memory deletion.
+#    define G_MUTEX_TYPE int
+#    define G_MUTEX_ACQUIRE(Mutex) do {} while (0)
 #    define G_MUTEX_RELEASE(Mutex) do {} while (0)
 #endif
 
