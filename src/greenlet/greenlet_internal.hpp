@@ -13,15 +13,34 @@
 namespace greenlet {
     class ThreadState;
 };
-#define state_ptr_t greenlet::ThreadState*
+struct _PyMainGreenlet;
+#define main_greenlet_ptr_t struct _PyMainGreenlet*
+
 
 #include "greenlet.h"
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_cpython_compat.hpp"
 
-
 #include <vector>
 #include <memory>
+
+// Define a special type for the main greenlets. This way it can have
+// a thread state pointer without having to carry the expense of a
+// NULL field around on every other greenlet.
+// At the Python level, the main greenlet class is
+// *almost* indistinguisable from plain greenlets.
+typedef struct _PyMainGreenlet
+{
+    PyGreenlet super;
+    greenlet::ThreadState* thread_state;
+} PyMainGreenlet;
+
+static PyTypeObject PyMainGreenlet_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "greenlet.greenlet",
+    .tp_basicsize = sizeof(PyMainGreenlet)
+};
+
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
 
@@ -90,7 +109,7 @@ typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
 /**
   * Forward declarations needed in multiple files.
   */
-static PyGreenlet* green_create_main();
+static PyMainGreenlet* green_create_main();
 static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
 
 

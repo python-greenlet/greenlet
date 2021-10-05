@@ -178,7 +178,7 @@ _ThreadStateCreator_Destroy(void* arg)
     // Passed a borrowed reference to the main greenlet.
     // main greenlet -> state -> main greenlet
     // main greenlet -> main greenlet
-    PyGreenlet* main = (PyGreenlet*)arg;
+    PyMainGreenlet* main = (PyMainGreenlet*)arg;
     ThreadState* s = main->thread_state;
     _GDPrint("PendingCall: Destroying main greenlet %p (refcount %ld)\n", main, Py_REFCNT(main));
     // When we need to do cross-thread operations, we check this.
@@ -240,7 +240,7 @@ ThreadStateCreator_Destroy(ThreadState* state)
             return;
         }
 
-        g_cleanup_queue.push_back(state->borrow_main_greenlet());
+        g_cleanup_queue.push_back((PyGreenlet*)state->borrow_main_greenlet());
         if (g_cleanup_queue.size() == 1) {
             // We added the first item to the queue. We need to schedule
             // the cleanup.
@@ -322,7 +322,7 @@ public:
     {
         return this->state().borrow_origin();
     };
-    inline PyGreenlet* borrow_main_greenlet()
+    inline PyMainGreenlet* borrow_main_greenlet()
     {
         return this->state().borrow_main_greenlet();
     };
@@ -372,20 +372,20 @@ green_clear_exc(PyGreenlet* g)
 #endif
 }
 
-static PyGreenlet*
+static PyMainGreenlet*
 green_create_main(void)
 {
-    PyGreenlet* gmain;
+    PyMainGreenlet* gmain;
 
     /* create the main greenlet for this thread */
-    gmain = (PyGreenlet*)PyType_GenericAlloc(&PyGreenlet_Type, 0);
+    gmain = (PyMainGreenlet*)PyType_GenericAlloc(&PyMainGreenlet_Type, 0);
     if (gmain == NULL) {
         return NULL;
     }
-    gmain->stack_start = (char*)1;
-    gmain->stack_stop = (char*)-1;
+    gmain->super.stack_start = (char*)1;
+    gmain->super.stack_stop = (char*)-1;
     // circular reference; the pending call will clean this up.
-    gmain->main_greenlet_s = gmain;
+    gmain->super.main_greenlet_s = gmain;
     Py_INCREF(gmain);
     assert(Py_REFCNT(gmain) == 2);
     return gmain;
@@ -488,7 +488,7 @@ green_create_main(void)
 //     return g->run_info;
 // }
 
-static PyGreenlet*
+static PyMainGreenlet*
 find_and_borrow_main_greenlet_in_lineage(PyGreenlet* g)
 {
     while (!PyGreenlet_STARTED(g)) {
@@ -1566,11 +1566,17 @@ green_dealloc(PyGreenlet* self)
 #endif
     Py_CLEAR(self->dict);
     assert(!PyErr_Occurred());
+    // XXX: We should never get here with a main greenlet that still
+    // has a thread state attached. If we do, that's a problem, right?
+    // (If it's not a problem, we can customize the dealloc function
+    // for the main greenlet class).
+#if 0
     if (self->thread_state) {
         // HMM. We shouldn't get here.
         _GDPrint("DEALLOC MAIN GREENLET (%p) WITH THREAD STATE (%p)\n", self, self->thread_state);
         assert(!self->thread_state);
     }
+#endif
     Py_TYPE(self)->tp_free((PyObject*)self);
     assert(!PyErr_Occurred());
 
@@ -1838,14 +1844,14 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
         _GDPrint("Examining parent ");
         _GDPoPrint((PyObject*)p);
         _GDPrint("\n\tActive? %d Run info: %p\n", PyGreenlet_ACTIVE(p), p->main_greenlet_s);
-        run_info = PyGreenlet_ACTIVE(p) ? p->main_greenlet_s : NULL;
+        run_info = PyGreenlet_ACTIVE(p) ? (PyGreenlet*)p->main_greenlet_s : NULL;
     }
     if (run_info == NULL) {
         PyErr_SetString(PyExc_ValueError,
                         "parent must not be garbage collected");
         return -1;
     }
-    if (PyGreenlet_STARTED(self) && self->main_greenlet_s != run_info) {
+    if (PyGreenlet_STARTED(self) && self->main_greenlet_s != (void*)run_info) {
         PyErr_SetString(PyExc_ValueError,
                         "parent cannot be on a different thread");
         return -1;
@@ -2244,6 +2250,7 @@ PyTypeObject PyGreenlet_Type = {
 };
 
 
+
 PyDoc_STRVAR(mod_getcurrent_doc,
              "getcurrent() -> greenlet\n"
              "\n"
@@ -2403,6 +2410,11 @@ init_greenlet(void)
     if (PyType_Ready(&PyGreenlet_Type) < 0) {
         INITERROR;
     }
+    PyMainGreenlet_Type.tp_base = &PyGreenlet_Type;
+    if (PyType_Ready(&PyMainGreenlet_Type) < 0) {
+        INITERROR;
+    }
+
     PyExc_GreenletError = PyErr_NewException("greenlet.error", NULL, NULL);
     if (PyExc_GreenletError == NULL) {
         INITERROR;

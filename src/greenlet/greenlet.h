@@ -15,7 +15,7 @@ extern "C" {
 #define GREENLET_VERSION "1.0.0"
 
 #ifndef GREENLET_MODULE
-#define state_ptr_t void*
+#define main_greenlet_ptr_t void*
 #endif
 
 typedef struct _greenlet {
@@ -28,7 +28,7 @@ typedef struct _greenlet {
     struct _greenlet* parent;
     /* strong reference, set when the greenlet begins to run. */
     /* Used to be called run_info */
-    struct _greenlet* main_greenlet_s;
+    main_greenlet_ptr_t main_greenlet_s;
     struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
     int recursion_depth;
     PyObject* weakreflist;
@@ -52,7 +52,6 @@ typedef struct _greenlet {
     // If we can get it down to just one pointer, we could
     // re-purpose an existing field.
     PyObject* run_callable;
-    state_ptr_t thread_state;
 } PyGreenlet;
 
 #define PyGreenlet_Check(op) PyObject_TypeCheck(op, &PyGreenlet_Type)

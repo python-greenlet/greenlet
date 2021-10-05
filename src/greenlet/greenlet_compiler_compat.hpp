@@ -15,10 +15,10 @@ typedef unsigned long long uint64_t;
 typedef signed long long int64_t;
 typedef unsigned int uint32_t;
 #define nullptr NULL
-#define G_DELETED_METHOD 0
+#define G_HAS_METHOD_DELETE 0
 #else
 #include <cstdint>
-#define G_DELETED_METHOD delete
+#define G_HAS_METHOD_DELETE 1
 #endif
 
 // CAUTION: MSVC is stupidly picky:

@@ -53,7 +53,7 @@ private:
     // Adding the vector takes us up to 80 bytes ()
 
     /* Strong reference to the main greenlet */
-    PyGreenlet* main_greenlet_s;
+    PyMainGreenlet* main_greenlet_s;
 
     /* Strong reference to the current greenlet. */
     PyGreenlet* current_greenlet_s;
@@ -111,7 +111,7 @@ public:
         return this->main_greenlet_s != nullptr;
     }
 
-    inline PyGreenlet* borrow_main_greenlet()
+    inline PyMainGreenlet* borrow_main_greenlet()
     {
         if (!this->main_greenlet_s) {
             assert(!this->current_greenlet_s);
@@ -119,16 +119,16 @@ public:
             this->main_greenlet_s = green_create_main();
             if (this->main_greenlet_s) {
                 this->main_greenlet_s->thread_state = this;
-                this->set_current(this->main_greenlet_s);
+                this->set_current((PyGreenlet*)this->main_greenlet_s);
                 assert(Py_REFCNT(this->main_greenlet_s) == 3);
             }
         }
         return this->main_greenlet_s;
     };
 
-    inline PyGreenlet* get_main_greenlet()
+    inline PyMainGreenlet* get_main_greenlet()
     {
-        PyGreenlet* g = this->borrow_main_greenlet();
+        PyMainGreenlet* g = this->borrow_main_greenlet();
         Py_XINCREF(g);
         return g;
     }
@@ -277,7 +277,7 @@ public:
         */
 
         assert(this->current_greenlet_s->main_greenlet_s == this->main_greenlet_s);
-        assert(this->main_greenlet_s->main_greenlet_s == this->main_greenlet_s);
+        assert(this->main_greenlet_s->super.main_greenlet_s == this->main_greenlet_s);
         this->clear_deleteme_list();
         return true;
     };
@@ -401,18 +401,18 @@ public:
         // It's possible that there is some other greenlet that
         // switched to us, leaving a reference to the main greenlet
         // on the stack, somewhere uncollectable. Try to detect that.
-        if (this->current_greenlet_s == this->main_greenlet_s && this->current_greenlet_s) {
+        if (this->current_greenlet_s == (void*)this->main_greenlet_s && this->current_greenlet_s) {
             assert(PyGreenlet_MAIN(this->main_greenlet_s));
             assert(!this->current_greenlet_s->top_frame);
-            assert(this->main_greenlet_s->main_greenlet_s == this->main_greenlet_s);
+            assert(this->main_greenlet_s->super.main_greenlet_s == this->main_greenlet_s);
             // Break a cycle we know about, the self reference
             // the main greenlet keeps.
-            Py_CLEAR(this->main_greenlet_s->main_greenlet_s);
+            Py_CLEAR(this->main_greenlet_s->super.main_greenlet_s);
             // Drop one reference we hold.
             Py_CLEAR(this->current_greenlet_s);
             // Only our reference to the main greenlet should be left,
             // But hold onto the pointer in case we need to do extra cleanup.
-            PyGreenlet* old_main_greenlet = this->main_greenlet_s;
+            PyMainGreenlet* old_main_greenlet = this->main_greenlet_s;
             Py_ssize_t cnt = Py_REFCNT(this->main_greenlet_s);
             Py_CLEAR(this->main_greenlet_s);
             _GDPrint("Destructor: Init refcount: %ld Current: %ld\n",
@@ -519,7 +519,7 @@ public:
             // when the thread exited (because we already cleared this
             // pointer if it was). This shouldn't be possible?
 
-            if (this->main_greenlet_s->top_frame) {
+            if (this->main_greenlet_s->super.top_frame) {
                 _GDPrint("The main greenlet had a frame: %p (refcount %ld)",
                          this->main_greenlet_s,
                          Py_REFCNT(this->main_greenlet_s->top_frame)
@@ -534,10 +534,10 @@ public:
             // If the main greenlet was current when the thread died (it
             // should be, right?) then we cleared its self pointer above
             // when we cleared the current greenlet's main greenlet pointer.
-            assert(this->main_greenlet_s->main_greenlet_s == this->main_greenlet_s
-                   || !this->main_greenlet_s->main_greenlet_s);
+            assert(this->main_greenlet_s->super.main_greenlet_s == this->main_greenlet_s
+                   || !this->main_greenlet_s->super.main_greenlet_s);
             // self reference, probably gone
-            Py_CLEAR(this->main_greenlet_s->main_greenlet_s);
+            Py_CLEAR(this->main_greenlet_s->super.main_greenlet_s);
 
             _GDPrint("\tFinishing double decref of main greenlet %p Refcount: %ld\n",
                      this->main_greenlet_s,
