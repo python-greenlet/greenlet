@@ -257,6 +257,11 @@ ThreadStateCreator_Destroy(ThreadState* state)
         G_MUTEX_RELEASE(g_cleanup_queue_lock);
     }
 }
+#else
+static class _CleanupQueue {
+public:
+    ssize_t size() { return 0; };
+} g_cleanup_queue;
 #endif
 
 
@@ -2592,6 +2597,7 @@ init_greenlet(void)
     PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(1));
     PyModule_AddObject(
         m, "GREENLET_USE_CONTEXT_VARS", PyBool_FromLong(GREENLET_PY37));
+    PyModule_AddObject(m, "GREENLET_USE_STANDARD_THREADING", PyBool_FromLong(G_USE_STANDARD_THREADING));
 
     /* also publish module-level data as attributes of the greentype. */
     /* XXX: Why? */
