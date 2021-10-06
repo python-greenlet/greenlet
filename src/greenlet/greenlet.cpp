@@ -560,11 +560,11 @@ find_and_borrow_main_greenlet_in_lineage(PyGreenlet* g)
 /* add forward declarations */
 static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int);
 static int GREENLET_NOINLINE(g_initialstub)(void*);
-static void GREENLET_NOINLINE(g_switchstack_success)(void);
+static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState*);
 
 extern "C" {
-    static void GREENLET_NOINLINE(slp_restore_state)(void);
-    static int GREENLET_NOINLINE(slp_save_state)(char*, ThreadState&);
+    static void GREENLET_NOINLINE(slp_restore_state)(ThreadState*);
+    static int GREENLET_NOINLINE(slp_save_state)(char*, ThreadState*);
 #    if !(defined(MS_WIN64) && defined(_M_X64))
     static int GREENLET_NOINLINE(slp_switch)(void);
 #    endif
@@ -581,8 +581,8 @@ static PyObject* (*g_switch_finish)(int err);
 static void (*g_switchstack_success)(void);
 
 extern "C" {
-    static void (*slp_restore_state)(void);
-    static int (*slp_save_state)(char*, ThreadState&);
+    static void (*slp_restore_state)(ThreadState*);
+    static int (*slp_save_state)(char*, ThreadState*);
     static int (*slp_switch)(void);
 };
 #    define GREENLET_NOINLINE(name) cannot_inline_##name
@@ -623,19 +623,27 @@ extern "C" {
 // ``slp_save_state_asm()`` function (but interestingly, because of
 // the calling convention, the extra argument is just ignored and
 // things function fine, albeit slower, if we just modify
-// ``slp_save_state_asm`()` to fetch the pointer to pass to the macro.)
+// ``slp_save_state_asm`()` to fetch the pointer to pass to the
+// macro.)
+//
+// Our compromise is to use a *glabal*, untracked, weak, pointer
+// to the necessary thread state during the process of switching only.
+// This is safe beacuse we're protected by the GIL, and if we're
+// running this code, the thread isn't exiting. This also nets us a
+// 10-12% speed improvement.
+static ThreadState* switching_thread_state = NULL;
 #define SLP_SAVE_STATE(stackref, stsizediff) \
     do {                                                    \
-    ThreadState& greenlet_thread_state = GET_THREAD_STATE(); \
+    assert(switching_thread_state);  \
     stackref += STACK_MAGIC;                 \
-    if (slp_save_state((char*)stackref, greenlet_thread_state)) \
+    if (slp_save_state((char*)stackref, switching_thread_state)) \
         return -1;                           \
-    if (!PyGreenlet_ACTIVE(greenlet_thread_state.borrow_target())) \
+    if (!PyGreenlet_ACTIVE(switching_thread_state->borrow_target())) \
         return 1;                            \
-    stsizediff = greenlet_thread_state.borrow_target()->stack_start - (char*)stackref; \
+    stsizediff = switching_thread_state->borrow_target()->stack_start - (char*)stackref; \
     } while (0)
 
-#define SLP_RESTORE_STATE() slp_restore_state()
+#define SLP_RESTORE_STATE() slp_restore_state(switching_thread_state)
 
 #define SLP_EVAL
 #define slp_switch GREENLET_NOINLINE(slp_switch)
@@ -705,11 +713,10 @@ g_save(PyGreenlet* g, char* stop)
     return 0;
 }
 
-static void GREENLET_NOINLINE(slp_restore_state)(void)
+static void GREENLET_NOINLINE(slp_restore_state)(ThreadState* state)
 {
-    ThreadState& state = GET_THREAD_STATE();
-    PyGreenlet* g = state.borrow_target();
-    PyGreenlet* owner = state.borrow_current();
+    PyGreenlet* g = state->borrow_target();
+    PyGreenlet* owner = state->borrow_current();
 
 #ifdef SLP_BEFORE_RESTORE_STATE
     SLP_BEFORE_RESTORE_STATE();
@@ -731,11 +738,11 @@ static void GREENLET_NOINLINE(slp_restore_state)(void)
     g->stack_prev = owner;
 }
 
-static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState& state)
+static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState* state)
 {
     /* must free all the C stack up to target_stop */
-    char* target_stop = (state.borrow_target())->stack_stop;
-    PyGreenlet* owner = state.borrow_current();
+    char* target_stop = state->borrow_target()->stack_stop;
+    PyGreenlet* owner = state->borrow_current();
     assert(owner->stack_saved == 0);
     if (owner->stack_start == NULL) {
         owner = owner->stack_prev; /* not saved if dying */
@@ -755,7 +762,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState& state)
         }
         owner = owner->stack_prev;
     }
-    if (owner != (state.borrow_target())) {
+    if (owner != (state->borrow_target())) {
         if (g_save(owner, target_stop)) {
             return -1; /* XXX */
         }
@@ -763,12 +770,11 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState& state)
     return 0;
 }
 
-static void GREENLET_NOINLINE(g_switchstack_success)(void)
+static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
 {
     // XXX: The ownership rules can be simplified here.
-    ThreadState& state = GET_THREAD_STATE();
-    PyGreenlet* target = state.borrow_target();
-    PyGreenlet* origin = state.borrow_current();
+    PyGreenlet* target = state->borrow_target();
+    PyGreenlet* origin = state->borrow_current();
     PyThreadState* tstate = PyThreadState_GET();
     tstate->recursion_depth = target->recursion_depth;
     tstate->frame = target->top_frame;
@@ -799,13 +805,13 @@ static void GREENLET_NOINLINE(g_switchstack_success)(void)
       root_cframe here. See note above about why we can't
       just copy this from ``origin->cframe->use_tracing``.
     */
-    tstate->cframe->use_tracing = state.switchstack_use_tracing;
+    tstate->cframe->use_tracing = state->switchstack_use_tracing;
 #endif
-    assert(state.borrow_origin() == NULL);
+    assert(state->borrow_origin() == NULL);
     Py_INCREF(target); // XXX: Simplify ownership rules
-    state.release_ownership_of_current_and_steal_new_current(target);
-    state.steal_ownership_as_origin(origin);
-    state.wref_target(NULL);
+    state->release_ownership_of_current_and_steal_new_current(target);
+    state->steal_ownership_as_origin(origin);
+    state->wref_target(NULL);
 }
 
 /**
@@ -877,6 +883,8 @@ g_switchstack(void)
         current->cframe = tstate->cframe;
         state.switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
+        switching_thread_state = &state; // XXX: should this access
+                                         // the global?
     }
 
     int err = slp_switch();
@@ -897,8 +905,9 @@ g_switchstack(void)
     }
     else {
         // No stack-based variables are valid anymore.
-        g_switchstack_success();
+        g_switchstack_success(switching_thread_state);
     }
+    switching_thread_state = NULL;
     return err;
 }
 
