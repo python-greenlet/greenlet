@@ -39,7 +39,7 @@ if sys.platform == 'darwin':
 
 
 def readfile(filename):
-    with open(filename, 'r') as f:
+    with open(filename, 'r') as f: # pylint:disable=unspecified-encoding
         return f.read()
 
 GREENLET_SRC_DIR = 'src/greenlet/'
@@ -52,6 +52,9 @@ GREENLET_PLATFORM_DIR = GREENLET_SRC_DIR + 'platform/'
 
 def _find_platform_headers():
     return glob.glob(GREENLET_PLATFORM_DIR + "switch_*.h")
+
+def _find_impl_headers():
+    return glob.glob(GREENLET_SRC_DIR + "*.hpp")
 
 if hasattr(sys, "pypy_version_info"):
     ext_modules = []
@@ -82,7 +85,7 @@ else:
             depends=[
                 GREENLET_HEADER,
                 GREENLET_SRC_DIR + 'slp_platformselect.h',
-            ] + _find_platform_headers()
+            ] + _find_platform_headers() + _find_impl_headers()
         ),
         # Test extensions.
         #
@@ -113,7 +116,7 @@ else:
 
 
 def get_greenlet_version():
-    with open('src/greenlet/__init__.py') as f:
+    with open('src/greenlet/__init__.py') as f: # pylint:disable=unspecified-encoding
         looking_for = '__version__ = \''
         for line in f:
             if line.startswith(looking_for):

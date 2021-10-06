@@ -28,7 +28,7 @@
 #        define G_USE_STANDARD_THREADING 1
 #    endif
 #elif defined(__GNUC__) || defined(__clang__)
-// All tested versions either do, or can, support what we need
+// All tested versions either do, or can with the right --std argument, support what we need
 #    define G_USE_STANDARD_THREADING 1
 #else
 #    define G_USE_STANDARD_THREADING 0
@@ -44,16 +44,29 @@
 #    define G_MUTEX_ACQUIRE(Mutex) const std::lock_guard<std::mutex> cleanup_lock(Mutex)
 #    define G_MUTEX_RELEASE(Mutex) do {} while (0)
 #    define G_MUTEX_INIT(Mutex) do {} while(0)
+#    define G_MUTEX_INIT_SUCCESS(Mutex) 1
 #else
+// NOTE: At this writing, the mutex isn't currently required;
+// we don't use a shared cleanup queue or Py_AddPendingCall in this
+// model, we rely on the thread state dictionary for cleanup.
 #    if defined(_MSC_VER)
+//       We should only hit this case for Python 2.7 on Windows.
 #        define G_THREAD_LOCAL_VAR __declspec(thread)
 #        include <windows.h>
 #        define G_MUTEX_TYPE CRITICAL_SECTION
 #        define G_MUTEX_ACQUIRE(Mutex) EnterCriticalSection(&Mutex)
 #        define G_MUTEX_RELEASE(Mutex) LeaveCriticalSection(&Mutex)
 #        define G_MUTEX_INIT(Mutex) InitializeCriticalSection(&Mutex)
-//#    elif defined(__GNUC__) || defined(__clang__)
-//#        define G_THREAD_LOCAL_VAR __thread
+#        define G_MUTEX_INIT_SUCCESS(Mutex) 1
+#    elif (defined(__GNUC__) || defined(__clang__)) && PY_MAJOR_VERSION >= 3
+// Here, we can use PyThread APIs, added in 3.2
+#        define G_THREAD_LOCAL_VAR __thread
+#        include "pythread.h"
+#        define G_MUTEX_TYPE PyThread_type_lock
+#        define G_MUTEX_ACQUIRE(Mutex) PyThread_acquire_lock(Mutex, WAIT_LOCK)
+#        define G_MUTEX_RELEASE(Mutex) PyThread_release_lock(Mutex)
+#        define G_MUTEX_INIT(Mutex) Mutex = PyThread_allocate_lock()
+#        define G_MUTEX_INIT_SUCCESS(Mutex) (Mutex != NULL)
 #    else
 #        error Don't know how to declare thread-local variables.
 #    endif

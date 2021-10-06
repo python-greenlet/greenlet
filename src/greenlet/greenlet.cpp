@@ -166,19 +166,14 @@ static PyObject* ts_empty_dict;
 // MSVC) can't have destructors.
 
 static G_MUTEX_TYPE g_cleanup_queue_lock;
-// We can't use the PythonAllocator for this, because we push to it
-// from the thread state destructor, which doesn't have the GIL,
-// and Python's allocators can only be called with the GIL.
-static std::vector<PyGreenlet*> g_cleanup_queue;
 
 static int
-_ThreadStateCreator_Destroy(void* arg)
+_ThreadStateCreator_Destroy(PyMainGreenlet* main)
 {
     // Holding the GIL.
     // Passed a borrowed reference to the main greenlet.
     // main greenlet -> state -> main greenlet
     // main greenlet -> main greenlet
-    PyMainGreenlet* main = (PyMainGreenlet*)arg;
     ThreadState* s = main->thread_state;
     _GDPrint("PendingCall: Destroying main greenlet %p (refcount %ld)\n", main, Py_REFCNT(main));
     // When we need to do cross-thread operations, we check this.
@@ -188,6 +183,12 @@ _ThreadStateCreator_Destroy(void* arg)
     delete s; // Deleting this runs the constructor, DECREFs the main greenlet.
     return 0;
 }
+
+#if G_USE_STANDARD_THREADING == 1
+// We can't use the PythonAllocator for this, because we push to it
+// from the thread state destructor, which doesn't have the GIL,
+// and Python's allocators can only be called with the GIL.
+static std::vector<PyMainGreenlet*> g_cleanup_queue;
 
 static int
 _ThreadStateCreator_DestroyAll(void* arg)
@@ -199,7 +200,7 @@ _ThreadStateCreator_DestroyAll(void* arg)
     // TODO: On platforms that support it, use ``pthread_atform`` to
     // drop this lock.
     while (1) {
-        PyGreenlet* to_destroy;
+        PyMainGreenlet* to_destroy;
         {
             G_MUTEX_ACQUIRE(g_cleanup_queue_lock);
             _GDPrint("Processing %ld cleanups\n", g_cleanup_queue.size());
@@ -240,7 +241,7 @@ ThreadStateCreator_Destroy(ThreadState* state)
             return;
         }
 
-        g_cleanup_queue.push_back((PyGreenlet*)state->borrow_main_greenlet());
+        g_cleanup_queue.push_back(state->borrow_main_greenlet());
         if (g_cleanup_queue.size() == 1) {
             // We added the first item to the queue. We need to schedule
             // the cleanup.
@@ -256,6 +257,8 @@ ThreadStateCreator_Destroy(ThreadState* state)
         G_MUTEX_RELEASE(g_cleanup_queue_lock);
     }
 }
+#endif
+
 
 class ThreadStateCreator
 {
@@ -280,7 +283,18 @@ public:
 
     ~ThreadStateCreator()
     {
+#if G_USE_STANDARD_THREADING == 1
         ThreadStateCreator_Destroy(this->_state);
+#else
+        // if we're not using standard threading, we're using
+        // the Python thread-local dictionary to perform our cleanup,
+        // which means we're deallocated when holding the GIL. The
+        // thread state is valide enough still for us to destroy
+        // stuff.
+        if (this->_state && this->_state->borrow_main_greenlet()) {
+            _ThreadStateCreator_Destroy(this->_state->borrow_main_greenlet());
+        }
+#endif
     }
 
 
@@ -333,13 +347,134 @@ public:
 static G_THREAD_LOCAL_VAR ThreadStateCreator g_thread_state_global;
 #define GET_THREAD_STATE() g_thread_state_global
 #else
+// Define a Python object that goes in the Python thread state dict
+// when the greenlet thread state is created, and which owns the
+// reference to the greenlet thread local state.
+// When the thread state dict is cleaned up, so too is the thread
+// state. This works best if we make sure there are no circular
+// references to the thread state.
+typedef struct _PyGreenletCleanup {
+    PyObject_HEAD
+    ThreadStateCreator* thread_state_creator;
+} PyGreenletCleanup;
+
+static void
+cleanup_dealloc(PyGreenletCleanup* self)
+{
+    PyObject_GC_UnTrack(self);
+    ThreadStateCreator* tmp = self->thread_state_creator;
+    self->thread_state_creator = NULL;
+    if (tmp) {
+        delete tmp;
+    }
+
+}
+
+static int
+cleanup_clear(PyGreenletCleanup* self)
+{
+    Py_CLEAR(self->thread_state_creator);
+    return 0;
+}
+
+static int
+cleanup_traverse(PyGreenletCleanup* self, visitproc visit, void* arg)
+{
+    // TODO: Anything we should traverse? Probably yes.
+    return 0;
+}
+
+static int
+cleanup_is_gc(PyGreenlet* self)
+{
+    return 1;
+}
+
+static PyTypeObject PyGreenletCleanup_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "greenlet._greenlet.ThreadStateCleanup",
+    sizeof(struct _PyGreenletCleanup),
+    0,                   /* tp_itemsize */
+    /* methods */
+    (destructor)cleanup_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_compare */
+    0,                         /* tp_repr */
+    0,                         /* tp_as _number*/
+    0,                         /* tp_as _sequence*/
+    0,                         /* tp_as _mapping*/
+    0,                         /* tp_hash */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer*/
+    G_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+    "Internal use only",                        /* tp_doc */
+    (traverseproc)cleanup_traverse, /* tp_traverse */
+    (inquiry)cleanup_clear,         /* tp_clear */
+    0,                                  /* tp_richcompare */
+    // XXX: Don't our flags promise a weakref?
+    0,                           /* tp_weaklistoffset */
+    0,                                  /* tp_iter */
+    0,                                  /* tp_iternext */
+    0,                      /* tp_methods */
+    0,                      /* tp_members */
+    0,                      /* tp_getset */
+    0,                                  /* tp_base */
+    0,                                  /* tp_dict */
+    0,                                  /* tp_descr_get */
+    0,                                  /* tp_descr_set */
+    0,         /* tp_dictoffset */
+    0,               /* tp_init */
+    PyType_GenericAlloc,                  /* tp_alloc */
+    PyType_GenericNew,                          /* tp_new */
+    PyObject_GC_Del,                   /* tp_free */
+    (inquiry)cleanup_is_gc,         /* tp_is_gc */
+};
 static G_THREAD_LOCAL_VAR ThreadStateCreator* _g_thread_state_global_ptr = nullptr;
 static ThreadStateCreator& GET_THREAD_STATE()
 {
     if (!_g_thread_state_global_ptr) {
-        // XXX: Need to clean this up. Same as before, an object in
-        // the thread local dictionary.
+        // NOTE: If any of this fails, we'll probably go on to hard
+        // crash the process, because we're returning a reference to a
+        // null pointer. we've called Py_FatalError(), but have no way
+        // to commuticate that to the user. Since these should
+        // essentially never fail unless the entire process is borked,
+        // a hard crash with a decent C backtrace is much more useful.
         _g_thread_state_global_ptr = new ThreadStateCreator();
+        if (!_g_thread_state_global_ptr) {
+            Py_FatalError("greenlet: Failed to create greenlet thread state.");
+        }
+        else {
+            PyGreenletCleanup* cleanup = (PyGreenletCleanup*)PyType_GenericAlloc(&PyGreenletCleanup_Type, 0);
+            if (!cleanup) {
+                Py_FatalError("greenlet: Failed to create greenlet thread state cleanup.");
+            }
+            else {
+                cleanup->thread_state_creator = _g_thread_state_global_ptr;
+#if PY_MAJOR_VERSION >= 3
+                assert(PyObject_GC_IsTracked((PyObject*)cleanup));
+#else
+                assert(_PyObject_GC_IS_TRACKED(cleanup));
+#endif
+                PyObject* ts_dict = PyThreadState_GetDict();
+                if (!ts_dict) {
+                    Py_FatalError("greenlet: Failed to get Python thread state.");
+                }
+                else {
+                    if (PyDict_SetItemString(ts_dict, "__greenlet_cleanup", (PyObject*)cleanup) < 0) {
+                        Py_FatalError("greenlet: Failed to save cleanup key in Python thread state.");
+                    }
+                    else {
+                        // The dict owns the reference now.
+                        Py_DECREF(cleanup);
+                    }
+                }
+            }
+        }
     }
     return *_g_thread_state_global_ptr;
 }
@@ -1356,7 +1491,6 @@ kill_greenlet(PyGreenlet* self)
         self->main_greenlet_s->thread_state->delete_when_thread_running(self);
     }
     else {
-        fprintf(stderr, "Killing greenlet %p after its thread done. Top frame: %p; just dealloc.\n", self, self->top_frame);
         // We need to make it look non-active, though, so that dealloc
         // finishes killing it.
         self->stack_start = NULL;
@@ -2387,7 +2521,10 @@ init_greenlet(void)
 
     GREENLET_NOINLINE_INIT();
     G_MUTEX_INIT(g_cleanup_queue_lock);
-
+    if (!G_MUTEX_INIT_SUCCESS(g_cleanup_queue_lock)) {
+        PyErr_SetString(PyExc_MemoryError, "can't allocate lock");
+        INITERROR;
+    }
 #if PY_MAJOR_VERSION >= 3
     m = PyModule_Create(&greenlet_module_def);
 #else
@@ -2418,7 +2555,11 @@ init_greenlet(void)
     if (PyType_Ready(&PyMainGreenlet_Type) < 0) {
         INITERROR;
     }
-
+#if G_USE_STANDARD_THREADING == 0
+    if (PyType_Ready(&PyGreenletCleanup_Type) < 0) {
+        INITERROR;
+    }
+#endif
     PyExc_GreenletError = PyErr_NewException("greenlet.error", NULL, NULL);
     if (PyExc_GreenletError == NULL) {
         INITERROR;
