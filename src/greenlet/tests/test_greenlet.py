@@ -795,5 +795,27 @@ class TestRepr(Cleanup, unittest.TestCase):
             )
 
 
+class TestMainGreenlet(Cleanup, unittest.TestCase):
+    # Tests some implementation details, and relies on some
+    # implementation details.
+
+    def _check_current_is_main(self):
+        # implementation detail
+        assert 'main' in repr(greenlet.getcurrent())
+
+        t = type(greenlet.getcurrent())
+        assert 'main' in repr(t)
+        return t
+
+    def test_main_greenlet_cannot_be_subclassed(self):
+        main_type = self._check_current_is_main()
+        with self.assertRaises(TypeError):
+            class Subclass(main_type): # pylint:disable=unused-variable
+                pass
+
+    def test_main_greenlet_is_greenlet(self):
+        self._check_current_is_main()
+        self.assertIsInstance(greenlet.getcurrent(), greenlet)
+
 if __name__ == '__main__':
     unittest.main()

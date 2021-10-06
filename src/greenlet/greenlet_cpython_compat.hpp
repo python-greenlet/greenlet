@@ -43,4 +43,35 @@ https://bugs.python.org/issue39573 */
 #    endif
 #endif
 
+#ifndef Py_TPFLAGS_CHECKTYPES
+  #define Py_TPFLAGS_CHECKTYPES 0
+#endif
+#ifndef Py_TPFLAGS_HAVE_INDEX
+  #define Py_TPFLAGS_HAVE_INDEX 0
+#endif
+#ifndef Py_TPFLAGS_HAVE_NEWBUFFER
+  #define Py_TPFLAGS_HAVE_NEWBUFFER 0
+#endif
+#ifndef Py_TPFLAGS_HAVE_FINALIZE
+  #define Py_TPFLAGS_HAVE_FINALIZE 0
+#endif
+#ifndef Py_TPFLAGS_HAVE_VERSION_TAG
+   #define Py_TPFLAGS_HAVE_VERSION_TAG 0
+#endif
+
+#define G_TPFLAGS_DEFAULT Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_VERSION_TAG | Py_TPFLAGS_CHECKTYPES | Py_TPFLAGS_HAVE_NEWBUFFER | Py_TPFLAGS_HAVE_GC
+
+#if PY_MAJOR_VERSION >= 3
+#    define GNative_FromFormat PyUnicode_FromFormat
+#else
+#    define GNative_FromFormat PyString_FromFormat
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+#    define Greenlet_Intern PyUnicode_InternFromString
+#else
+#    define Greenlet_Intern PyString_InternFromString
+#endif
+
+
 #endif /* GREENLET_CPYTHON_COMPAT_H */

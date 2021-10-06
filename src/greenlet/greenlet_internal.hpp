@@ -1,6 +1,12 @@
 /* -*- indent-tabs-mode: nil; tab-width: 4; -*- */
 #ifndef GREENLET_INTERNAL_H
 #define GREENLET_INTERNAL_H
+#ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wunused-function"
+#    pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#    pragma clang diagnostic ignored "-Wunused-variable"
+#endif
 
 /**
  * Implementation helpers.
@@ -35,10 +41,14 @@ typedef struct _PyMainGreenlet
     greenlet::ThreadState* thread_state;
 } PyMainGreenlet;
 
+// GCC and clang support mixing designated and non-designated
+// initializers; recent MSVC requires ``/std=c++20`` to use
+// designated initializer, and doesn't permit mixing. And then older
+// MSVC doesn't support any of it.
 static PyTypeObject PyMainGreenlet_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "greenlet.greenlet",
-    .tp_basicsize = sizeof(PyMainGreenlet)
+    "greenlet.main_greenlet", // tp_name
+    sizeof(PyMainGreenlet)
 };
 
 
@@ -111,6 +121,10 @@ typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
   */
 static PyMainGreenlet* green_create_main();
 static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
+
+#ifdef __clang__
+#    pragma clang diagnostic pop
+#endif
 
 
 #endif

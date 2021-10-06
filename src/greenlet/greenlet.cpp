@@ -2017,11 +2017,12 @@ green_repr(PyGreenlet* self)
     }
     */
 
-#if PY_MAJOR_VERSION >= 3
-# define GNative_FromFormat PyUnicode_FromFormat
-#else
-# define GNative_FromFormat PyString_FromFormat
-#endif
+    // Disguise the main greenlet type; changing the name in the repr breaks
+    // doctests, but having a different actual tp_name is important
+    // for debugging.
+    const char* const tp_name = Py_TYPE(self) == &PyMainGreenlet_Type
+        ? PyGreenlet_Type.tp_name
+        : Py_TYPE(self)->tp_name;
 
     if (_green_not_dead(self)) {
         /* XXX: The otid= is almost useless becasue you can't correlate it to
@@ -2033,7 +2034,7 @@ green_repr(PyGreenlet* self)
         */
         result = GNative_FromFormat(
             "<%s object at %p (otid=%p)%s%s%s%s>",
-            Py_TYPE(self)->tp_name,
+            tp_name,
             self,
             self->main_greenlet_s,
             GET_THREAD_STATE().state().is_current(self)
@@ -2048,12 +2049,11 @@ green_repr(PyGreenlet* self)
         /* main greenlets never really appear dead. */
         result = GNative_FromFormat(
             "<%s object at %p (otid=%p) dead>",
-            Py_TYPE(self)->tp_name,
+            tp_name,
             self,
             self->main_greenlet_s
             );
     }
-#undef GNative_FromFormat
 
     return result;
 }
@@ -2221,8 +2221,7 @@ PyTypeObject PyGreenlet_Type = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-        Py_TPFLAGS_HAVE_GC, /* tp_flags */
+    G_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
     "greenlet(run=None, parent=None) -> greenlet\n\n"
     "Creates a new greenlet object (without running it).\n\n"
     " - *run* -- The callable to invoke.\n"
@@ -2398,19 +2397,24 @@ init_greenlet(void)
         INITERROR;
     }
 
-#if PY_MAJOR_VERSION >= 3
-#    define Greenlet_Intern PyUnicode_InternFromString
-#else
-#    define Greenlet_Intern PyString_InternFromString
-#endif
     ts_event_switch = Greenlet_Intern("switch");
     ts_event_throw = Greenlet_Intern("throw");
-#undef Greenlet_Intern
 
     if (PyType_Ready(&PyGreenlet_Type) < 0) {
         INITERROR;
     }
     PyMainGreenlet_Type.tp_base = &PyGreenlet_Type;
+    Py_INCREF(&PyGreenlet_Type);
+    // On Py27, if we don't manually inherit the flags, we don't get
+    // Py_TPFLAGS_HAVE_CLASS, which breaks lots of things, notably
+    // type checking for the subclass. We also wind up inheriting
+    // HAVE_GC, which means we must set those fields as well, since if
+    // its explicitly set they don't get copied
+    PyMainGreenlet_Type.tp_flags = G_TPFLAGS_DEFAULT;
+    PyMainGreenlet_Type.tp_traverse = (traverseproc)green_traverse;
+    PyMainGreenlet_Type.tp_clear = (inquiry)green_clear;
+    PyMainGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;
+
     if (PyType_Ready(&PyMainGreenlet_Type) < 0) {
         INITERROR;
     }
