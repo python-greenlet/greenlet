@@ -58,8 +58,9 @@
 #        define G_MUTEX_RELEASE(Mutex) LeaveCriticalSection(&Mutex)
 #        define G_MUTEX_INIT(Mutex) InitializeCriticalSection(&Mutex)
 #        define G_MUTEX_INIT_SUCCESS(Mutex) 1
-#    elif (defined(__GNUC__) || defined(__clang__)) && PY_MAJOR_VERSION >= 3
-// Here, we can use PyThread APIs, added in 3.2
+#    elif (defined(__GNUC__) || defined(__clang__))
+// Here, we can use PyThread APIs, officially added in 3.2, but
+// present back to 2.7
 #        define G_THREAD_LOCAL_VAR __thread
 #        include "pythread.h"
 #        define G_MUTEX_TYPE PyThread_type_lock
@@ -68,9 +69,8 @@
 #        define G_MUTEX_INIT(Mutex) Mutex = PyThread_allocate_lock()
 #        define G_MUTEX_INIT_SUCCESS(Mutex) (Mutex != NULL)
 #    else
-#        error Don't know how to declare thread-local variables.
+#        error Unable to declare thread-local variables.
 #    endif
-// XXX: Actually need to implement the memory deletion.
 #endif
 
 #endif /* GREENLET_THREAD_SUPPORT_HPP */
