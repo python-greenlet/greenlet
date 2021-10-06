@@ -490,10 +490,6 @@ static ThreadStateCreator& GET_THREAD_STATE()
 /***********************************************************/
 /* Thread-aware routines, switching global variables when needed */
 
-#define STATE_OK  (GET_THREAD_STATE().state().ensure_current_greenlet())
-//    (ts_current->run_info == PyThreadState_GET()->dict || \
-//     !green_updatecurrent())
-
 
 
 static void
@@ -531,102 +527,6 @@ green_create_main(void)
     return gmain;
 }
 
-//XXX: We need to handle deleting the objects in ts_delkey!!
-// static int
-// green_updatecurrent(void)
-// {
-//     PyObject *exc, *val, *tb;
-//     PyThreadState* tstate;
-//     PyGreenlet* current;
-//     PyGreenlet* previous;
-//     PyObject* deleteme;
-
-// green_updatecurrent_restart:
-//     /* save current exception */
-//     PyErr_Fetch(&exc, &val, &tb);
-
-//     /* get ts_current from the active tstate */
-//     tstate = PyThreadState_GET();
-//     if (tstate->dict &&
-//         (current = (PyGreenlet*)PyDict_GetItem(tstate->dict, ts_curkey))) {
-//         /* found -- remove it, to avoid keeping a ref */
-//         Py_INCREF(current);
-//         PyDict_DelItem(tstate->dict, ts_curkey);
-//     }
-//     else {
-//         /* first time we see this tstate */
-//         current = green_create_main();
-//         if (current == NULL) {
-//             Py_XDECREF(exc);
-//             Py_XDECREF(val);
-//             Py_XDECREF(tb);
-//             return -1;
-//         }
-//     }
-//     assert(current->run_info == tstate->dict);
-
-// green_updatecurrent_retry:
-//     /* update ts_current as soon as possible, in case of nested switches */
-//     Py_INCREF(current);
-//     previous = ts_current;
-//     ts_current = current;
-
-//     /* save ts_current as the current greenlet of its own thread */
-//     if (PyDict_SetItem(previous->run_info, ts_curkey, (PyObject*)previous)) {
-//         Py_DECREF(previous);
-//         Py_DECREF(current);
-//         Py_XDECREF(exc);
-//         Py_XDECREF(val);
-//         Py_XDECREF(tb);
-//         return -1;
-//     }
-//     Py_DECREF(previous);
-
-//     /* green_dealloc() cannot delete greenlets from other threads, so
-//        it stores them in the thread dict; delete them now. */
-//     deleteme = PyDict_GetItem(tstate->dict, ts_delkey);
-//     if (deleteme != NULL) {
-//         /* The only reference to these greenlets should be in this list, so
-//            clearing the list should let them be deleted again, triggering
-//            calls to green_dealloc() in the correct thread. This may run
-//            arbitrary Python code?
-//          */
-//         PyList_SetSlice(deleteme, 0, INT_MAX, NULL);
-//     }
-
-//     if (ts_current != current) {
-//         /* some Python code executed above and there was a thread switch,
-//          * so ts_current points to some other thread again. We need to
-//          * delete ts_curkey (it's likely there) and retry. */
-//         PyDict_DelItem(tstate->dict, ts_curkey);
-//         goto green_updatecurrent_retry;
-//     }
-
-//     /* release an extra reference */
-//     Py_DECREF(current);
-//     /* restore current exception */
-//     PyErr_Restore(exc, val, tb);
-
-//     /* thread switch could happen during PyErr_Restore, in that
-//        case there's nothing to do except restart from scratch. */
-//     if (ts_current->run_info != tstate->dict) {
-//         goto green_updatecurrent_restart;
-//     }
-//     return 0;
-// }
-
-// static PyObject*
-// green_statedict(PyGreenlet* g)
-// {
-//     while (!PyGreenlet_STARTED(g)) {
-//         g = g->parent;
-//         if (g == NULL) {
-//             /* garbage collected greenlet in chain */
-//             return NULL;
-//         }
-//     }
-//     return g->run_info;
-// }
 
 static PyMainGreenlet*
 find_and_borrow_main_greenlet_in_lineage(PyGreenlet* g)
@@ -706,12 +606,15 @@ extern "C" {
  */
 
 #define SLP_SAVE_STATE(stackref, stsizediff) \
+    do {                                                    \
+    ThreadState& greenlet_thread_state = GET_THREAD_STATE(); \
     stackref += STACK_MAGIC;                 \
     if (slp_save_state((char*)stackref))     \
         return -1;                           \
-    if (!PyGreenlet_ACTIVE(GET_THREAD_STATE().borrow_target())) \
+    if (!PyGreenlet_ACTIVE(greenlet_thread_state.borrow_target())) \
         return 1;                            \
-    stsizediff = GET_THREAD_STATE().borrow_target()->stack_start - (char*)stackref
+    stsizediff = greenlet_thread_state.borrow_target()->stack_start - (char*)stackref; \
+    } while (0)
 
 #define SLP_RESTORE_STATE() slp_restore_state()
 
@@ -834,7 +737,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
         }
         owner = owner->stack_prev;
     }
-    if (owner != (GET_THREAD_STATE().borrow_target())) {
+    if (owner != (state.borrow_target())) {
         if (g_save(owner, target_stop)) {
             return -1; /* XXX */
         }
@@ -975,6 +878,7 @@ g_switchstack(void)
         GET_THREAD_STATE().state().wref_target(NULL);
     }
     else {
+        // No stack-based variables are valid anymore.
         g_switchstack_success();
     }
     return err;
@@ -1226,10 +1130,12 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     PyErr_Restore(exc, val, tb);
 
     /* recheck the state in case getattr caused thread switches */
+    /*
     if (!STATE_OK) {
         Py_DECREF(run);
         return -1;
     }
+    */
 
     /* recheck run_info in case greenlet reparented anywhere above */
     void* run_info = find_and_borrow_main_greenlet_in_lineage(self);
@@ -1360,18 +1266,20 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 
 /***********************************************************/
 
-static PyObject*
+static PyGreenlet*
 green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 {
-    PyObject* o =
-        PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
+    PyGreenlet* o =
+        (PyGreenlet*)PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
     if (o != NULL) {
+        /*
         if (!STATE_OK) {
             Py_DECREF(o);
             return NULL;
         }
+        */
 
-        ((PyGreenlet*)o)->parent = GET_THREAD_STATE().state().get_current();
+        o->parent = GET_THREAD_STATE().state().get_or_establish_current();
 #if GREENLET_USE_CFRAME
         /*
           The PyThreadState->cframe pointer usually points to memory on the
@@ -1414,7 +1322,7 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
           ``glet.run()`` returns and the CFrame is taken out of the linked
           list and the stack value is now unused and free to expire.
         */
-        ((PyGreenlet*)o)->cframe = &PyThreadState_GET()->root_cframe;
+        o->cframe = &PyThreadState_GET()->root_cframe;
 #endif
     }
     return o;
@@ -2382,7 +2290,7 @@ PyTypeObject PyGreenlet_Type = {
     offsetof(PyGreenlet, dict),         /* tp_dictoffset */
     (initproc)green_init,               /* tp_init */
     PyType_GenericAlloc,                  /* tp_alloc */
-    green_new,                          /* tp_new */
+    (newfunc)green_new,                          /* tp_new */
     PyObject_GC_Del,                   /* tp_free */
     (inquiry)green_is_gc,         /* tp_is_gc */
 };
