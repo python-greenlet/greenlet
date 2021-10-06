@@ -564,7 +564,7 @@ static void GREENLET_NOINLINE(g_switchstack_success)(void);
 
 extern "C" {
     static void GREENLET_NOINLINE(slp_restore_state)(void);
-    static int GREENLET_NOINLINE(slp_save_state)(char*);
+    static int GREENLET_NOINLINE(slp_save_state)(char*, ThreadState&);
 #    if !(defined(MS_WIN64) && defined(_M_X64))
     static int GREENLET_NOINLINE(slp_switch)(void);
 #    endif
@@ -582,7 +582,7 @@ static void (*g_switchstack_success)(void);
 
 extern "C" {
     static void (*slp_restore_state)(void);
-    static int (*slp_save_state)(char*);
+    static int (*slp_save_state)(char*, ThreadState&);
     static int (*slp_switch)(void);
 };
 #    define GREENLET_NOINLINE(name) cannot_inline_##name
@@ -604,12 +604,31 @@ extern "C" {
  * the following macros are spliced into the OS/compiler
  * specific code, in order to simplify maintenance.
  */
-
+// We can save about 10% of the time it takes to switch greenlets if
+// we thread the thread state through the slp_save_state() and the
+// following slp_restore_state() calls from
+// slp_switch()->g_switchstack() (which already needs to access it).
+//
+// However:
+//
+// that requires changing the prototypes and implementations of the
+// switching functions. If we just change the prototype of
+// slp_switch() to accept the argument and update the macros, without
+// changing the implementation of slp_switch(), we get crashes on
+// 64-bit Linux and 32-bit x86 (for reasons that aren't 100% clear);
+// on the other hand, 64-bit macOS seems to be fine. Also, 64-bit
+// windows is an issue because slp_switch is written fully in assembly
+// and currently ignores its argument so some code would have to be
+// adjusted there to pass the argument on to the
+// ``slp_save_state_asm()`` function (but interestingly, because of
+// the calling convention, the extra argument is just ignored and
+// things function fine, albeit slower, if we just modify
+// ``slp_save_state_asm`()` to fetch the pointer to pass to the macro.)
 #define SLP_SAVE_STATE(stackref, stsizediff) \
     do {                                                    \
     ThreadState& greenlet_thread_state = GET_THREAD_STATE(); \
     stackref += STACK_MAGIC;                 \
-    if (slp_save_state((char*)stackref))     \
+    if (slp_save_state((char*)stackref, greenlet_thread_state)) \
         return -1;                           \
     if (!PyGreenlet_ACTIVE(greenlet_thread_state.borrow_target())) \
         return 1;                            \
@@ -712,10 +731,9 @@ static void GREENLET_NOINLINE(slp_restore_state)(void)
     g->stack_prev = owner;
 }
 
-static int GREENLET_NOINLINE(slp_save_state)(char* stackref)
+static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState& state)
 {
     /* must free all the C stack up to target_stop */
-    ThreadState& state = GET_THREAD_STATE();
     char* target_stop = (state.borrow_target())->stack_stop;
     PyGreenlet* owner = state.borrow_current();
     assert(owner->stack_saved == 0);
@@ -1574,7 +1592,9 @@ static void
 green_dealloc(PyGreenlet* self)
 {
     PyObject_GC_UnTrack(self);
-
+#ifndef NDEBUG
+    PyObject* already_in_err = PyErr_Occurred();
+#endif
     _GDPrint("About to attempt to dealloc %p\n", self);
     if (PyGreenlet_ACTIVE(self)
         && self->main_greenlet_s != NULL // means started
@@ -1589,30 +1609,30 @@ green_dealloc(PyGreenlet* self)
     if (self->weakreflist != NULL) {
         PyObject_ClearWeakRefs((PyObject*)self);
     }
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->parent);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->main_greenlet_s);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
 #if GREENLET_PY37
     Py_CLEAR(self->context);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
 #endif
 #if GREENLET_PY37
     Py_CLEAR(self->exc_state.exc_type);
     Py_CLEAR(self->exc_state.exc_value);
     Py_CLEAR(self->exc_state.exc_traceback);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
 #else
     Py_CLEAR(self->exc_type);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->exc_value);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->exc_traceback);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
 #endif
     Py_CLEAR(self->dict);
-    assert(!PyErr_Occurred());
+    assert(already_in_err || !PyErr_Occurred());
     // XXX: We should never get here with a main greenlet that still
     // has a thread state attached. If we do, that's a problem, right?
     // (If it's not a problem, we can customize the dealloc function
@@ -1625,8 +1645,7 @@ green_dealloc(PyGreenlet* self)
     }
 #endif
     Py_TYPE(self)->tp_free((PyObject*)self);
-    assert(!PyErr_Occurred());
-
+    assert(already_in_err || !PyErr_Occurred());
 }
 
 static inline PyObject*
