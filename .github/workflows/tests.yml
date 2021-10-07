@@ -50,7 +50,11 @@ jobs:
         python -m pip install -U -e ".[test,docs]"
       env:
         # Ensure we test with assertions enabled.
-        CPPFLAGS: "-Ofast -fno-fast-math -UNDEBUG"
+        # As opposed to the manylinux builds, which we distribute and
+        # thus only use O3 (because Ofast enables fast-math, which has
+        # process-wide effects), we test with Ofast here, because we
+        # expect that some people will compile it themselves with that setting.
+        CPPFLAGS: "-Ofast -UNDEBUG"
     - name: Check greenlet build
       run: |
         ls -l dist
@@ -102,7 +106,7 @@ jobs:
         python -m pip install -U twine
     - name: Install greenlet
       env:
-        CPPFLAGS: -DG_USE_STANDARD_THREADING=0
+        CPPFLAGS: "-DG_USE_STANDARD_THREADING=0 -UNDEBUG -Ofast"
       run: |
         python setup.py bdist_wheel
         python -m pip install -U -v -e ".[test,docs]"

@@ -80,6 +80,7 @@ private:
     greenlet::g_deleteme_t deleteme;
 
     G_NO_COPIES_OF_CLS(ThreadState);
+
 public:
     /* Used internally in ``g_switchstack()`` when
        GREENLET_USE_CFRAME is true. */
