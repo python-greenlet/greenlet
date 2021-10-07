@@ -7,6 +7,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import sys
 from gc import collect
 from gc import get_objects
 from threading import active_count as active_thread_count
@@ -28,7 +29,7 @@ class CleanupMixin(object):
         # Python threads to make sure they, at least, have gone away.
 
         # Always sleep at least once to let other threads run
-        sleep(sleep_time)
+        sleep(sleep_time * 2)
         quit_after = time() + 10
         while get_pending_cleanup_count() or active_thread_count() > initial_active_threads:
             sleep(sleep_time)
@@ -54,7 +55,6 @@ class CleanupMixin(object):
             if isinstance(x, kind)
         )
 
-    # TODO: Ensure we don't leak greenlets, everything gets GC'd.
     greenlets_before_test = 0
     expect_greenlet_leak = False
 
@@ -73,13 +73,15 @@ class CleanupMixin(object):
 
     def tearDown(self):
         self.wait_for_pending_cleanups()
+        print("Counting greenlets", file=sys.stderr)
         greenlets_after_test = self.count_greenlets()
         if self.expect_greenlet_leak:
             if greenlets_after_test <= self.greenlets_before_test:
                 # Turn this into self.fail for debugging
                 print("WARNING:"
-                    "Expected to leak greenlets but did not; expected more than %d but found %d"
-                    % (self.greenlets_before_test, greenlets_after_test)
+                      "Expected to leak greenlets but did not; expected more than %d but found %d"
+                      % (self.greenlets_before_test, greenlets_after_test),
+                      file=sys.stderr
                 )
         else:
             if greenlets_after_test > self.greenlets_before_test:

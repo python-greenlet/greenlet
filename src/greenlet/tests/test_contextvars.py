@@ -212,8 +212,11 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
             getcurrent().parent.switch()
             holder.append(var.get())
 
+        print("BEGIN CONTEXT ASSIGNMENT DIF THREAD", file=sys.stderr)
         def thread_fn():
             gr = greenlet(greenlet_in_thread_fn)
+            print("gr", gr, file=sys.stderr)
+            print("Main", greenlet.getcurrent(), file=sys.stderr)
             gr.gr_context = ctx
             holder.append(gr)
             gr.switch()
@@ -257,6 +260,7 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
         # XXX: Should be able to do this automatically
         del holder[:]
         gr = None
+        thread = None
 
 @unittest.skipIf(Context is not None, "ContextVar supported")
 class NoContextVarsTests(unittest.TestCase):
