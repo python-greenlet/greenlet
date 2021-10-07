@@ -219,16 +219,20 @@ private:
     inline void clear_deleteme_list(const bool murder=false)
     {
         if (!this->deleteme.empty()) {
-            for(greenlet::g_deleteme_t::iterator it = this->deleteme.begin(), end = this->deleteme.end();
+            g_deleteme_t copy = this->deleteme;
+            this->deleteme.clear(); // in case things come back on the list
+            for(greenlet::g_deleteme_t::iterator it = copy.begin(), end = copy.end();
                 it != end;
                 ++it ) {
                 PyGreenlet* to_del = *it;
-
+                fprintf(stderr, "Deleteme: Decref %p; active? %d Refcount: %ld\n",
+                        to_del, PyGreenlet_ACTIVE(to_del), Py_REFCNT(to_del));
                 if (murder) {
                     // Force each greenlet to appear dead; we can't raise an
                     // exception into it anymore anyway.
 
                     Py_CLEAR(to_del->main_greenlet_s);
+                    fprintf(stderr, "\tMurdering %p; active? %d\n", to_del, PyGreenlet_ACTIVE(to_del));
                     if (PyGreenlet_ACTIVE(to_del)) {
                         assert(to_del->top_frame);
                         to_del->stack_start = NULL;
@@ -254,13 +258,20 @@ private:
                 // in the correct thread (if we're not murdering).
                 // This may run arbitrary Python code and switch
                 // threads.
+                Py_ssize_t refs = Py_REFCNT(to_del);
                 Py_DECREF(to_del);
+                if (refs > 1) {
+                    fprintf(stderr, "\tResurrected? %p before=%ld after=%ld\n",
+                            to_del, refs, Py_REFCNT(to_del));
+                }
                 if (PyErr_Occurred()) {
                     PyErr_WriteUnraisable(nullptr);
                     PyErr_Clear();
                 }
             }
-            this->deleteme.clear();
+        }
+        if (!this->deleteme.empty()) {
+            fprintf(stderr, "During deletion got more items: %ld\n", this->deleteme.size());
         }
     }
 
