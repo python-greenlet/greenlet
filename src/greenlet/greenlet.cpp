@@ -2230,10 +2230,13 @@ static PyMethodDef GreenMethods[] = {
 };
 
 static const char* const copy_on_greentype[] = {
-    "getcurrent", "error", "GreenletExit", "settrace", "gettrace", NULL};
-
-#if PY_MAJOR_VERSION >= 3
-#    define INITERROR return NULL
+    "getcurrent",
+    "error",
+    "GreenletExit",
+    "settrace",
+    "gettrace",
+    NULL
+};
 
 static struct PyModuleDef greenlet_module_def = {
     PyModuleDef_HEAD_INIT,
@@ -2243,14 +2246,8 @@ static struct PyModuleDef greenlet_module_def = {
     GreenMethods,
 };
 
-PyMODINIT_FUNC
-PyInit__greenlet(void)
-#else
-#    define INITERROR return
-
-PyMODINIT_FUNC
-init_greenlet(void)
-#endif
+static PyObject*
+greenlet_internal_mod_init()
 {
     PyObject* m = NULL;
     const char* const*  p = NULL;
@@ -2261,22 +2258,19 @@ init_greenlet(void)
     G_MUTEX_INIT(thread_states_to_destroy_lock);
     if (!G_MUTEX_INIT_SUCCESS(thread_states_to_destroy_lock)) {
         PyErr_SetString(PyExc_MemoryError, "can't allocate lock");
-        INITERROR;
+        return NULL;
     }
-#if PY_MAJOR_VERSION >= 3
+
     m = PyModule_Create(&greenlet_module_def);
-#else
-    m = Py_InitModule("greenlet._greenlet", GreenMethods);
-#endif
     if (m == NULL) {
-        INITERROR;
+        return NULL;
     }
 
     ts_event_switch = Greenlet_Intern("switch");
     ts_event_throw = Greenlet_Intern("throw");
 
     if (PyType_Ready(&PyGreenlet_Type) < 0) {
-        INITERROR;
+        return NULL;
     }
     PyMainGreenlet_Type.tp_base = &PyGreenlet_Type;
     Py_INCREF(&PyGreenlet_Type);
@@ -2291,31 +2285,31 @@ init_greenlet(void)
     PyMainGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;
 
     if (PyType_Ready(&PyMainGreenlet_Type) < 0) {
-        INITERROR;
+        return NULL;
     }
 #if G_USE_STANDARD_THREADING == 0
     if (PyType_Ready(&PyGreenletCleanup_Type) < 0) {
-        INITERROR;
+        return NULL;
     }
 #endif
     PyExc_GreenletError = PyErr_NewException("greenlet.error", NULL, NULL);
     if (PyExc_GreenletError == NULL) {
-        INITERROR;
+        return NULL;
     }
     PyExc_GreenletExit =
         PyErr_NewException("greenlet.GreenletExit", PyExc_BaseException, NULL);
     if (PyExc_GreenletExit == NULL) {
-        INITERROR;
+        return NULL;
     }
 
     ts_empty_tuple = PyTuple_New(0);
     if (ts_empty_tuple == NULL) {
-        INITERROR;
+        return NULL;
     }
 
     ts_empty_dict = PyDict_New();
     if (ts_empty_dict == NULL) {
-        INITERROR;
+        return NULL;
     }
 
 
@@ -2375,6 +2369,21 @@ init_greenlet(void)
     return m;
 #endif
 }
+
+
+#if PY_MAJOR_VERSION >= 3
+PyMODINIT_FUNC
+PyInit__greenlet(void)
+{
+    return greenlet_internal_mod_init();
+}
+#else
+PyMODINIT_FUNC
+init_greenlet(void)
+{
+    greenlet_internal_mod_init();
+}
+#endif
 
 #ifdef __clang__
 #    pragma clang diagnostic pop

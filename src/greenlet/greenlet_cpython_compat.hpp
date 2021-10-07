@@ -6,6 +6,7 @@
  * Helpers for compatibility with multiple versions of CPython.
  */
 
+#include "Python.h"
 
 #if PY_VERSION_HEX >= 0x030700A3
 #    define GREENLET_PY37 1
@@ -73,8 +74,24 @@ https://bugs.python.org/issue39573 */
 #    define Greenlet_Intern PyString_InternFromString
 #endif
 
-#if PY_MAJOR_VERSION < 3
+#if PY_VERSION_HEX < 0x03090000
+// The official version only became available in 3.9
 #    define PyObject_GC_IsTracked(o) _PyObject_GC_IS_TRACKED(o)
+#endif
+
+#if PY_MAJOR_VERSION < 3
+struct PyModuleDef {
+    int unused;
+    const char* const name;
+    void* unused_2;
+    int unused_3;
+    PyMethodDef* methods;
+};
+#define PyModuleDef_HEAD_INIT 1
+PyObject* PyModule_Create(PyModuleDef* m)
+{
+    return Py_InitModule(m->name, m->methods);
+}
 #endif
 
 #endif /* GREENLET_CPYTHON_COMPAT_H */

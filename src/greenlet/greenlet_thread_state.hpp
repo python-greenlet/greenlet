@@ -358,6 +358,8 @@ public:
     {
         _GDPrint("Destructing thread state %p\n", this);
         if (!PyInterpreterState_Head()) {
+            // We shouldn't get here (our callers protect us)
+            // but if we do, all we can do is bail early.
             _GDPrint("\tInterp torn down\n");
             return;
         }
