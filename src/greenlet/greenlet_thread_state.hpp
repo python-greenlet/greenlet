@@ -55,11 +55,19 @@ namespace greenlet {
  * other compilers do, if some other library is using the thread
  * dictionary and has a cycle or extra reference.
  *
- * The only wrinkle is that when the thread exits, it is too late to
- * actually invoke Python APIs: the Python thread state is gone, and
- * the GIL is released. To solve *this* problem, our destructor uses
- * ``Py_InvokePending`` to transfer the destruction work to the main
- * thread. (This is not an issue for the dictionary solution.)
+ * There are two small wrinkles. The first is that when the thread
+ * exits, it is too late to actually invoke Python APIs: the Python
+ * thread state is gone, and the GIL is released. To solve *this*
+ * problem, our destructor uses ``Py_AddPendingCall`` to transfer the
+ * destruction work to the main thread. (This is not an issue for the
+ * dictionary solution.)
+ *
+ * The second is that once the thread exits, the thread local object
+ * is invalid and we can't even access a pointer to it, so we can't
+ * pass it to ``Py_AddPendingCall``. This is handled by actually using
+ * a second object that's thread local (ThreadStateCreator) and having
+ * it dynamically allocate this object so it can live until the
+ * pending call runs.
  */
 class ThreadState {
 private:
@@ -272,17 +280,7 @@ public:
         }
         /* green_dealloc() cannot delete greenlets from other threads, so
            it stores them in the thread dict; delete them now. */
-        /* XXX: We only used to do this when we specifically detected
-           a thread change. This is quite expensive to do on
-           essentially every API call, changing ``getcurrent`` from
-           19.3ns to 31.8ns, 1.65x slower. What's a better way?
-           Probably we need to continue auditing when we call this
-           function, and, if still a problem, introduce another
-           storage mechanism for these.
 
-           We have introduced that, we're using a vector now. See how
-           that performs?
-        */
 
         assert(this->current_greenlet_s->main_greenlet_s == this->main_greenlet_s);
         assert(this->main_greenlet_s->super.main_greenlet_s == this->main_greenlet_s);

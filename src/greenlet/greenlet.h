@@ -47,10 +47,15 @@ typedef struct _greenlet {
 #if PY_VERSION_HEX >= 0x30A00B1
     CFrame* cframe;
 #endif
-    // XXX: Adding these fields is a breaker, unless we can
+    // XXX: Adding this field is a breaker, unless we can
     // get rid of the run_info field completely.
     // If we can get it down to just one pointer, we could
-    // re-purpose an existing field.
+    // re-purpose an existing field; actually, we could already do that by
+    // making ``run_info``, oko ``main_greenlet_s`` a tuple or list.
+    // If we do go ahead and add this field, we should take out all the
+    // CPython-version specific stuff and move those to their own structure
+    // that we access via a pointer so that we can evolve this object in the
+    // future without introducing ABI issues.
     PyObject* run_callable;
 } PyGreenlet;
 

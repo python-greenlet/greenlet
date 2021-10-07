@@ -85,17 +85,8 @@ The running greenlet's stack_start is undefined but not NULL.
 
 /*** global state ***/
 
-/* In the presence of multithreading, this is a bit tricky:
-
-   - ts_current always store a reference to a greenlet, but it is
-     not really the current greenlet after a thread switch occurred.
-
-   - each *running* greenlet uses its run_info field to know which
-     thread it is attached to.  A greenlet can only run in the thread
-     where it was created.  This run_info is a ref to tstate->dict.
-
-   - the thread state dict is used to save and restore ts_current,
-     using the dictionary key 'ts_curkey'.
+/* In the presence of multithreading, this is a bit tricky; see
+   greenlet_thread_state.hpp for details.
 */
 
 extern PyTypeObject PyGreenlet_Type;
@@ -1073,13 +1064,6 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
     if (o != NULL) {
-        /*
-        if (!STATE_OK) {
-            Py_DECREF(o);
-            return NULL;
-        }
-        */
-
         o->parent = GET_THREAD_STATE().state().get_or_establish_current();
 #if GREENLET_USE_CFRAME
         /*
