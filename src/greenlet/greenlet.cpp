@@ -163,6 +163,7 @@ struct ThreadState_DestroyNoGIL
                 return;
             }
 
+            fprintf(stderr, "QUEUE FOR DELETE %p\n", state->borrow_main_greenlet());
             thread_states_to_destroy.push_back(state);
             if (thread_states_to_destroy.size() == 1) {
                 // We added the first item to the queue. We need to schedule
@@ -198,6 +199,7 @@ struct ThreadState_DestroyNoGIL
                 G_MUTEX_RELEASE(thread_states_to_destroy_lock);
             }
             // Drop the lock while we do the actual deletion.
+            fprintf(stderr, "DELETING IN PENDING CALL: %p\n", to_destroy->borrow_main_greenlet());
             ThreadState_DestroyWithGIL::DestroyWithGIL(to_destroy);
         }
         return 0;
