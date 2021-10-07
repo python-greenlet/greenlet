@@ -220,6 +220,8 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
             did_suspend.set()
             should_exit.wait(10)
             gr.switch()
+            del gr
+            greenlet() # trigger cleanup
 
         thread = threading.Thread(target=thread_fn, daemon=True)
         thread.start()
@@ -250,6 +252,11 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
         self.assertIsNone(gr.gr_context)
         gr.gr_context = ctx
         self.assertIs(gr.gr_context, ctx)
+
+        # Otherwise we leak greenlets on some platforms.
+        # XXX: Should be able to do this automatically
+        del holder[:]
+        gr = None
 
 @unittest.skipIf(Context is not None, "ContextVar supported")
 class NoContextVarsTests(unittest.TestCase):

@@ -164,6 +164,7 @@ class TestGreenlet(Cleanup, unittest.TestCase):
             greenlet()   # trigger release
             bg_should_be_clear.set()
             ok_to_exit_bg_thread.wait(10)
+            greenlet() # One more time
             #print("Exiting")
         t = threading.Thread(target=f)
         t.start()
@@ -180,6 +181,8 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         self.assertEqual(seen, [greenlet.GreenletExit])
         ok_to_exit_bg_thread.set()
         t.join(10)
+        del seen[:]
+        del someref[:]
 
     def test_frame(self):
         def f1():
