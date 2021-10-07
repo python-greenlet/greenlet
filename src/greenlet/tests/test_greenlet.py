@@ -325,7 +325,7 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         result = []
         def worker():
             try:
-                # Wait to be killed
+                # Wait to be killed by going back to the test.
                 main.switch()
             except greenlet.GreenletExit:
                 # Resurrect and switch to parent
@@ -334,10 +334,17 @@ class TestGreenlet(Cleanup, unittest.TestCase):
                 hub.switch()
         g = greenlet(worker, parent=hub)
         g.switch()
+        # delete the only reference, thereby raising GreenletExit
         del g
         self.assertTrue(result)
-        self.assertEqual(result[0], main)
-        self.assertEqual(result[1].parent, hub)
+        self.assertIs(result[0], main)
+        self.assertIs(result[1].parent, hub)
+        # Delete them, thereby breaking the cycle between the greenlet
+        # and the frame, which otherwise would never be collectable
+        # XXX: We should be able to automatically fix this.
+        del result[:]
+        hub = None
+        main = None
 
     def test_parent_return_failure(self):
         # No run causes AttributeError on switch
@@ -369,7 +376,22 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         t = threading.Thread(target=creator)
         t.start()
         t.join(10)
-        self.assertRaises(greenlet.error, result[0].throw, SomeError())
+        with self.assertRaises(greenlet.error):
+            result[0].throw(SomeError)
+
+        if hasattr(result[0].gr_frame, 'clear'):
+            # The frame is actually executing (it thinks), we can't clear it.
+            with self.assertRaises(RuntimeError):
+                result[0].gr_frame.clear()
+        # Unfortunately, this doesn't actually clear the references, they're in the
+        # fast local array.
+        result[0].gr_frame.f_locals.clear()
+        del t
+        del creator
+        del result[:]
+        # XXX: we ought to be able to automatically fix this.
+        # See issue 252
+        self.expect_greenlet_leak = True
 
     def test_recursive_startup(self):
         class convoluted(greenlet):
@@ -386,6 +408,10 @@ class TestGreenlet(Cleanup, unittest.TestCase):
                     self.parent.switch(value)
         g = convoluted()
         self.assertEqual(g.switch(42), 43)
+        # Exits the running greenlet, otherwise it leaks
+        # XXX: We should be able to automatically fix this
+        g.throw(greenlet.GreenletExit)
+        del g
 
     def test_unexpected_reparenting(self):
         another = []
