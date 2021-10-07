@@ -48,6 +48,9 @@ jobs:
       run: |
         python setup.py bdist_wheel
         python -m pip install -U -e ".[test,docs]"
+      env:
+        # Ensure we test with assertions enabled.
+        CPPFLAGS: "-Ofast -fno-fast-math -UNDEBUG"
     - name: Check greenlet build
       run: |
         ls -l dist

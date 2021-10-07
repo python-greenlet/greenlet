@@ -8,6 +8,7 @@
 #define _GDPrint(...)
 #define _GDPoPrint(...)
 
+
 namespace greenlet {
 /**
  * Thread-local state of greenlets.
@@ -97,8 +98,6 @@ public:
         _GDPrint("Initialized thread state %p\n", this);
         //_GDPrint("Size of thread state: %ld\n", sizeof(_GThreadState));
     };
-
-
 
     inline bool has_main_greenlet()
     {
@@ -616,7 +615,7 @@ public:
 // We can't use the PythonAllocator for this, because we push to it
 // from the thread state destructor, which doesn't have the GIL,
 // and Python's allocators can only be called with the GIL.
-typedef std::vector<PyMainGreenlet*> cleanup_queue_t;
+typedef std::vector<ThreadState*> cleanup_queue_t;
 #else
 class cleanup_queue_t {
 public:
@@ -626,11 +625,11 @@ public:
     {
         throw std::out_of_range("empty queue.");
     };
-    inline PyMainGreenlet* back()
+    inline ThreadState* back()
     {
         throw std::out_of_range("empty queue.");
     };
-    inline void push_back(const PyMainGreenlet* g)
+    inline void push_back(ThreadState* g)
     {
         throw std::out_of_range("empty queue.");
     };

@@ -18,6 +18,10 @@ export PIP_NO_WARN_SCRIPT_LOCATION=1
 if [ -d /greenlet -a -d /opt/python ]; then
     # Running inside docker
 
+    # Build for speed (we're going to test this anyway) and without assertions.
+    # Note: -Ofast includes -ffast-math which affects process-wide floating-point flags (e.g. can affect numpy).
+    #       We opt out of -ffast-math explicitly. Other libraries can still trigger it.
+    export CFLAGS="-Ofast -fno-fast-math -DNDEBUG"
     # Build in an isolated directory
     mkdir /tmp/build
     cd /tmp/build

@@ -73,5 +73,8 @@ https://bugs.python.org/issue39573 */
 #    define Greenlet_Intern PyString_InternFromString
 #endif
 
+#if PY_MAJOR_VERSION < 3
+#    define PyObject_GC_IsTracked(o) _PyObject_GC_IS_TRACKED(o)
+#endif
 
 #endif /* GREENLET_CPYTHON_COMPAT_H */
