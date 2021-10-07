@@ -828,8 +828,15 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     int err = 0;
     ThreadState& state = GET_THREAD_STATE();
 
-    /* check ts_current */
-    /* If we get here, there must be one, right?.  */
+    // If *target* is from another thread, it's possible that this
+    // thread has never actually had a main/current greenlet.
+    if (!state.has_main_greenlet()) {
+        Py_XDECREF(args);
+        Py_XDECREF(kwargs);
+        PyErr_SetString(PyExc_GreenletError, "cannot switch to a different thread");
+        return NULL;
+    }
+
     assert(state.borrow_current() != nullptr);
     // Switching greenlets used to attempt to clean out ones that need
     // deleted *if* we detected a thread switch. Should it still do
@@ -837,14 +844,6 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     // An issue is that if we delete a greenlet from another thread,
     // it gets queued to this thread, and ``kill_greenlet()`` switches
     // back into the greenlet
-    /*
-    if (!STATE_OK) {
-        Py_XDECREF(args);
-        Py_XDECREF(kwargs);
-        _GDPrint("g_switch: err 1\n");
-        return NULL;
-    }
-    */
 
     void* run_info = find_and_borrow_main_greenlet_in_lineage(target);
     if (run_info == NULL || run_info != state.borrow_main_greenlet()) {
@@ -852,7 +851,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
         Py_XDECREF(kwargs);
         PyErr_SetString(PyExc_GreenletError,
                         run_info ?
-                            "cannot switch to a different thread (1)" :
+                            "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
         _GDPrint("g_switch: err 2   \n");
         return NULL;
@@ -1509,7 +1508,9 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
     _GDPrint("Switching to: ");
     _GDPoPrint((PyObject*)self);
     _GDPrint("\t\n Refcount: %ld\n", Py_REFCNT((PyObject*)self));
-
+    // If: *self* came from a different thread, it's possible this thread has
+    // never actually had a main/current greenlet, in which case
+    // g_switch will fail.
     Py_INCREF(args);
     Py_XINCREF(kwargs);
     return single_result(g_switch(self, args, kwargs));
