@@ -109,10 +109,6 @@ static PyObject* ts_empty_tuple;
 static PyObject* ts_empty_dict;
 static G_MUTEX_TYPE thread_states_to_destroy_lock;
 
-#undef _GDPrint
-#define _GDPrint(...)
-#define _GDPoPrint(...)
-
 static greenlet::cleanup_queue_t thread_states_to_destroy;
 
 struct ThreadState_DestroyWithGIL
@@ -135,6 +131,8 @@ struct ThreadState_DestroyWithGIL
         PyMainGreenlet* main = state->borrow_main_greenlet();
         // When we need to do cross-thread operations, we check this.
         // A NULL value means the thread died some time ago.
+        // We do this here, rather than in a Python dealloc function
+        // for the greenlet, in case there's still a reference out there.
         main->thread_state = NULL;
         delete state; // Deleting this runs the constructor, DECREFs the main greenlet.
         return 0;
@@ -601,7 +599,7 @@ static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
       root_cframe here. See note above about why we can't
       just copy this from ``origin->cframe->use_tracing``.
     */
-    tstate->cframe->use_tracing = state->switchstack_use_tracing;
+    tstate->cframe->use_tracing = state->switchstack_use_tracing();
 #endif
     assert(state->borrow_origin() == NULL);
     Py_INCREF(target); // XXX: Simplify ownership rules
@@ -677,7 +675,7 @@ g_switchstack(void)
          here either).
          */
         current->cframe = tstate->cframe;
-        state.switchstack_use_tracing = tstate->cframe->use_tracing;
+        state.switchstack_use_tracing(tstate->cframe->use_tracing);
 #endif
         switching_thread_state = &state; // XXX: should this access
                                          // the global?
@@ -688,13 +686,7 @@ g_switchstack(void)
     if (err < 0) { /* error */
         PyGreenlet* current = GET_THREAD_STATE().borrow_current();
         current->top_frame = NULL;
-#if GREENLET_PY37
         green_clear_exc(current);
-#else
-        current->exc_type = NULL;
-        current->exc_value = NULL;
-        current->exc_traceback = NULL;
-#endif
 
         assert(GET_THREAD_STATE().borrow_origin() == NULL);
         GET_THREAD_STATE().state().wref_target(NULL);
@@ -754,9 +746,6 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
     PyObject* args = state.borrow_switch_args();
     PyObject* kwargs = state.borrow_switch_kwargs();
     state.wref_switch_args_kwargs(NULL, NULL);
-    _GDPrint("Finishing switch into: ");
-    _GDPoPrint((PyObject*)state.borrow_current());
-    _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(state.borrow_current()));
     if (err < 0) {
         /* Turn switch errors into switch throws */
         assert(state.borrow_origin() == NULL);
@@ -781,11 +770,6 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
         }
 
         Py_DECREF(origin);
-
-        _GDPrint("Finished switch into: ");
-        _GDPoPrint((PyObject*)state.borrow_current());
-        _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(state.borrow_current()));
-
     }
 
     /* We need to figure out what values to pass to the target greenlet
@@ -812,7 +796,6 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
     if (tuple == NULL) {
         Py_DECREF(args);
         Py_DECREF(kwargs);
-        _GDPrint("g_switch_finish: err no tuple\n");
         return NULL;
     }
     PyTuple_SET_ITEM(tuple, 0, args);
@@ -853,7 +836,6 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
                         run_info ?
                             "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
-        _GDPrint("g_switch: err 2   \n");
         return NULL;
     }
 
@@ -864,9 +846,6 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     while (target) {
         if (PyGreenlet_ACTIVE(target)) {
             state.wref_target(target);
-            _GDPrint("Found target: ");
-            _GDPoPrint((PyObject*)target);
-            _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(target));
             err = g_switchstack();
             break;
         }
@@ -1222,7 +1201,6 @@ kill_greenlet(PyGreenlet* self)
     // That's mostly OK! Since we can't add it to a list, our refcount
     // won't increase, and we'll go ahead with the DECREFs later.
     if (self->main_greenlet_s->thread_state) {
-        _GDPrint("Adding to state %p\n", self->main_greenlet_s->thread_state);
         self->main_greenlet_s->thread_state->delete_when_thread_running(self);
     }
     else {
@@ -1266,8 +1244,6 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 static int
 green_is_gc(PyGreenlet* self)
 {
-    _GDPrint("\t\tIs GC? ");
-    _GDPoPrint((PyObject*)self);
     int result = 0;
     /* Main greenlet can be garbage collected since it can only
        become unreachable if the underlying thread exited.
@@ -1275,16 +1251,12 @@ green_is_gc(PyGreenlet* self)
     if (PyGreenlet_MAIN(self) || !PyGreenlet_ACTIVE(self)) {
         result = 1;
     }
-    // The main greenlet pointer can go away if the thread dies.
+    // The main greenlet pointer will eventually go away after the thread dies.
     if (self->main_greenlet_s && !self->main_greenlet_s->thread_state) {
         // Our thread is dead! We can never run again. Might as well
         // GC us.
-        _GDPrint("Allowing GC of greenlet from dead thread\n");
         result = 1;
     }
-    _GDPrint(" %s\n", result ? "YES" : "NO");
-    _GDPrint("\t\t\tRefcount: %ld Frame count: %ld\n",
-            Py_REFCNT(self), self->top_frame ? Py_REFCNT(self->top_frame) : -1);
     return result;
 }
 
@@ -1296,9 +1268,6 @@ green_clear(PyGreenlet* self)
        be sure that, even if they are deallocated during clear,
        nothing they reference is in unreachable or finalizers,
        so even if it switches we are relatively safe. */
-    _GDPrint("Clearing ");
-    _GDPoPrint((PyObject*)self);
-    _GDPrint("\n");
     Py_CLEAR(self->parent);
     Py_CLEAR(self->main_greenlet_s); // XXX breaks when this is a state
     Py_CLEAR(self->run_callable);
@@ -1326,7 +1295,6 @@ _green_dealloc_kill_started_non_main_greenlet(PyGreenlet* self)
 {
     Py_ssize_t refcnt;
     PyObject *error_type, *error_value, *error_traceback;
-    _GDPrint("dealloc: mark 1\n");
     /* Hacks hacks hacks copied from instance_dealloc() */
     /* Temporarily resurrect the greenlet. */
     assert(Py_REFCNT(self) == 0);
@@ -1399,15 +1367,12 @@ green_dealloc(PyGreenlet* self)
 #ifndef NDEBUG
     PyObject* already_in_err = PyErr_Occurred();
 #endif
-    _GDPrint("About to attempt to dealloc %p\n", self);
     if (PyGreenlet_ACTIVE(self)
         && self->main_greenlet_s != NULL // means started
         && !PyGreenlet_MAIN(self)) {
         if (!_green_dealloc_kill_started_non_main_greenlet(self)) {
-            _GDPrint("Resurrected %p\n", self);
             return;
         }
-        _GDPrint("Did kill, did not resurrect %p\n", self);
     }
 
     if (self->weakreflist != NULL) {
@@ -1437,19 +1402,16 @@ green_dealloc(PyGreenlet* self)
 #endif
     Py_CLEAR(self->dict);
     assert(already_in_err || !PyErr_Occurred());
-    // XXX: We should never get here with a main greenlet that still
-    // has a thread state attached. If we do, that's a problem, right?
-    // (If it's not a problem, we can customize the dealloc function
-    // for the main greenlet class).
-#if 0
-    if (self->thread_state) {
-        // HMM. We shouldn't get here.
-        _GDPrint("DEALLOC MAIN GREENLET (%p) WITH THREAD STATE (%p)\n", self, self->thread_state);
-        assert(!self->thread_state);
-    }
-#endif
     Py_TYPE(self)->tp_free((PyObject*)self);
     assert(already_in_err || !PyErr_Occurred());
+}
+
+static void
+maingreen_dealloc(PyMainGreenlet* self)
+{
+    // The ThreadState cleanup should have taken care of this.
+    assert(!self->thread_state);
+    green_dealloc(reinterpret_cast<PyGreenlet*>(self));
 }
 
 static inline PyObject*
@@ -1463,9 +1425,6 @@ single_result(PyObject* results)
         Py_DECREF(results);
         return result;
     }
-    // _GDPrint("single_result: current: ");
-    // _GDPoPrint((PyObject*)g_thread_state_global.borrow_current());
-    // _GDPrint("\n\tRefcount: %ld\n", Py_REFCNT(g_thread_state_global.borrow_current()));
     return results;
 }
 
@@ -1505,9 +1464,6 @@ PyDoc_STRVAR(
 static PyObject*
 green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
-    _GDPrint("Switching to: ");
-    _GDPoPrint((PyObject*)self);
-    _GDPrint("\t\n Refcount: %ld\n", Py_REFCNT((PyObject*)self));
     // If: *self* came from a different thread, it's possible this thread has
     // never actually had a main/current greenlet, in which case
     // g_switch will fail.
@@ -1713,9 +1669,6 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
             PyErr_SetString(PyExc_ValueError, "cyclic parent chain");
             return -1;
         }
-        _GDPrint("Examining parent ");
-        _GDPoPrint((PyObject*)p);
-        _GDPrint("\n\tActive? %d Run info: %p\n", PyGreenlet_ACTIVE(p), p->main_greenlet_s);
         run_info = PyGreenlet_ACTIVE(p) ? (PyGreenlet*)p->main_greenlet_s : NULL;
     }
     if (run_info == NULL) {
@@ -2260,12 +2213,10 @@ greenlet_internal_mod_init()
         PyErr_SetString(PyExc_MemoryError, "can't allocate lock");
         return NULL;
     }
-    fprintf(stderr, "INIT_GREENLET 2 %p\n", greenlet_module_def.m_methods);
     m = PyModule_Create(&greenlet_module_def);
     if (m == NULL) {
         return NULL;
     }
-    fprintf(stderr, "INIT_GREENLET 3 %p\n", m);
     ts_event_switch = Greenlet_Intern("switch");
     ts_event_throw = Greenlet_Intern("throw");
 
@@ -2283,6 +2234,7 @@ greenlet_internal_mod_init()
     PyMainGreenlet_Type.tp_traverse = (traverseproc)green_traverse;
     PyMainGreenlet_Type.tp_clear = (inquiry)green_clear;
     PyMainGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;
+    PyMainGreenlet_Type.tp_dealloc = (destructor)maingreen_dealloc;
 
     if (PyType_Ready(&PyMainGreenlet_Type) < 0) {
         return NULL;
@@ -2378,9 +2330,7 @@ PyInit__greenlet(void)
 PyMODINIT_FUNC
 init_greenlet(void)
 {
-    fprintf(stderr, "INIT_GREENLET\n");
     greenlet_internal_mod_init();
-    fprintf(stderr, "DID INIT GREENLET\n");
 }
 #endif
 

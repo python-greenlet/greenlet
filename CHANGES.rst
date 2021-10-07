@@ -2,12 +2,15 @@
  Changes
 =========
 
-1.2.0 (unreleased)
+2.0.0 (unreleased)
 ==================
 
 - Drop support for very old versions of GCC and MSVC.
-- Drop support for Python 2.7 *on Windows only*. The compiler required
-  to build extensions on that platform doesn't support the necessary features.
+
+- Compilation now requires a compiler that either supports C++11 or
+  has some other intrinsic way to create thread local variables; for
+  older GCC, clang and SunStudio we use ``__thread``, while for older
+  MSVC we use ``__declspec(thread)``.
 
 1.1.2 (2021-09-29)
 ==================

@@ -43,7 +43,7 @@ https://bugs.python.org/issue39573 */
 #        define _Py_DEC_REFTOTAL
 #    endif
 #endif
-
+// Define these flags like Cython does if we're on an old version.
 #ifndef Py_TPFLAGS_CHECKTYPES
   #define Py_TPFLAGS_CHECKTYPES 0
 #endif

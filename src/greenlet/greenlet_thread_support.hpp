@@ -58,8 +58,9 @@
 #        define G_MUTEX_RELEASE(Mutex) LeaveCriticalSection(&Mutex)
 #        define G_MUTEX_INIT(Mutex) InitializeCriticalSection(&Mutex)
 #        define G_MUTEX_INIT_SUCCESS(Mutex) 1
-#    elif (defined(__GNUC__) || defined(__clang__))
-// Here, we can use PyThread APIs, officially added in 3.2, but
+#    elif (defined(__GNUC__) || defined(__clang__)) || (defined(__SUNPRO_C))
+// GCC, clang, SunStudio all use __thread for thread-local variables.
+// For locks, we can use PyThread APIs, officially added in 3.2, but
 // present back to 2.7
 #        define G_THREAD_LOCAL_VAR __thread
 #        include "pythread.h"

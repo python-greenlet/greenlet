@@ -29,6 +29,7 @@ include *.cfg
 include *.py
 include *.ini
 include .clang-format
+include .pylintrc
 
 recursive-include appveyor *.cmd
 recursive-include appveyor *.ps1
