@@ -2260,12 +2260,12 @@ greenlet_internal_mod_init()
         PyErr_SetString(PyExc_MemoryError, "can't allocate lock");
         return NULL;
     }
-
+    fprintf(stderr, "INIT_GREENLET 2 %p\n", greenlet_module_def.m_methods);
     m = PyModule_Create(&greenlet_module_def);
     if (m == NULL) {
         return NULL;
     }
-
+    fprintf(stderr, "INIT_GREENLET 3 %p\n", m);
     ts_event_switch = Greenlet_Intern("switch");
     ts_event_throw = Greenlet_Intern("throw");
 
@@ -2311,7 +2311,6 @@ greenlet_internal_mod_init()
     if (ts_empty_dict == NULL) {
         return NULL;
     }
-
 
     Py_INCREF(&PyGreenlet_Type);
     PyModule_AddObject(m, "greenlet", (PyObject*)&PyGreenlet_Type);
@@ -2365,9 +2364,7 @@ greenlet_internal_mod_init()
         PyModule_AddObject(m, "_C_API", c_api_object);
     }
 
-#if PY_MAJOR_VERSION >= 3
     return m;
-#endif
 }
 
 
@@ -2381,7 +2378,9 @@ PyInit__greenlet(void)
 PyMODINIT_FUNC
 init_greenlet(void)
 {
+    fprintf(stderr, "INIT_GREENLET\n");
     greenlet_internal_mod_init();
+    fprintf(stderr, "DID INIT GREENLET\n");
 }
 #endif
 

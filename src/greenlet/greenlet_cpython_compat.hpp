@@ -82,15 +82,16 @@ https://bugs.python.org/issue39573 */
 #if PY_MAJOR_VERSION < 3
 struct PyModuleDef {
     int unused;
-    const char* const name;
-    void* unused_2;
-    int unused_3;
-    PyMethodDef* methods;
+    const char* const m_name;
+    const char* m_doc;
+    Py_ssize_t m_size;
+    PyMethodDef* m_methods;
+    // Then several more fields we're not currently using.
 };
 #define PyModuleDef_HEAD_INIT 1
 PyObject* PyModule_Create(PyModuleDef* m)
 {
-    return Py_InitModule(m->name, m->methods);
+    return Py_InitModule(m->m_name, m->m_methods);
 }
 #endif
 
