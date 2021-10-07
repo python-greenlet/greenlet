@@ -154,6 +154,8 @@ class TestGreenlet(Cleanup, unittest.TestCase):
 
         def f():
             g1 = greenlet(fmain)
+            print("g1", g1)
+            print("main", greenlet.getcurrent())
             g1.switch(seen)
             someref.append(g1)
             del g1

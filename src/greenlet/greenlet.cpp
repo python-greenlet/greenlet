@@ -1206,6 +1206,7 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
        referenced
        - frames are not visited: alive greenlets are not garbage collected
        anyway */
+    fprintf(stderr, "Traversing into greenlet %p\n", self);
     Py_VISIT((PyObject*)self->parent);
     Py_VISIT(self->main_greenlet_s);
     Py_VISIT(self->run_callable);
@@ -1222,6 +1223,16 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
     Py_VISIT(self->exc_traceback);
 #endif
     Py_VISIT(self->dict);
+    if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
+        if (self->top_frame) {
+        fprintf(stderr, "\tGreenlet owns the frame (%p) now, traversing. Is GC %d? Is tracked? %d\n",
+                self->top_frame,
+                self->top_frame && PyObject_IS_GC((PyObject*)self->top_frame),
+                self->top_frame && PyObject_IS_GC((PyObject*)self->top_frame) && PyObject_GC_IsTracked((PyObject*)self->top_frame)
+                );
+        Py_VISIT(self->top_frame);
+        }
+    }
     return 0;
 }
 
@@ -1268,6 +1279,12 @@ green_clear(PyGreenlet* self)
     Py_CLEAR(self->exc_traceback);
 #endif
     Py_CLEAR(self->dict);
+    if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
+        if (self->top_frame) {
+            fprintf(stderr, "\tGreenlet: Thread is dead, clearing frame that we own.\n");
+            Py_CLEAR(self->top_frame);
+        }
+    }
     return 0;
 }
 
