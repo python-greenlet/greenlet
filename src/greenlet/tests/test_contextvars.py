@@ -212,11 +212,8 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
             getcurrent().parent.switch()
             holder.append(var.get())
 
-        print("BEGIN CONTEXT ASSIGNMENT DIF THREAD", file=sys.stderr)
         def thread_fn():
             gr = greenlet(greenlet_in_thread_fn)
-            print("gr", gr, file=sys.stderr)
-            print("Main", greenlet.getcurrent(), file=sys.stderr)
             gr.gr_context = ctx
             holder.append(gr)
             gr.switch()

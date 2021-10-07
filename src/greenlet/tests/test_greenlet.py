@@ -156,11 +156,8 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         bg_should_be_clear = threading.Event()
         ok_to_exit_bg_thread = threading.Event()
 
-        print("BEGIN DEALLOC OTHER THREAD", file=sys.stderr)
         def f():
             g1 = greenlet(fmain)
-            print("g1", g1, file=sys.stderr)
-            print("main", greenlet.getcurrent(), file=sys.stderr)
             g1.switch(seen)
             someref.append(g1)
             del g1
@@ -238,7 +235,6 @@ class TestGreenlet(Cleanup, unittest.TestCase):
 
     def test_switch_to_another_thread(self):
         data = {}
-        error = None
         created_event = threading.Event()
         done_event = threading.Event()
 
@@ -249,13 +245,12 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         thread = threading.Thread(target=run)
         thread.start()
         created_event.wait(10)
-        try:
+        with self.assertRaises(greenlet.error):
             data['g'].switch()
-        except greenlet.error:
-            error = sys.exc_info()[1]
-        self.assertIsNotNone(error, "greenlet.error was not raised!")
         done_event.set()
         thread.join(10)
+        # XXX: Should handle this automatically
+        data.clear()
 
     def test_exc_state(self):
         def f():
@@ -446,12 +441,9 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         # cleared, this test is catching whether ``green_setparent``
         # can detect the dead thread.
         #
-        # NOTE: This depends on ``Py_AddPendingCall``, which means we may
-        # need to force ceval.c to go around its loop, which we do
-        # by sleeping. XXX: This is not reliable; we need a method call
-        # to force this.
-        for _ in range(5):
-            time.sleep(0.001)
+        # We need to wait for the cleanup to happen, but we're
+        # deliberately leaking a main greenlet here.
+        self.wait_for_pending_cleanups(initial_main_greenlets=self.main_greenlets_before_test + 1)
 
         class convoluted(greenlet):
             def __getattribute__(self, name):
@@ -462,6 +454,7 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         with self.assertRaises(ValueError) as exc:
             g.switch()
         self.assertEqual(str(exc.exception), "parent must not be garbage collected")
+        del another[:]
 
     def test_unexpected_reparenting_thread_running(self):
         # Like ``test_unexpected_reparenting``, except the background thread is
@@ -494,6 +487,8 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         finally:
             keep_main_alive.set()
             t.join(10)
+            # XXX: Should handle this automatically.
+            del another[:]
 
     def test_threaded_updatecurrent(self):
         # released when main thread should execute

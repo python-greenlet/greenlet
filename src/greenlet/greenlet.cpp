@@ -98,8 +98,11 @@ static PyObject* PyExc_GreenletError;
 static PyObject* PyExc_GreenletExit;
 static PyObject* ts_empty_tuple;
 static PyObject* ts_empty_dict;
-static G_MUTEX_TYPE thread_states_to_destroy_lock;
+// Protected by the GIL. Incremented when we create a main greenlet,
+// in a new thread, decremented when it is destroyed.
+static Py_ssize_t total_main_greenlets;
 
+static G_MUTEX_TYPE thread_states_to_destroy_lock;
 static greenlet::cleanup_queue_t thread_states_to_destroy;
 
 struct ThreadState_DestroyWithGIL
@@ -163,7 +166,6 @@ struct ThreadState_DestroyNoGIL
                 return;
             }
 
-            fprintf(stderr, "QUEUE FOR DELETE %p\n", state->borrow_main_greenlet());
             thread_states_to_destroy.push_back(state);
             if (thread_states_to_destroy.size() == 1) {
                 // We added the first item to the queue. We need to schedule
@@ -199,7 +201,6 @@ struct ThreadState_DestroyNoGIL
                 G_MUTEX_RELEASE(thread_states_to_destroy_lock);
             }
             // Drop the lock while we do the actual deletion.
-            fprintf(stderr, "DELETING IN PENDING CALL: %p\n", to_destroy->borrow_main_greenlet());
             ThreadState_DestroyWithGIL::DestroyWithGIL(to_destroy);
         }
         return 0;
@@ -311,6 +312,7 @@ green_create_main(void)
     gmain->super.main_greenlet_s = gmain;
     Py_INCREF(gmain);
     assert(Py_REFCNT(gmain) == 2);
+    total_main_greenlets++;
     return gmain;
 }
 
@@ -1208,7 +1210,6 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
        referenced
        - frames are not visited: alive greenlets are not garbage collected
        anyway */
-    fprintf(stderr, "Traversing into greenlet %p\n", self);
     Py_VISIT((PyObject*)self->parent);
     Py_VISIT(self->main_greenlet_s);
     Py_VISIT(self->run_callable);
@@ -1226,14 +1227,7 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 #endif
     Py_VISIT(self->dict);
     if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
-        if (self->top_frame) {
-        fprintf(stderr, "\tGreenlet owns the frame (%p) now, traversing. Is GC %d? Is tracked? %d\n",
-                self->top_frame,
-                self->top_frame && PyObject_IS_GC((PyObject*)self->top_frame),
-                self->top_frame && PyObject_IS_GC((PyObject*)self->top_frame) && PyObject_GC_IsTracked((PyObject*)self->top_frame)
-                );
         Py_VISIT(self->top_frame);
-        }
     }
     return 0;
 }
@@ -1283,7 +1277,6 @@ green_clear(PyGreenlet* self)
     Py_CLEAR(self->dict);
     if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
         if (self->top_frame) {
-            fprintf(stderr, "\tGreenlet: Thread is dead, clearing frame that we own.\n");
             Py_CLEAR(self->top_frame);
         }
     }
@@ -1414,6 +1407,7 @@ maingreen_dealloc(PyMainGreenlet* self)
 {
     // The ThreadState cleanup should have taken care of this.
     assert(!self->thread_state);
+    total_main_greenlets--;
     green_dealloc(reinterpret_cast<PyGreenlet*>(self));
 }
 
@@ -2173,6 +2167,17 @@ mod_get_pending_cleanup_count(PyObject* mod)
     return result;
 }
 
+PyDoc_STRVAR(mod_get_total_main_greenlets_doc,
+             "get_total_main_greenlets() -> Integer\n"
+             "\n"
+             "Quickly return the number of main greenlets that exist. Testing only.\n");
+
+static PyObject*
+mod_get_total_main_greenlets(PyObject* mod)
+{
+    return PyLong_FromSize_t(total_main_greenlets);
+}
+
 static PyMethodDef GreenMethods[] = {
     {"getcurrent",
      (PyCFunction)mod_getcurrent,
@@ -2182,6 +2187,7 @@ static PyMethodDef GreenMethods[] = {
     {"gettrace", (PyCFunction)mod_gettrace, METH_NOARGS, mod_gettrace_doc},
     {"set_thread_local", (PyCFunction)mod_set_thread_local, METH_VARARGS, mod_set_thread_local_doc},
     {"get_pending_cleanup_count", (PyCFunction)mod_get_pending_cleanup_count, METH_NOARGS, mod_get_pending_cleanup_count_doc},
+    {"get_total_main_greenlets", (PyCFunction)mod_get_total_main_greenlets, METH_NOARGS, mod_get_total_main_greenlets_doc},
     {NULL, NULL} /* Sentinel */
 };
 
