@@ -152,10 +152,11 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         bg_should_be_clear = threading.Event()
         ok_to_exit_bg_thread = threading.Event()
 
+        print("BEGIN DEALLOC OTHER THREAD", file=sys.stderr)
         def f():
             g1 = greenlet(fmain)
-            print("g1", g1)
-            print("main", greenlet.getcurrent())
+            print("g1", g1, file=sys.stderr)
+            print("main", greenlet.getcurrent(), file=sys.stderr)
             g1.switch(seen)
             someref.append(g1)
             del g1

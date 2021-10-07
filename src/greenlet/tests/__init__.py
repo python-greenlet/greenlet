@@ -77,8 +77,9 @@ class CleanupMixin(object):
         else:
             if greenlets_after_test > self.greenlets_before_test:
                 self.fail(
-                    "Leaked greenlets; expected no more than %d but found %d"
-                    % (self.greenlets_before_test, greenlets_after_test)
+                    "Leaked greenlets; expected no more than %d but found %d: %s"
+                    % (self.greenlets_before_test, greenlets_after_test,
+                       [x for x in get_objects() if isinstance(x, RawGreenlet)])
                 )
 
 Cleanup = CleanupMixin
