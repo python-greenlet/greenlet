@@ -21,6 +21,17 @@ typedef unsigned int uint32_t;
 #define G_HAS_METHOD_DELETE 1
 #endif
 
+#if G_HAS_METHOD_DELETE == 1
+#    define G_NO_COPIES_OF_CLS(Cls) public:     \
+    Cls(const Cls& other) = delete; \
+    Cls& operator=(const Cls& other) = delete
+
+#else
+#    define G_NO_COPIES_OF_CLS(Cls) private: \
+    Cls(const Cls& other); \
+    Cls& operator=(const Cls& other)
+#endif
+
 // CAUTION: MSVC is stupidly picky:
 //
 // "The compiler ignores, without warning, any __declspec keywords

@@ -1,7 +1,9 @@
 #ifndef GREENLET_THREAD_STATE_HPP
 #define GREENLET_THREAD_STATE_HPP
 
+#include <stdexcept>
 #include "greenlet_internal.hpp"
+#include "greenlet_thread_support.hpp"
 
 #define _GDPrint(...)
 #define _GDPoPrint(...)
@@ -75,13 +77,9 @@ private:
        references, but you need to manually INCREF/DECREF as you use
        them. */
     greenlet::g_deleteme_t deleteme;
-#if G_HAS_METHOD_DELETE == 0
-    ThreadState(const ThreadState& other);
-    ThreadState& operator=(const ThreadState& other);
-#endif
 
+    G_NO_COPIES_OF_CLS(ThreadState);
 public:
-
     /* Used internally in ``g_switchstack()`` when
        GREENLET_USE_CFRAME is true. */
     int switchstack_use_tracing;
@@ -100,11 +98,7 @@ public:
         //_GDPrint("Size of thread state: %ld\n", sizeof(_GThreadState));
     };
 
-#if G_HAS_METHOD_DELETE
-    // Only one of these, auto created per thread
-    ThreadState(const ThreadState& other) = delete;
-    ThreadState& operator=(const ThreadState& other) = delete;
-#endif
+
 
     inline bool has_main_greenlet()
     {
@@ -554,6 +548,94 @@ public:
 
 };
 
-}; // namespace relstorage
+template<typename Destructor>
+class ThreadStateCreator
+{
+private:
+    ThreadState* _state;
+    G_NO_COPIES_OF_CLS(ThreadStateCreator);
+public:
+
+    // Only one of these, auto created per thread
+    ThreadStateCreator() :
+        _state(0)
+    {
+    }
+
+    ~ThreadStateCreator()
+    {
+        Destructor(this->_state);
+    }
+
+    inline ThreadState& state()
+    {
+        // The main greenlet will own this pointer when it is created,
+        // which will be right after this. The plan is to give every
+        // greenlet a pointer to the main greenlet for the thread it
+        // runs in; if we are doing something cross-thread, we need to
+        // access the pointer from the main greenlet. Deleting the
+        // thread, and hence the thread-local storage, will delete the
+        // state pointer in the main greenlet.
+        if (!this->_state) {
+            // XXX: Assumming allocation never fails
+            this->_state = new ThreadState;
+            // For non-standard threading, we need to store an object
+            // in the Python thread state dictionary so that it can be
+            // DECREF'd when the thread ends (ideally; the dict could
+            // last longer) and clean this object up.
+        }
+        return *this->_state;
+    }
+
+    operator ThreadState&()
+    {
+        return this->state();
+    }
+
+    // shadow API to make this easier to use.
+    inline PyGreenlet* borrow_target()
+    {
+        return this->state().borrow_target();
+    };
+    inline PyGreenlet* borrow_current()
+    {
+        return this->state().borrow_current();
+    };
+    inline PyGreenlet* borrow_origin()
+    {
+        return this->state().borrow_origin();
+    };
+    inline PyMainGreenlet* borrow_main_greenlet()
+    {
+        return this->state().borrow_main_greenlet();
+    };
+
+};
+
+#if G_USE_STANDARD_THREADING == 1
+// We can't use the PythonAllocator for this, because we push to it
+// from the thread state destructor, which doesn't have the GIL,
+// and Python's allocators can only be called with the GIL.
+typedef std::vector<PyMainGreenlet*> cleanup_queue_t;
+#else
+class cleanup_queue_t {
+public:
+    inline ssize_t size() { return 0; };
+    inline bool empty() { return true; };
+    inline void pop_back()
+    {
+        throw std::out_of_range("empty queue.");
+    };
+    inline PyMainGreenlet* back()
+    {
+        throw std::out_of_range("empty queue.");
+    };
+    inline void push_back(const PyMainGreenlet* g)
+    {
+        throw std::out_of_range("empty queue.");
+    };
+};
+#endif
+}; // namespace greenlet
 
 #endif
