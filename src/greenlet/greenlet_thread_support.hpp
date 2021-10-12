@@ -65,55 +65,64 @@ namespace greenlet {
 //       We should only hit this case for Python 2.7 on Windows.
 #        define G_THREAD_LOCAL_VAR __declspec(thread)
 #        include <windows.h>
-#        define G_MUTEX_TYPE CRITICAL_SECTION
-#        define G_MUTEX_ACQUIRE(Mutex) EnterCriticalSection(&Mutex)
-#        define G_MUTEX_RELEASE(Mutex) LeaveCriticalSection(&Mutex)
-#        define G_MUTEX_INIT(Mutex) InitializeCriticalSection(&Mutex)
-#        define G_MUTEX_INIT_SUCCESS(Mutex) 1
+namespace greenlet {
+    class Mutex
+    {
+        CRITICAL_SECTION _mutex;
+        G_NO_COPIES_OF_CLS(Mutex);
+    public:
+        Mutex()
+        {
+            InitializeCriticalSection(&this->_mutex);
+        };
+
+        void Lock()
+        {
+            EnterCriticalSection(&this->_mutex);
+        };
+
+        void UnLock()
+        {
+            LeaveCriticalSection(&this->_mutex);
+        };
+    };
+};
 #    elif (defined(__GNUC__) || defined(__clang__)) || (defined(__SUNPRO_C))
 // GCC, clang, SunStudio all use __thread for thread-local variables.
 // For locks, we can use PyThread APIs, officially added in 3.2, but
 // present back to 2.7
 #        define G_THREAD_LOCAL_VAR __thread
 #        include "pythread.h"
-#        define G_MUTEX_TYPE PyThread_type_lock
-#        define G_MUTEX_ACQUIRE(Mutex) PyThread_acquire_lock(Mutex, WAIT_LOCK)
-#        define G_MUTEX_RELEASE(Mutex) PyThread_release_lock(Mutex)
-#        define G_MUTEX_INIT(Mutex) Mutex = PyThread_allocate_lock()
-#        define G_MUTEX_INIT_SUCCESS(Mutex) (Mutex != NULL)
-#    else
-#        error Unable to declare thread-local variables.
-#    endif
-
 namespace greenlet {
     class Mutex
     {
-        G_MUTEX_TYPE _mutex;
+        PyThread_type_lock _mutex;
         G_NO_COPIES_OF_CLS(Mutex);
     public:
         Mutex()
         {
-            G_MUTEX_INIT(this->_mutex);
-            if (!G_MUTEX_INIT_SUCCESS(this->_mutex)) {
+            this->_mutex = PyThread_allocate_lock();
+            if (!this->_mutex) {
                 throw LockInitError("Failed to initialize mutex.");
             }
         };
 
         void Lock()
         {
-            G_MUTEX_ACQUIRE(this->_mutex);
-        }
+            PyThread_acquire_lock(this->_mutex, WAIT_LOCK);
+        };
 
         void UnLock()
         {
-            G_MUTEX_RELEASE(&this->_mutex);
-        }
+            PyThread_release_lock(this->_mutex);
+        };
     };
-#undef G_MUTEX_INIT
-#undef G_MUTEX_ACQUIRE
-#undef G_MUTEX_RELEASE
-#undef G_MUTEX_INIT_SUCCESS
-
+};
+#    else
+#        error Unable to declare thread-local variables.
+#    endif
+// the RAII lock keeper for all non-standard threading platforms.
+namespace greenlet {
     class LockGuard
     {
         Mutex& _mutex;
@@ -122,11 +131,11 @@ namespace greenlet {
         LockGuard(Mutex& m) : _mutex(m)
         {
             this->_mutex.Lock();
-        }
+        };
         ~LockGuard()
         {
             this->_mutex.UnLock();
-        }
+        };
     };
 
 };
