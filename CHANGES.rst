@@ -12,6 +12,11 @@
   older GCC, clang and SunStudio we use ``__thread``, while for older
   MSVC we use ``__declspec(thread)``.
 
+- Fix several leaks that could occur when using greenlets from
+  multiple threads. For example, it is no longer necessary to call
+  ``getcurrent()`` before exiting a thread to allow its main greenlet
+  to be cleaned up. See `issue 252 <https://github.com/python-greenlet/greenlet/issues/251>`_.
+
 1.1.2 (2021-09-29)
 ==================
 

@@ -412,6 +412,8 @@ public:
                 // Highly likely that the reference is somewhere on
                 // the stack, not reachable by GC. Verify.
                 // XXX: This is O(n) in the total number of objects.
+                // TODO: Add a way to disable this at runtime, and
+                // another way to report on it.
                 PyObject* gc = PyImport_ImportModule("gc");
                 PyObject* get_referrers = NULL;
                 PyObject* refs = NULL;
