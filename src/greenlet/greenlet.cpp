@@ -11,6 +11,9 @@
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
 using greenlet::ThreadState;
+using greenlet::Mutex;
+using greenlet::LockGuard;
+using greenlet::LockInitError;
 
 
 #include "structmember.h"
@@ -102,7 +105,7 @@ static PyObject* ts_empty_dict;
 // in a new thread, decremented when it is destroyed.
 static Py_ssize_t total_main_greenlets;
 
-static G_MUTEX_TYPE thread_states_to_destroy_lock;
+static Mutex* thread_states_to_destroy_lock;
 static greenlet::cleanup_queue_t thread_states_to_destroy;
 
 struct ThreadState_DestroyWithGIL
@@ -128,7 +131,7 @@ struct ThreadState_DestroyWithGIL
         // We do this here, rather than in a Python dealloc function
         // for the greenlet, in case there's still a reference out there.
         main->thread_state = NULL;
-        delete state; // Deleting this runs the constructor, DECREFs the main greenlet.
+        delete state; // Deleting this runs the destructor, DECREFs the main greenlet.
         return 0;
     }
 };
@@ -149,11 +152,11 @@ struct ThreadState_DestroyNoGIL
         // Python thread could run and call ``os.fork()``, which would
         // be bad if that happenend while we are holding the cleanup
         // lock (it wouldn't function in the child process).
-        // Make a best effort so try to keep the duration we hold the
+        // Make a best effort to try to keep the duration we hold the
         // lock short.
         // TODO: On platforms that support it, use ``pthread_atfork`` to
         // drop this lock.
-        G_MUTEX_ACQUIRE(thread_states_to_destroy_lock);
+        LockGuard cleanup_lock(*thread_states_to_destroy_lock);
 
         if (state && state->has_main_greenlet()) {
             // Because we don't have the GIL, this is a race condition.
@@ -162,7 +165,6 @@ struct ThreadState_DestroyNoGIL
                 // interpreter has shut down when we're getting
                 // deallocated, we can't run the cleanup code that
                 // deleting it would imply.
-                G_MUTEX_RELEASE(thread_states_to_destroy_lock);
                 return;
             }
 
@@ -179,7 +181,6 @@ struct ThreadState_DestroyNoGIL
                             "expect a memory leak.\n");
                 }
             }
-            G_MUTEX_RELEASE(thread_states_to_destroy_lock);
         }
     }
 
@@ -191,14 +192,12 @@ struct ThreadState_DestroyNoGIL
         while (1) {
             ThreadState* to_destroy;
             {
-                G_MUTEX_ACQUIRE(thread_states_to_destroy_lock);
+                LockGuard cleanup_lock(*thread_states_to_destroy_lock);
                 if (thread_states_to_destroy.empty()) {
-                    G_MUTEX_RELEASE(thread_states_to_destroy_lock);
                     break;
                 }
                 to_destroy = thread_states_to_destroy.back();
                 thread_states_to_destroy.pop_back();
-                G_MUTEX_RELEASE(thread_states_to_destroy_lock);
             }
             // Drop the lock while we do the actual deletion.
             ThreadState_DestroyWithGIL::DestroyWithGIL(to_destroy);
@@ -2161,10 +2160,8 @@ PyDoc_STRVAR(mod_get_pending_cleanup_count_doc,
 static PyObject*
 mod_get_pending_cleanup_count(PyObject* mod)
 {
-    G_MUTEX_ACQUIRE(thread_states_to_destroy_lock);
-    PyObject* result = PyLong_FromSize_t(thread_states_to_destroy.size());
-    G_MUTEX_RELEASE(thread_states_to_destroy_lock);
-    return result;
+    LockGuard cleanup_lock(*thread_states_to_destroy_lock);
+    return PyLong_FromSize_t(thread_states_to_destroy.size());
 }
 
 PyDoc_STRVAR(mod_get_total_main_greenlets_doc,
@@ -2217,11 +2214,14 @@ greenlet_internal_mod_init()
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
 
     GREENLET_NOINLINE_INIT();
-    G_MUTEX_INIT(thread_states_to_destroy_lock);
-    if (!G_MUTEX_INIT_SUCCESS(thread_states_to_destroy_lock)) {
-        PyErr_SetString(PyExc_MemoryError, "can't allocate lock");
+    try {
+        thread_states_to_destroy_lock = new Mutex;
+    }
+    catch (const LockInitError& e) {
+        PyErr_SetString(PyExc_MemoryError, e.what());
         return NULL;
     }
+
     m = PyModule_Create(&greenlet_module_def);
     if (m == NULL) {
         return NULL;

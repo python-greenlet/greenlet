@@ -8,6 +8,9 @@
  * available. (Currently, this is only for Python 2.7 on Windows.)
  */
 
+#include <stdexcept>
+#include "greenlet_compiler_compat.hpp"
+
 // Allow setting this to 0 on the command line so that we
 // can test these code paths on compilers that otherwise support
 // standard threads.
@@ -35,16 +38,25 @@
 #endif
 #endif /* G_USE_STANDARD_THREADING */
 
+namespace greenlet {
+    class LockInitError : public std::runtime_error
+    {
+    public:
+        LockInitError(const char* what) : std::runtime_error(what)
+        {};
+    };
+};
+
+
 #if G_USE_STANDARD_THREADING == 1
 #    define G_THREAD_LOCAL_SUPPORTS_DESTRUCTOR 1
 #    include <thread>
 #    include <mutex>
 #    define G_THREAD_LOCAL_VAR thread_local
-#    define G_MUTEX_TYPE std::mutex
-#    define G_MUTEX_ACQUIRE(Mutex) const std::lock_guard<std::mutex> cleanup_lock(Mutex)
-#    define G_MUTEX_RELEASE(Mutex) do {} while (0)
-#    define G_MUTEX_INIT(Mutex) do {} while(0)
-#    define G_MUTEX_INIT_SUCCESS(Mutex) 1
+namespace greenlet {
+    typedef std::mutex Mutex;
+    typedef std::lock_guard<Mutex> LockGuard;
+};
 #else
 // NOTE: At this writing, the mutex isn't currently required;
 // we don't use a shared cleanup queue or Py_AddPendingCall in this
@@ -72,6 +84,52 @@
 #    else
 #        error Unable to declare thread-local variables.
 #    endif
-#endif
+
+namespace greenlet {
+    class Mutex
+    {
+        G_MUTEX_TYPE _mutex;
+        G_NO_COPIES_OF_CLS(Mutex);
+    public:
+        Mutex()
+        {
+            G_MUTEX_INIT(this->_mutex);
+            if (!G_MUTEX_INIT_SUCCESS(this->_mutex)) {
+                throw LockInitError("Failed to initialize mutex.");
+            }
+        };
+
+        void Lock()
+        {
+            G_MUTEX_ACQUIRE(this->_mutex);
+        }
+
+        void UnLock()
+        {
+            G_MUTEX_RELEASE(&this->_mutex);
+        }
+    };
+#undef G_MUTEX_INIT
+#undef G_MUTEX_ACQUIRE
+#undef G_MUTEX_RELEASE
+#undef G_MUTEX_INIT_SUCCESS
+
+    class LockGuard
+    {
+        Mutex& _mutex;
+        G_NO_COPIES_OF_CLS(LockGuard);
+    public:
+        LockGuard(Mutex& m) : _mutex(m)
+        {
+            this->_mutex.Lock();
+        }
+        ~LockGuard()
+        {
+            this->_mutex.UnLock();
+        }
+    };
+
+};
+#endif /* G_USE_STANDARD_THREADING == 1 */
 
 #endif /* GREENLET_THREAD_SUPPORT_HPP */
