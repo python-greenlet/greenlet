@@ -2,11 +2,20 @@
  Changes
 =========
 
-1.2.0 (unreleased)
+2.0.0 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Drop support for very old versions of GCC and MSVC.
 
+- Compilation now requires a compiler that either supports C++11 or
+  has some other intrinsic way to create thread local variables; for
+  older GCC, clang and SunStudio we use ``__thread``, while for older
+  MSVC we use ``__declspec(thread)``.
+
+- Fix several leaks that could occur when using greenlets from
+  multiple threads. For example, it is no longer necessary to call
+  ``getcurrent()`` before exiting a thread to allow its main greenlet
+  to be cleaned up. See `issue 252 <https://github.com/python-greenlet/greenlet/issues/251>`_.
 
 1.1.2 (2021-09-29)
 ==================
@@ -229,9 +238,9 @@ Packaging Changes
 =====
 * Greenlet has an instance dictionary now, which means it can be
   used for implementing greenlet local storage, etc. However, this
-  might introduce incompatibility if subclasses have __dict__ in their
-  __slots__. Classes like that will fail, because greenlet already
-  has __dict__ out of the box.
+  might introduce incompatibility if subclasses have ``__dict__`` in their
+  ``__slots__``. Classes like that will fail, because greenlet already
+  has ``__dict__`` out of the box.
 * Greenlet no longer leaks memory after thread termination, as long as
   terminated thread has no running greenlets left at the time.
 * Add support for debian sparc and openbsd5-sparc64

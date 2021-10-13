@@ -136,6 +136,9 @@ test_throw(PyObject* self, PyGreenlet* g)
     PyObject* msg_obj = Py_BuildValue("s", msg);
     PyGreenlet_Throw(g, PyExc_ValueError, msg_obj, NULL);
     Py_DECREF(msg_obj);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
     Py_RETURN_NONE;
 }
 

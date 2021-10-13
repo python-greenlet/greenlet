@@ -20,6 +20,8 @@ environment:
     # Use a fixed hash seed for reproducability
     PYTHONHASHSEED: 8675309
     PYTHONDEVMODE: 1
+    PYTHONFAULTHANDLER: 1
+    PYTHONUNBUFFERED: 1
     # Don't get warnings about Python 2 support being deprecated. We
     # know.
     PIP_NO_PYTHON_VERSION_WARNING: 1
@@ -35,7 +37,7 @@ environment:
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
     - PYTHON: "C:\\Python310-x64"
-      PYTHON_VERSION: "3.10.0rc2"
+      PYTHON_VERSION: "3.10.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
@@ -118,8 +120,8 @@ install:
         Where-Object pullRequestId -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)[0].buildNumber) { `
           throw "There are newer queued builds for this pull request, failing early." }
   ## Debugging
-  # - ECHO "Filesystem root:"
-  # - ps: "ls \"C:/\""
+  - ECHO "Filesystem root:"
+  - ps: "ls \"C:/\""
 
   # - ECHO "Installed SDKs:"
   # - ps: "if(Test-Path(\"C:/Program Files/Microsoft SDKs/Windows\")) {ls \"C:/Program Files/Microsoft SDKs/Windows\";}"

@@ -4,6 +4,7 @@
 recursive-include src *.py
 recursive-include src *.c
 recursive-include src *.cpp
+recursive-include src *.hpp
 recursive-include src *.h
 recursive-include src *.cmd
 recursive-include src *.asm
@@ -28,6 +29,7 @@ include *.cfg
 include *.py
 include *.ini
 include .clang-format
+include .pylintrc
 
 recursive-include appveyor *.cmd
 recursive-include appveyor *.ps1

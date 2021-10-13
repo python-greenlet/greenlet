@@ -1,3 +1,7 @@
+"""
+Testing scenarios that may have leaked.
+"""
+from __future__ import print_function, absolute_import, division
 import unittest
 import sys
 import gc
@@ -8,7 +12,9 @@ import threading
 
 import greenlet
 
-class TestLeaks(unittest.TestCase):
+from . import Cleanup
+
+class TestLeaks(Cleanup, unittest.TestCase):
 
     def test_arg_refs(self):
         args = ('a', 'b', 'c')
@@ -86,49 +92,65 @@ class TestLeaks(unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
-    def test_issue251_killing_cross_thread_leaks_list(self, manually_collect_background=True):
+    def test_issue251_killing_cross_thread_leaks_list(self,
+                                                      manually_collect_background=True,
+                                                      explicit_reference_to_switch=False):
         # See https://github.com/python-greenlet/greenlet/issues/251
         # Killing a greenlet (probably not the main one)
         # in one thread from another thread would
         # result in leaking a list (the ts_delkey list).
+        # We no longer use lists to hold that stuff, though.
 
         # For the test to be valid, even empty lists have to be tracked by the
         # GC
         assert gc.is_tracked([])
 
-        def count_objects(kind=list):
-            # pylint:disable=unidiomatic-typecheck
-            # Collect the garbage.
-            for _ in range(3):
-                gc.collect()
-            gc.collect()
-            return sum(
-                1
-                for x in gc.get_objects()
-                if type(x) is kind
-            )
-
-        # XXX: The main greenlet of a dead thread is only released
-        # when one of the proper greenlet APIs is used from a different
-        # running thread. See #252 (https://github.com/python-greenlet/greenlet/issues/252)
         greenlet.getcurrent()
-        greenlets_before = count_objects(greenlet.greenlet)
+        greenlets_before = self.count_objects(greenlet.greenlet, exact_kind=False)
 
         background_glet_running = threading.Event()
         background_glet_killed = threading.Event()
         background_greenlets = []
+        # To toggle debugging off and on.
+        class JustDelMe(object):
+            EXTANT_INSTANCES = set()
+            def __init__(self, msg):
+                self.msg = msg
+                self.EXTANT_INSTANCES.add(id(self))
+            def __del__(self):
+                self.EXTANT_INSTANCES.remove(id(self))
+            def __repr__(self):
+                return "<JustDelMe at 0x%x %r>" % (
+                    id(self), self.msg
+                )
+
         def background_greenlet():
             # Throw control back to the main greenlet.
-            greenlet.getcurrent().parent.switch()
+            jd = JustDelMe("DELETING STACK OBJECT")
+            greenlet._greenlet.set_thread_local(
+                'test_leaks_key',
+                JustDelMe("DELETING THREAD STATE"))
+            # Explicitly keeping 'switch' in a local variable
+            # breaks this test in all versions
+            if explicit_reference_to_switch:
+                s = greenlet.getcurrent().parent.switch
+                s([jd])
+            else:
+                greenlet.getcurrent().parent.switch([jd])
+
+        bg_main_wrefs = []
 
         def background_thread():
             glet = greenlet.greenlet(background_greenlet)
+            bg_main_wrefs.append(weakref.ref(glet.parent))
+
             background_greenlets.append(glet)
             glet.switch() # Be sure it's active.
             # Control is ours again.
             del glet # Delete one reference from the thread it runs in.
             background_glet_running.set()
-            background_glet_killed.wait()
+            background_glet_killed.wait(10)
+
             # To trigger the background collection of the dead
             # greenlet, thus clearing out the contents of the list, we
             # need to run some APIs. See issue 252.
@@ -138,9 +160,9 @@ class TestLeaks(unittest.TestCase):
 
         t = threading.Thread(target=background_thread)
         t.start()
-        background_glet_running.wait()
-
-        lists_before = count_objects()
+        background_glet_running.wait(10)
+        greenlet.getcurrent()
+        lists_before = self.count_objects(list, exact_kind=True)
 
         assert len(background_greenlets) == 1
         self.assertFalse(background_greenlets[0].dead)
@@ -153,26 +175,67 @@ class TestLeaks(unittest.TestCase):
         # Now wait for the background thread to die.
         t.join(10)
         del t
+        # As part of the fix for 252, we need to cycle the ceval.c
+        # interpreter loop to be sure it has had a chance to process
+        # the pending call.
+        self.wait_for_pending_cleanups()
 
-        # Free the background main greenlet by forcing greenlet to notice a difference.
-        greenlet.getcurrent()
-        greenlets_after = count_objects(greenlet.greenlet)
+        lists_after = self.count_objects(list, exact_kind=True)
+        greenlets_after = self.count_objects(greenlet.greenlet, exact_kind=False)
 
-        lists_after = count_objects()
         # On 2.7, we observe that lists_after is smaller than
         # lists_before. No idea what lists got cleaned up. All the
         # Python 3 versions match exactly.
         self.assertLessEqual(lists_after, lists_before)
+        # On versions after 3.6, we've successfully cleaned up the
+        # greenlet references thanks to the internal "vectorcall"
+        # protocol; prior to that, there is a reference path through
+        # the ``greenlet.switch`` method still on the stack that we
+        # can't reach to clean up. The C code goes through terrific
+        # lengths to clean that up.
+        if not explicit_reference_to_switch:
+            self.assertEqual(greenlets_after, greenlets_before)
+            if manually_collect_background:
+                # TODO: Figure out how to make this work!
+                # The one on the stack is still leaking somehow
+                # in the non-manually-collect state.
+                self.assertEqual(JustDelMe.EXTANT_INSTANCES, set())
+        else:
+            # The explicit reference prevents us from collecting it
+            # and it isn't always found by the GC either for some
+            # reason. The entire frame is leaked somehow, on some
+            # platforms (e.g., MacPorts builds of Python (all
+            # versions!)), but not on other platforms (the linux and
+            # windows builds on GitHub actions and Appveyor). So we'd
+            # like to write a test that proves that the main greenlet
+            # sticks around, and we can on my machine (macOS 11.6,
+            # MacPorts builds of everything) but we can't write that
+            # same test on other platforms
+            pass
 
-        self.assertEqual(greenlets_before, greenlets_after)
 
-    @unittest.expectedFailure
+
     def test_issue251_issue252_need_to_collect_in_background(self):
-        # This still fails because the leak of the list
-        # still exists when we don't call a greenlet API before exiting the
-        # thread. The proximate cause is that neither of the two greenlets
-        # from the background thread are actually being destroyed, even though
-        # the GC is in fact visiting both objects.
-        # It's not clear where that leak is? For some reason the thread-local dict
-        # holding it isn't being cleaned up.
+        # Between greenlet 1.1.2 and the next version, this was still
+        # failing because the leak of the list still exists when we
+        # don't call a greenlet API before exiting the thread. The
+        # proximate cause is that neither of the two greenlets from
+        # the background thread are actually being destroyed, even
+        # though the GC is in fact visiting both objects. It's not
+        # clear where that leak is? For some reason the thread-local
+        # dict holding it isn't being cleaned up.
+        #
+        # The leak, I think, is in the CPYthon internal function that
+        # calls into green_switch(). The argument tuple is still on
+        # the C stack somewhere and can't be reached? That doesn't
+        # make sense, because the tuple should be collectable when
+        # this object goes away.
+        #
+        # Note that this test sometimes spuriously passes on Linux,
+        # for some reason, but I've never seen it pass on macOS.
         self.test_issue251_killing_cross_thread_leaks_list(manually_collect_background=False)
+
+    def test_issue251_issue252_explicit_reference_not_collectable(self):
+        self.test_issue251_killing_cross_thread_leaks_list(
+            manually_collect_background=False,
+            explicit_reference_to_switch=True)

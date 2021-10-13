@@ -1,5 +1,5 @@
 import gc
-import sys
+
 import unittest
 import weakref
 
@@ -36,7 +36,7 @@ class GCTests(unittest.TestCase):
             o = inactive_greenlet()
             o = weakref.ref(o)
             gc.collect()
-            self.assertTrue(o() is None)
+            self.assertIsNone(o())
             self.assertFalse(gc.garbage, gc.garbage)
 
         def test_finalizer_crash(self):

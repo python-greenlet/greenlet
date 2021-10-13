@@ -10,21 +10,41 @@ from setuptools import setup
 from setuptools import Extension
 from setuptools import find_packages
 
+# Extra compiler arguments passed to *all* extensions.
+global_compile_args = []
+
+# Extra compiler arguments passed to C++ extensions
+cpp_compile_args = []
+
+# Extra compiler arguments passed to the main extension
+main_compile_args = []
+
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 # https://github.com/python-greenlet/greenlet/issues/4
 # https://github.com/python-greenlet/greenlet/issues/94
 # pylint:disable=too-many-boolean-expressions
+is_linux = sys.platform.startswith('linux') # could be linux or linux2
 if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or ("-with-redhat-3." in platform.platform() and platform.machine() == 'i686')
     or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
     or ("SunOS" in platform.platform() and platform.machine() == "sun4v")
-    or (sys.platform == "linux" and platform.machine() == "ppc")):
-    os.environ["CFLAGS"] = ("%s %s" % (os.environ.get("CFLAGS", ""), "-Os")).lstrip()
+    or (is_linux and platform.machine() == "ppc")):
+    global_compile_args.append("-Os")
+
+
+if sys.platform == 'darwin':
+    # The clang compiler doesn't use --std=c++11 by default
+    cpp_compile_args.append("--std=gnu++11")
+elif sys.platform == 'win32':
+    # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
+    # correctly by default. "/EH" == exception handling. "s" == standard C++,
+    # "c" == extern C doesn't throw
+    cpp_compile_args.append("/EHsc")
 
 
 def readfile(filename):
-    with open(filename, 'r') as f:
+    with open(filename, 'r') as f: # pylint:disable=unspecified-encoding
         return f.read()
 
 GREENLET_SRC_DIR = 'src/greenlet/'
@@ -37,6 +57,9 @@ GREENLET_PLATFORM_DIR = GREENLET_SRC_DIR + 'platform/'
 
 def _find_platform_headers():
     return glob.glob(GREENLET_PLATFORM_DIR + "switch_*.h")
+
+def _find_impl_headers():
+    return glob.glob(GREENLET_SRC_DIR + "*.hpp")
 
 if hasattr(sys, "pypy_version_info"):
     ext_modules = []
@@ -53,22 +76,21 @@ else:
         extra_objects = []
 
     if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
-        extra_compile_args = ['/MT']
+        main_compile_args.append('/MT')
     elif hasattr(os, 'uname') and os.uname()[4] in ['ppc64el', 'ppc64le']:
-        extra_compile_args = ['-fno-tree-dominator-opts']
-    else:
-        extra_compile_args = []
+        main_compile_args.append('-fno-tree-dominator-opts')
 
     ext_modules = [
         Extension(
             name='greenlet._greenlet',
-            sources=[GREENLET_SRC_DIR + 'greenlet.c'],
+            sources=[GREENLET_SRC_DIR + 'greenlet.cpp'],
+            language='c++',
             extra_objects=extra_objects,
-            extra_compile_args=extra_compile_args,
+            extra_compile_args=global_compile_args + main_compile_args + cpp_compile_args,
             depends=[
                 GREENLET_HEADER,
                 GREENLET_SRC_DIR + 'slp_platformselect.h',
-            ] + _find_platform_headers()
+            ] + _find_platform_headers() + _find_impl_headers()
         ),
         # Test extensions.
         #
@@ -81,7 +103,8 @@ else:
         Extension(
             name='greenlet.tests._test_extension',
             sources=[GREENLET_TEST_DIR + '_test_extension.c'],
-            include_dirs=[GREENLET_HEADER_DIR]
+            include_dirs=[GREENLET_HEADER_DIR],
+            extra_compile_args=global_compile_args,
         ),
     ]
 
@@ -91,12 +114,14 @@ else:
                 name='greenlet.tests._test_extension_cpp',
                 sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
                 language="c++",
-                include_dirs=[GREENLET_HEADER_DIR]),
+                include_dirs=[GREENLET_HEADER_DIR],
+                extra_compile_args=global_compile_args + cpp_compile_args,
+            )
         )
 
 
 def get_greenlet_version():
-    with open('src/greenlet/__init__.py') as f:
+    with open('src/greenlet/__init__.py') as f: # pylint:disable=unspecified-encoding
         looking_for = '__version__ = \''
         for line in f:
             if line.startswith(looking_for):

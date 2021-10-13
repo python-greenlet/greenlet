@@ -14,6 +14,10 @@ extern "C" {
 /* This is deprecated and undocumented. It does not change. */
 #define GREENLET_VERSION "1.0.0"
 
+#ifndef GREENLET_MODULE
+#define main_greenlet_ptr_t void*
+#endif
+
 typedef struct _greenlet {
     PyObject_HEAD
     char* stack_start;
@@ -22,8 +26,10 @@ typedef struct _greenlet {
     intptr_t stack_saved;
     struct _greenlet* stack_prev;
     struct _greenlet* parent;
-    PyObject* run_info;
-    struct _frame* top_frame;
+    /* strong reference, set when the greenlet begins to run. */
+    /* Used to be called run_info */
+    main_greenlet_ptr_t main_greenlet_s;
+    struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
     int recursion_depth;
     PyObject* weakreflist;
 #if PY_VERSION_HEX >= 0x030700A3
@@ -41,6 +47,16 @@ typedef struct _greenlet {
 #if PY_VERSION_HEX >= 0x30A00B1
     CFrame* cframe;
 #endif
+    // XXX: Adding this field is a breaker, unless we can
+    // get rid of the run_info field completely.
+    // If we can get it down to just one pointer, we could
+    // re-purpose an existing field; actually, we could already do that by
+    // making ``run_info``, oko ``main_greenlet_s`` a tuple or list.
+    // If we do go ahead and add this field, we should take out all the
+    // CPython-version specific stuff and move those to their own structure
+    // that we access via a pointer so that we can evolve this object in the
+    // future without introducing ABI issues.
+    PyObject* run_callable;
 } PyGreenlet;
 
 #define PyGreenlet_Check(op) PyObject_TypeCheck(op, &PyGreenlet_Type)

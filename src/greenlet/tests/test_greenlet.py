@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import gc
 import sys
 import time
@@ -6,6 +10,7 @@ import unittest
 from abc import ABCMeta, abstractmethod
 
 from greenlet import greenlet
+from . import Cleanup
 
 # We manually manage locks in many tests
 # pylint:disable=consider-using-with
@@ -32,7 +37,7 @@ def send_exception(g, exc):
     g1.switch(exc)
 
 
-class TestGreenlet(unittest.TestCase):
+class TestGreenlet(Cleanup, unittest.TestCase):
     def test_simple(self):
         lst = []
 
@@ -145,10 +150,11 @@ class TestGreenlet(unittest.TestCase):
     def test_dealloc_other_thread(self):
         seen = []
         someref = []
-        lock = threading.Lock()
-        lock.acquire()
-        lock2 = threading.Lock()
-        lock2.acquire()
+
+        bg_glet_created_running_and_no_longer_ref_in_bg = threading.Event()
+        fg_ref_released = threading.Event()
+        bg_should_be_clear = threading.Event()
+        ok_to_exit_bg_thread = threading.Event()
 
         def f():
             g1 = greenlet(fmain)
@@ -156,25 +162,31 @@ class TestGreenlet(unittest.TestCase):
             someref.append(g1)
             del g1
             gc.collect()
-            lock.release()
-            lock2.acquire()
+            bg_glet_created_running_and_no_longer_ref_in_bg.set()
+            fg_ref_released.wait(10)
+            #print("Triggering")
             greenlet()   # trigger release
-            lock.release()
-            lock2.acquire()
+            bg_should_be_clear.set()
+            ok_to_exit_bg_thread.wait(10)
+            greenlet() # One more time
+            #print("Exiting")
         t = threading.Thread(target=f)
         t.start()
-        lock.acquire()
+        bg_glet_created_running_and_no_longer_ref_in_bg.wait(10)
+
         self.assertEqual(seen, [])
         self.assertEqual(len(someref), 1)
         del someref[:]
         gc.collect()
         # g1 is not released immediately because it's from another thread
         self.assertEqual(seen, [])
-        lock2.release()
-        lock.acquire()
+        fg_ref_released.set()
+        bg_should_be_clear.wait(10)
         self.assertEqual(seen, [greenlet.GreenletExit])
-        lock2.release()
+        ok_to_exit_bg_thread.set()
         t.join(10)
+        del seen[:]
+        del someref[:]
 
     def test_frame(self):
         def f1():
@@ -223,24 +235,22 @@ class TestGreenlet(unittest.TestCase):
 
     def test_switch_to_another_thread(self):
         data = {}
-        error = None
         created_event = threading.Event()
         done_event = threading.Event()
 
         def run():
             data['g'] = greenlet(lambda: None)
             created_event.set()
-            done_event.wait()
+            done_event.wait(10)
         thread = threading.Thread(target=run)
         thread.start()
-        created_event.wait()
-        try:
+        created_event.wait(10)
+        with self.assertRaises(greenlet.error):
             data['g'].switch()
-        except greenlet.error:
-            error = sys.exc_info()[1]
-        self.assertIsNotNone(error, "greenlet.error was not raised!")
         done_event.set()
         thread.join(10)
+        # XXX: Should handle this automatically
+        data.clear()
 
     def test_exc_state(self):
         def f():
@@ -273,6 +283,17 @@ class TestGreenlet(unittest.TestCase):
         self.assertRaises(TypeError, deldict, g)
         self.assertRaises(TypeError, setdict, g, 42)
 
+    def test_running_greenlet_has_no_run(self):
+        has_run = []
+        def func():
+            has_run.append(
+                hasattr(greenlet.getcurrent(), 'run')
+            )
+
+        g = greenlet(func)
+        g.switch()
+        self.assertEqual(has_run, [False])
+
     def test_threaded_reparent(self):
         data = {}
         created_event = threading.Event()
@@ -281,7 +302,7 @@ class TestGreenlet(unittest.TestCase):
         def run():
             data['g'] = greenlet(lambda: None)
             created_event.set()
-            done_event.wait()
+            done_event.wait(10)
 
         def blank():
             greenlet.getcurrent().parent.switch()
@@ -291,7 +312,7 @@ class TestGreenlet(unittest.TestCase):
 
         thread = threading.Thread(target=run)
         thread.start()
-        created_event.wait()
+        created_event.wait(10)
         g = greenlet(blank)
         g.switch()
         self.assertRaises(ValueError, setparent, g, data['g'])
@@ -309,7 +330,7 @@ class TestGreenlet(unittest.TestCase):
         result = []
         def worker():
             try:
-                # Wait to be killed
+                # Wait to be killed by going back to the test.
                 main.switch()
             except greenlet.GreenletExit:
                 # Resurrect and switch to parent
@@ -318,10 +339,17 @@ class TestGreenlet(unittest.TestCase):
                 hub.switch()
         g = greenlet(worker, parent=hub)
         g.switch()
+        # delete the only reference, thereby raising GreenletExit
         del g
         self.assertTrue(result)
-        self.assertEqual(result[0], main)
-        self.assertEqual(result[1].parent, hub)
+        self.assertIs(result[0], main)
+        self.assertIs(result[1].parent, hub)
+        # Delete them, thereby breaking the cycle between the greenlet
+        # and the frame, which otherwise would never be collectable
+        # XXX: We should be able to automatically fix this.
+        del result[:]
+        hub = None
+        main = None
 
     def test_parent_return_failure(self):
         # No run causes AttributeError on switch
@@ -353,7 +381,22 @@ class TestGreenlet(unittest.TestCase):
         t = threading.Thread(target=creator)
         t.start()
         t.join(10)
-        self.assertRaises(greenlet.error, result[0].throw, SomeError())
+        with self.assertRaises(greenlet.error):
+            result[0].throw(SomeError)
+
+        if hasattr(result[0].gr_frame, 'clear'):
+            # The frame is actually executing (it thinks), we can't clear it.
+            with self.assertRaises(RuntimeError):
+                result[0].gr_frame.clear()
+        # Unfortunately, this doesn't actually clear the references, they're in the
+        # fast local array.
+        result[0].gr_frame.f_locals.clear()
+        del t
+        del creator
+        del result[:]
+        # XXX: we ought to be able to automatically fix this.
+        # See issue 252
+        self.expect_greenlet_leak = True
 
     def test_recursive_startup(self):
         class convoluted(greenlet):
@@ -370,6 +413,10 @@ class TestGreenlet(unittest.TestCase):
                     self.parent.switch(value)
         g = convoluted()
         self.assertEqual(g.switch(42), 43)
+        # Exits the running greenlet, otherwise it leaks
+        # XXX: We should be able to automatically fix this
+        g.throw(greenlet.GreenletExit)
+        del g
 
     def test_unexpected_reparenting(self):
         another = []
@@ -380,13 +427,68 @@ class TestGreenlet(unittest.TestCase):
         t = threading.Thread(target=worker)
         t.start()
         t.join(10)
+        # The first time we switch (running g_initialstub(), which is
+        # when we look up the run attribute) we attempt to change the
+        # parent to one from another thread (which also happens to be
+        # dead). ``g_initialstub()`` should detect this and raise a
+        # greenlet error.
+        #
+        # EXCEPT: With the fix for #252, this is actually detected
+        # sooner, when setting the parent itself. Prior to that fix,
+        # the main greenlet from the background thread kept a valid
+        # value for ``run_info``, and appeared to be a valid parent
+        # until we actually started the greenlet. But now that it's
+        # cleared, this test is catching whether ``green_setparent``
+        # can detect the dead thread.
+        #
+        # We need to wait for the cleanup to happen, but we're
+        # deliberately leaking a main greenlet here.
+        self.wait_for_pending_cleanups(initial_main_greenlets=self.main_greenlets_before_test + 1)
+
         class convoluted(greenlet):
             def __getattribute__(self, name):
                 if name == 'run':
                     self.parent = another[0] # pylint:disable=attribute-defined-outside-init
                 return greenlet.__getattribute__(self, name)
         g = convoluted(lambda: None)
-        self.assertRaises(greenlet.error, g.switch)
+        with self.assertRaises(ValueError) as exc:
+            g.switch()
+        self.assertEqual(str(exc.exception), "parent must not be garbage collected")
+        del another[:]
+
+    def test_unexpected_reparenting_thread_running(self):
+        # Like ``test_unexpected_reparenting``, except the background thread is
+        # actually still alive.
+        another = []
+        switched_to_greenlet = threading.Event()
+        keep_main_alive = threading.Event()
+        def worker():
+            g = greenlet(lambda: None)
+            another.append(g)
+            g.switch()
+            switched_to_greenlet.set()
+            keep_main_alive.wait(10)
+        class convoluted(greenlet):
+            def __getattribute__(self, name):
+                if name == 'run':
+                    self.parent = another[0] # pylint:disable=attribute-defined-outside-init
+                return greenlet.__getattribute__(self, name)
+
+        t = threading.Thread(target=worker)
+        t.start()
+
+        switched_to_greenlet.wait(10)
+        try:
+            g = convoluted(lambda: None)
+
+            with self.assertRaises(greenlet.error) as exc:
+                g.switch()
+            self.assertEqual(str(exc.exception), "cannot switch to a different thread")
+        finally:
+            keep_main_alive.set()
+            t.join(10)
+            # XXX: Should handle this automatically.
+            del another[:]
 
     def test_threaded_updatecurrent(self):
         # released when main thread should execute
@@ -609,7 +711,7 @@ class TestGreenlet(unittest.TestCase):
             greenlet_running_event.set()
             # Wait for main to let us know the references are
             # gone and the greenlet objects no longer reachable
-            ref_cleared.wait()
+            ref_cleared.wait(10)
             # The creating thread must call getcurrent() (or a few other
             # greenlet APIs) because that's when the thread-local list of dead
             # greenlets gets cleared.
@@ -638,7 +740,7 @@ class TestGreenlet(unittest.TestCase):
 
 
         for done_event in thread_ready_events:
-            done_event.wait()
+            done_event.wait(10)
 
 
         del glets[:]
@@ -650,7 +752,7 @@ class TestGreenlet(unittest.TestCase):
         self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
 
 
-class TestRepr(unittest.TestCase):
+class TestRepr(Cleanup, unittest.TestCase):
 
     def assertEndsWith(self, got, suffix):
         self.assertTrue(got.endswith(suffix), (got, suffix))
@@ -723,6 +825,28 @@ class TestRepr(unittest.TestCase):
                 str,
             )
 
+
+class TestMainGreenlet(Cleanup, unittest.TestCase):
+    # Tests some implementation details, and relies on some
+    # implementation details.
+
+    def _check_current_is_main(self):
+        # implementation detail
+        assert 'main' in repr(greenlet.getcurrent())
+
+        t = type(greenlet.getcurrent())
+        assert 'main' in repr(t)
+        return t
+
+    def test_main_greenlet_cannot_be_subclassed(self):
+        main_type = self._check_current_is_main()
+        with self.assertRaises(TypeError):
+            class Subclass(main_type): # pylint:disable=unused-variable
+                pass
+
+    def test_main_greenlet_is_greenlet(self):
+        self._check_current_is_main()
+        self.assertIsInstance(greenlet.getcurrent(), greenlet)
 
 if __name__ == '__main__':
     unittest.main()
