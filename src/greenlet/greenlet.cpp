@@ -14,7 +14,11 @@ using greenlet::ThreadState;
 using greenlet::Mutex;
 using greenlet::LockGuard;
 using greenlet::LockInitError;
-
+using greenlet::Borrowed;
+using greenlet::BorrowedGreenlet;
+using greenlet::APIResult;
+using greenlet::OutParam;
+using greenlet::Stolen;
 
 #include "structmember.h"
 
@@ -694,33 +698,32 @@ g_switchstack(void)
 }
 
 static int
-g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin,
-            PyGreenlet* target)
+g_calltrace(Borrowed tracefunc,
+            Borrowed event,
+            BorrowedGreenlet origin,
+            BorrowedGreenlet target)
 {
-    PyObject* retval;
-    PyObject *exc_type, *exc_val, *exc_tb;
+    OutParam exc_type, exc_val, exc_tb;
     PyThreadState* tstate;
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
     tstate = PyThreadState_GET();
     tstate->tracing++;
     TSTATE_USE_TRACING(tstate) = 0;
-    retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
+    APIResult retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
     tstate->tracing--;
     TSTATE_USE_TRACING(tstate) =
         (tstate->tracing <= 0 &&
          ((tstate->c_tracefunc != NULL) || (tstate->c_profilefunc != NULL)));
-    if (retval == NULL) {
-        /* In case of exceptions trace function is removed */
+
+    if (!retval) {
+        // In case of exceptions trace function is removed,
+        // and any existing exception is replaced with the tracing
+        // exception.
         GET_THREAD_STATE().state().del_tracefunc();
-        Py_XDECREF(exc_type);
-        Py_XDECREF(exc_val);
-        Py_XDECREF(exc_tb);
         return -1;
     }
-    else {
-        Py_DECREF(retval);
-    }
-    PyErr_Restore(exc_type, exc_val, exc_tb);
+
+    PyErr_Restore(Stolen(exc_type), Stolen(exc_val), Stolen(exc_tb));
     return 0;
 }
 

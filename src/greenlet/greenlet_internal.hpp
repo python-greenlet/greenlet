@@ -54,65 +54,182 @@ static PyTypeObject PyMainGreenlet_Type = {
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
 
-namespace greenlet {
+namespace greenlet
+{
 
-// This allocator is stateless; all instances are identical.
-// It can *ONLY* be used when we're sure we're holding the GIL
-// (Python's allocators require the GIL).
-template <class T>
-struct PythonAllocator : public std::allocator<T> {
-    // As a reminder: the `delete` expression first executes
-    // the destructors, and then it calls the static ``operator delete``
-    // on the type to release the storage. That's what our dispose()
-    // mimics.
-    PythonAllocator(const PythonAllocator& other)
-        : std::allocator<T>()
-    {
-        UNUSED(other);
-    }
-
-    PythonAllocator(const std::allocator<T> other)
-        : std::allocator<T>(other)
-    {}
-
-    template <class U>
-    PythonAllocator(const std::allocator<U>& other)
-        : std::allocator<T>(other)
-    {
-    }
-
-    PythonAllocator() : std::allocator<T>() {}
-
-    T* allocate(size_t number_objects, const void* hint=0)
-    {
-        UNUSED(hint);
-        void* p;
-        if (number_objects == 1)
-            p = PyObject_Malloc(sizeof(T));
-        else
-            p = PyMem_Malloc(sizeof(T) * number_objects);
-        return static_cast<T*>(p);
-    }
-
-    void deallocate(T* t, size_t n)
-    {
-        void* p = t;
-        if (n == 1) {
-            PyObject_Free(p);
+    // This allocator is stateless; all instances are identical.
+    // It can *ONLY* be used when we're sure we're holding the GIL
+    // (Python's allocators require the GIL).
+    template <class T>
+    struct PythonAllocator : public std::allocator<T> {
+        // As a reminder: the `delete` expression first executes
+        // the destructors, and then it calls the static ``operator delete``
+        // on the type to release the storage. That's what our dispose()
+        // mimics.
+        PythonAllocator(const PythonAllocator& other)
+            : std::allocator<T>()
+        {
+            UNUSED(other);
         }
-        else
-            PyMem_Free(p);
-    }
 
-    // Destroy and deallocate in one step.
-    void dispose(T* other)
+        PythonAllocator(const std::allocator<T> other)
+            : std::allocator<T>(other)
+        {}
+
+        template <class U>
+        PythonAllocator(const std::allocator<U>& other)
+            : std::allocator<T>(other)
+        {
+        }
+
+        PythonAllocator() : std::allocator<T>() {}
+
+        T* allocate(size_t number_objects, const void* hint=0)
+        {
+            UNUSED(hint);
+            void* p;
+            if (number_objects == 1)
+                p = PyObject_Malloc(sizeof(T));
+            else
+                p = PyMem_Malloc(sizeof(T) * number_objects);
+            return static_cast<T*>(p);
+        }
+
+        void deallocate(T* t, size_t n)
+        {
+            void* p = t;
+            if (n == 1) {
+                PyObject_Free(p);
+            }
+            else
+                PyMem_Free(p);
+        }
+
+        // Destroy and deallocate in one step.
+        void dispose(T* other)
+        {
+            this->destroy(other);
+            this->deallocate(other, 1);
+        }
+    };
+
+    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
+
+    // A set of classes to make reference counting rules in python
+    // code explicit.
+    //
+    // For a class with a single pointer member, whose constructor
+    // does nothing but copy a pointer parameter into the member, and
+    // which can then be converted back to the pointer type, compilers
+    // generate code that's the same as just passing the pointer.
+    // That is, func(BorrowedReference x) called like ``PyObject* p =
+    // ...; f(p)`` has 0 overhead. Similarly, they "unpack" to the
+    // pointer type with 0 overhead.
+    template <typename T=PyObject>
+    class BorrowedReference
     {
-        this->destroy(other);
-        this->deallocate(other, 1);
-    }
-};
+    private:
+        T* p;
+    public:
+        // Allow implicit creation from PyObject* pointers as we
+        // transition to using these classes.
+        BorrowedReference(T* it) : p(it)
+        {}
 
-typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
+        operator PyObject*() const
+        {
+            return this->p;
+        }
+    };
+
+    typedef BorrowedReference<PyObject> Borrowed;
+    typedef BorrowedReference<PyGreenlet> BorrowedGreenlet;
+
+    class APIResult
+    {
+    private:
+        PyObject* p;
+        //G_NO_COPIES_OF_CLS(APIResult);
+    public:
+        APIResult(PyObject* it) : p(it)
+        {
+        }
+
+        // To allow declaring these and passing them to
+        // PyErr_Fetch we implement the empty constructor,
+        // and the address operator.
+        APIResult() : p(nullptr)
+        {
+        }
+
+        PyObject** operator&()
+        {
+            return &this->p;
+        }
+
+        APIResult& operator=(APIResult& other) = delete;
+        // TODO: In C++11, this should be the move constructor.
+        // In the common case of ``APIResult x = Py_SomeFunction()``,
+        // the call to the copy constructor will be elided completely.
+        APIResult(const APIResult& other) : p(other.p)
+        {
+            Py_XINCREF(this->p);
+        }
+
+        ~APIResult()
+        {
+            Py_XDECREF(p);
+        }
+
+        explicit operator bool() const
+        {
+            return p != nullptr;
+        }
+    };
+
+    class OutParam
+    {
+    private:
+        PyObject* p;
+        G_NO_COPIES_OF_CLS(OutParam);
+        friend class Stolen;
+    public:
+        // To allow declaring these and passing them to
+        // PyErr_Fetch we implement the empty constructor,
+        // and the address operator.
+        OutParam() : p(nullptr)
+        {
+        }
+
+        PyObject** operator&()
+        {
+            return &this->p;
+        }
+
+        // We don't want to be able to pass these to Py_DECREF and
+        // such so we don't have the  PyObject conversion,
+
+        ~OutParam()
+        {
+            Py_XDECREF(p);
+        }
+    };
+
+    class Stolen
+    {
+    private:
+        PyObject* p;
+        G_NO_COPIES_OF_CLS(Stolen);
+    public:
+        Stolen(OutParam& param) : p(param.p)
+        {
+            param.p = nullptr;
+        }
+        operator PyObject*() const
+        {
+            return this->p;
+        }
+    };
 
 };
 
