@@ -62,7 +62,7 @@ using greenlet::LockInitError;
 // at a steady state.
 // Running in verbose mode and adding objgraph to report gives us this
 // info in a steady state:
-
+//
 // function              6416       +21
 // tuple                 2864       +20
 // list                  1728       +13
@@ -98,10 +98,48 @@ using greenlet::LockInitError;
 //     greenlet.tests.test_leaks.JustDelMe                          1      1
 //     -------------------------------------------------------  -----   ----
 //     total                                                      103    299
+//
+// The commit that adds this comment is actually leaking worse (for
+// the first time, I think), so the new code is also leaky:
+// function              6446       +26
+// tuple                 2846       +20
+// list                  1721       +13
+// cell                   707       +10
+// dict                  3615        +8
+// getset_descriptor      952        +6
+// method                  89        +4
+// Genlet                  36        +4
+// weakref               1566        +3
+// type                   950        +3
+//   sum detail refcount=56358    sys refcount=381575   change=635
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.cell                                               10     18
+//     builtins.dict                                                8     92
+//     builtins.function                                           26     42
+//     builtins.getset_descriptor                                   6      6
+//     builtins.list                                               13     38
+//     builtins.list_iterator                                       3      3
+//     builtins.method                                              4      4
+//     builtins.method_descriptor                                   0      7
+//     builtins.set                                                 2      2
+//     builtins.tuple                                              20     24
+//     builtins.type                                                3     29
+//     builtins.weakref                                             3      3
+//     greenlet.greenlet                                            2      2
+//     greenlet.main_greenlet                                       1     14
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.Genlet                  4     26
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     -------------------------------------------------------  -----   ----
+//     total                                                      108    314
 
 using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
-using greenlet::APIResult;
+using greenlet::OwnedObject;
 using greenlet::OutParam;
 
 
@@ -794,7 +832,11 @@ g_calltrace(BorrowedObject tracefunc,
     tstate = PyThreadState_GET();
     tstate->tracing++;
     TSTATE_USE_TRACING(tstate) = 0;
-    APIResult retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
+    // TODO: This calls tracefunc(event, (origin, target)). Add a shortcut
+    // function for that that's specialized to avoid the Py_BuildValue
+    // string parsing, or start with just using "ON" format with PyTuple_Pack(2,
+    // origin, target). That seems like what the N format is meant for.
+    OwnedObject retval(PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target));
     tstate->tracing--;
     TSTATE_USE_TRACING(tstate) =
         (tstate->tracing <= 0 &&

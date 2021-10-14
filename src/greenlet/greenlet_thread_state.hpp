@@ -414,14 +414,13 @@ public:
                 // XXX: This is O(n) in the total number of objects.
                 // TODO: Add a way to disable this at runtime, and
                 // another way to report on it.
-                PyObject* gc = PyImport_ImportModule("gc");
-                PyObject* get_referrers = NULL;
-                PyObject* refs = NULL;
+                OwnedObject gc(PyImport_ImportModule("gc"));
                 if (gc) {
-                    get_referrers = PyObject_GetAttrString(gc, "get_referrers");
+                    OwnedObject get_referrers = gc.PyGetAttrString("get_referrers");
                     assert(get_referrers);
-                    refs = PyObject_CallFunctionObjArgs(get_referrers, old_main_greenlet, NULL);
-                    if (refs && !PyList_GET_SIZE(refs)) {
+                    OwnedList refs = get_referrers.PyCall(old_main_greenlet);
+                    if (refs && refs.empty()) {
+                        assert(refs.REFCNT() == 1);
                         // We found nothing! So we left a dangling
                         // reference: Probably the last thing some
                         // other greenlet did was call
@@ -434,9 +433,10 @@ public:
                         Py_DECREF(old_main_greenlet);
                     }
                     else if (refs
-                             && PyList_GET_SIZE(refs) == 1
-                             && PyCFunction_Check(PyList_GET_ITEM(refs, 0))
-                             && Py_REFCNT(PyList_GET_ITEM(refs, 0)) == 2) {
+                             && refs.size() == 1
+                             && PyCFunction_Check(refs.at(0))
+                             && Py_REFCNT(refs.at(0)) == 2) {
+                        assert(refs.REFCNT() == 1);
                         // Ok, we found a C method that refers to the
                         // main greenlet, and its only referenced
                         // twice, once in the list we just created,
@@ -445,13 +445,15 @@ public:
                         // This happens in older versions of CPython
                         // that create a bound method object somewhere
                         // on the stack that we'll never get back to.
-                        if (PyCFunction_GetFunction(PyList_GET_ITEM(refs, 0)) == (PyCFunction)green_switch) {
-                            PyObject* function_w = PyList_GET_ITEM(refs, 0);
-                            Py_DECREF(refs);
+                        if (PyCFunction_GetFunction(refs.at(0)) == (PyCFunction)green_switch) {
+                            BorrowedObject function_w = refs.at(0);
+                            refs.clear(); // destroy the reference
+                                          // from the list.
                             // back to one reference. Can *it* be
                             // found?
-                            refs = PyObject_CallFunctionObjArgs(get_referrers, function_w, NULL);
-                            if (refs && !PyList_GET_SIZE(refs)) {
+                            assert(Py_REFCNT(function_w) == 1);
+                            refs = get_referrers.PyCall(function_w);
+                            if (refs && refs.empty()) {
                                 // Nope, it can't be found so it won't
                                 // ever be GC'd. Drop it.
                                 Py_CLEAR(function_w);
@@ -459,9 +461,6 @@ public:
                         }
                     }
                 }
-                Py_XDECREF(gc);
-                Py_XDECREF(refs);
-                Py_XDECREF(get_referrers);
             }
         }
 

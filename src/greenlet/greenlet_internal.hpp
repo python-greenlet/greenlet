@@ -143,36 +143,33 @@ namespace greenlet
     // If there are no virtual functions, no complex inheritance (maybe?) and
     // no destructor, these can be directly used as parameters in
     // Python callbacks like tp_init: the layout is the same as a
-    // single pointer. The only thing that's safe to use is the base
-    // class, BorrowedObject.
+    // single pointer. Only subclasses with trivial constructors that
+    // do nothing but set the single pointer member are safe to use
+    // that way.
+    class OwnedObject;
+    template<typename T>
+    class BorrowedReference;
+    typedef BorrowedReference<PyObject> BorrowedObject;
+
+    // This is the base class for thnigs that can be done with a
+    // PyObject pointer. It assumes nothing about memory management.
+    // NOTE: Nothing is virtual, so subclasses shouldn't add new
+    // storage fields or try to override these methods.
     template <typename T=PyObject>
-    class BorrowedReference
+    class PyObjectPointer
     {
-    private:
+    protected:
         T* p;
     public:
-        // Allow implicit creation from PyObject* pointers as we
-        // transition to using these classes.
-        BorrowedReference(T* it) : p(it)
+        PyObjectPointer(T* it) : p(it)
         {}
-
-        // passing to CPython function calls
-        /*operator PyObject*() const
-        {
-            return this->p;
-            }*/
-
-        operator T*() const
-        {
-            return this->p;
-        }
 
         T* operator->() const
         {
             return this->p;
         }
 
-        bool operator==(const BorrowedReference& other) const
+        bool operator==(const PyObjectPointer& other) const
         {
             return other.p == this->p;
         }
@@ -181,6 +178,16 @@ namespace greenlet
         {
             return p != nullptr;
         }
+
+        inline Py_ssize_t REFCNT() const
+        {
+            return Py_REFCNT(p);
+        }
+
+        inline OwnedObject PyGetAttrString(const char* const name) const;
+        inline OwnedObject PyCall(const BorrowedObject& arg) const;
+        inline OwnedObject PyCall(PyMainGreenlet* arg) const;
+        inline OwnedObject PyCall(const PyObject* arg) const;
     protected:
         void _set_raw_pointer(void* t)
         {
@@ -189,6 +196,23 @@ namespace greenlet
         void* _get_raw_pointer() const
         {
             return p;
+        }
+    };
+
+    template <typename T=PyObject>
+    class BorrowedReference : public PyObjectPointer<T>
+    {
+    public:
+        // Allow implicit creation from PyObject* pointers as we
+        // transition to using these classes. Also allow automatic
+        // conversion to PyObject* for passing to C API calls and even
+        // for Py_INCREF/DECREF, because we ourselves do no memory management.
+        BorrowedReference(T* it) : PyObjectPointer<T>(it)
+        {}
+
+        operator T*() const
+        {
+            return this->p;
         }
     };
 
@@ -214,46 +238,152 @@ namespace greenlet
 
     };
 
-    class APIResult
+    class OwnedObject : public PyObjectPointer<>
     {
     private:
-        PyObject* p;
-        // We can't use G_NO_COPIES_OF_CLS(APIResult) because we need
+        // We can't use G_NO_COPIES_OF_CLS(OwnedObject) because we need
         // one copy constructor.
-        G_NO_ASSIGNMENT_OF_CLS(APIResult);
+        G_NO_ASSIGNMENT_OF_CLS(OwnedObject);
+        friend class OwnedList;
     public:
-        APIResult(PyObject* it) : p(it)
+        // CAUTION: Constructing from a PyObject*
+        // steals the reference.
+        explicit OwnedObject(PyObject* it) : PyObjectPointer<>(it)
         {
         }
         // TODO: In C++11, this should be the move constructor.
-        // In the common case of ``APIResult x = Py_SomeFunction()``,
+        // In the common case of ``OwnedObject x = Py_SomeFunction()``,
         // the call to the copy constructor will be elided completely.
-        APIResult(const APIResult& other) : p(other.p)
+        OwnedObject(const OwnedObject& other) : PyObjectPointer<>(other.p)
         {
             Py_XINCREF(this->p);
         }
 
-        ~APIResult()
+        ~OwnedObject()
         {
-            Py_XDECREF(p);
+            fprintf(stderr, "Decrefing an owned object\n");
+            Py_CLEAR(p);
         }
 
-        G_EXPLICIT_OP operator bool() const
+        // CPython API shortcuts
+        inline OwnedObject PyGetAttrString(const char* const name) const
         {
-            return p != nullptr;
+            assert(this->p);
+            return OwnedObject(PyObject_GetAttrString(this->p, name));
+        }
+
+        inline OwnedObject PyCall(const BorrowedObject& arg) const
+        {
+            return this->PyCall(static_cast<PyObject*>(arg));
+        }
+
+        inline OwnedObject PyCall(PyMainGreenlet* arg) const
+        {
+            return this->PyCall(reinterpret_cast<const PyObject*>(arg));
+        }
+
+        inline OwnedObject PyCall(const PyObject* arg) const
+        {
+            assert(this->p);
+            return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
         }
     };
 
-    class OutParam
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const
+    {
+        assert(this->p);
+        return OwnedObject(PyObject_GetAttrString(this->p, name));
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject& arg) const
+    {
+        return this->PyCall(static_cast<PyObject*>(arg));
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyCall(PyMainGreenlet* arg) const
+    {
+        return this->PyCall(reinterpret_cast<const PyObject*>(arg));
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const
+    {
+        assert(this->p);
+        return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
+    }
+
+    class OwnedList : public OwnedObject
     {
     private:
-        PyObject* p;
+        G_NO_ASSIGNMENT_OF_CLS(OwnedList);
+    public:
+        // TODO: Would like to use move.
+        OwnedList(const OwnedObject& other) : OwnedObject(other)
+        {
+            // At this point, we own a reference to the object,
+            // or its null.
+            // Should this raise type error?
+            if (p && !PyList_Check(p)) {
+                // Drat, not a list, drop the reference.
+                Py_DECREF(p);
+                p = nullptr;
+            }
+        }
+
+        OwnedList& operator=(const OwnedObject& other)
+        {
+            if (other && PyList_Check(other.p)) {
+                // Valid list. Own a new reference to it, discard the
+                // reference to what we did own.
+                PyObject* new_ptr = other.p;
+                Py_INCREF(new_ptr);
+                Py_XDECREF(this->p);
+                this->p = new_ptr;
+            }
+            else {
+                // Either the other object was NULL (an error) or it
+                // wasn't a list. Either way, we're now invalidated.
+                Py_XDECREF(this->p);
+                this->p = nullptr;
+            }
+            return *this;
+        }
+
+        inline bool empty() const
+        {
+            return PyList_GET_SIZE(p) == 0;
+        }
+
+        inline Py_ssize_t size() const
+        {
+            return PyList_GET_SIZE(p);
+        }
+
+        inline BorrowedObject at(const Py_ssize_t index) const
+        {
+            return PyList_GET_ITEM(p, index);
+        }
+
+        inline void clear()
+        {
+            PyList_SetSlice(p, 0, PyList_GET_SIZE(p), NULL);
+        }
+    };
+
+    class OutParam : public PyObjectPointer<>
+    {
+        // Not an owned object, because we can't be initialized with
+        // one, and we only sometimes acquire ownership.
+    private:
         G_NO_COPIES_OF_CLS(OutParam);
     public:
         // To allow declaring these and passing them to
         // PyErr_Fetch we implement the empty constructor,
         // and the address operator.
-        OutParam() : p(nullptr)
+        OutParam() : PyObjectPointer<>(nullptr)
         {
         }
 
@@ -276,11 +406,6 @@ namespace greenlet
             PyObject* result = this->p;
             this->p = nullptr;
             return result;
-        }
-
-        G_EXPLICIT_OP operator bool() const
-        {
-            return p != nullptr;
         }
 
         ~OutParam()
