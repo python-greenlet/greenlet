@@ -259,33 +259,9 @@ namespace greenlet
             Py_XINCREF(this->p);
         }
 
-        ~OwnedObject()
+        virtual ~OwnedObject()
         {
-            fprintf(stderr, "Decrefing an owned object\n");
             Py_CLEAR(p);
-        }
-
-        // CPython API shortcuts
-        inline OwnedObject PyGetAttrString(const char* const name) const
-        {
-            assert(this->p);
-            return OwnedObject(PyObject_GetAttrString(this->p, name));
-        }
-
-        inline OwnedObject PyCall(const BorrowedObject& arg) const
-        {
-            return this->PyCall(static_cast<PyObject*>(arg));
-        }
-
-        inline OwnedObject PyCall(PyMainGreenlet* arg) const
-        {
-            return this->PyCall(reinterpret_cast<const PyObject*>(arg));
-        }
-
-        inline OwnedObject PyCall(const PyObject* arg) const
-        {
-            assert(this->p);
-            return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
         }
     };
 

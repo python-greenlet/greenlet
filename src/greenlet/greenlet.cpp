@@ -136,6 +136,45 @@ using greenlet::LockInitError;
 //     greenlet.tests.test_leaks.JustDelMe                          1      1
 //     -------------------------------------------------------  -----   ----
 //     total                                                      108    314
+//
+// The commit adding this fixes a leak for run functions passed to the
+// constructor of a greenlet that is never switched to. Numbers are
+// almost as good as the original:
+// tuple                 2866       +20
+// function              6352       +14
+// list                  1734       +13
+// cell                   717       +10
+// dict                  3623        +8
+// getset_descriptor      958        +6
+// method                  93        +4
+// Genlet                  40        +4
+// weakref               1569        +3
+// type                   953        +3
+//   sum detail refcount=56311    sys refcount=381237   change=538
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.cell                                               10     18
+//     builtins.dict                                                8     68
+//     builtins.function                                           14     30
+//     builtins.getset_descriptor                                   6      6
+//     builtins.list                                               13     38
+//     builtins.list_iterator                                       3      3
+//     builtins.method                                              4      4
+//     builtins.method_descriptor                                   0      7
+//     builtins.set                                                 2      2
+//     builtins.tuple                                              20     24
+//     builtins.type                                                3     29
+//     builtins.weakref                                             3      3
+//     greenlet.greenlet                                            2      2
+//     greenlet.main_greenlet                                       1     14
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.Genlet                  4     26
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     -------------------------------------------------------  -----   ----
+//     total                                                       96    278
 
 using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
@@ -1514,6 +1553,8 @@ green_dealloc(PyGreenlet* self)
     if (self->weakreflist != NULL) {
         PyObject_ClearWeakRefs((PyObject*)self);
     }
+    assert(already_in_err || !PyErr_Occurred());
+    Py_CLEAR(self->run_callable);
     assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->parent);
     assert(already_in_err || !PyErr_Occurred());

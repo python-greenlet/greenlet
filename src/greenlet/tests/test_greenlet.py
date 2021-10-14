@@ -791,9 +791,6 @@ class TestGreenletSetParentErrors(Cleanup, unittest.TestCase):
 
     def test_trivial_cycle(self, glet=None):
         if glet is None:
-            # XXX: passing the lambda function here shows up as a leak
-            # of a function object! Figure out why. Are we not
-            # decrefing it if we don't actually run the greenlet?
             glet = greenlet(lambda: None)
         with self.assertRaises(ValueError) as exc:
             glet.parent = glet
