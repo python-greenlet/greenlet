@@ -180,6 +180,7 @@ using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
 using greenlet::OwnedObject;
 using greenlet::OutParam;
+using greenlet::ImmortalObject;
 
 
 #include "structmember.h"
@@ -258,15 +259,82 @@ The running greenlet's stack_start is undefined but not NULL.
    greenlet_thread_state.hpp for details.
 */
 
+class GeneralInitError : public std::runtime_error
+{
+public:
+    GeneralInitError() : std::runtime_error("")
+    {}
+};
 
+class ImmortalEventName : public ImmortalObject
+{
+private:
+    G_NO_COPIES_OF_CLS(ImmortalEventName);
+public:
+    ImmortalEventName(PyObject* p) : ImmortalObject(p)
+    {}
+};
 
+static inline PyObject*
+Steal(PyObject* p)
+{
+    if (!p) {
+        assert(PyErr_Occurred());
+        throw GeneralInitError();
+    }
+    return p;
+};
 
-static PyObject* ts_event_switch;
-static PyObject* ts_event_throw;
-static PyObject* PyExc_GreenletError;
-static PyObject* PyExc_GreenletExit;
-static PyObject* ts_empty_tuple;
-static PyObject* ts_empty_dict;
+// This encapsulates what were previously module global "constants"
+// established at init time.
+// This is a step towards Python3 style module state that allows
+// reloading.
+// We play some tricks with placement new to be able to allocate this
+// object statically still, so that references to its members don't
+// incur an extra pointer indirection.
+class GreenletGlobals
+{
+public:
+    const ImmortalEventName event_switch;
+    const ImmortalEventName event_throw;
+    const ImmortalObject PyExc_GreenletError;
+    const ImmortalObject PyExc_GreenletExit;
+    const ImmortalObject empty_tuple;
+    const ImmortalObject empty_dict;
+
+    GreenletGlobals(const int dummy) :
+        event_switch(0),
+        event_throw(0),
+        PyExc_GreenletError(0),
+        PyExc_GreenletExit(0),
+        empty_tuple(0),
+        empty_dict(0)
+    {}
+
+    GreenletGlobals() :
+        event_switch(Steal(Greenlet_Intern("switch"))),
+        event_throw(Steal(Greenlet_Intern("throw"))),
+        PyExc_GreenletError(Steal(PyErr_NewException("greenlet.error", NULL, NULL))),
+        PyExc_GreenletExit(Steal(PyErr_NewException("greenlet.GreenletExit", PyExc_BaseException, NULL))),
+        empty_tuple(Steal(PyTuple_New(0))),
+        empty_dict(Steal(PyDict_New()))
+    {}
+
+    ~GreenletGlobals()
+    {
+        // This object is (currently) effectively immortal, and not
+        // just because of those placement new tricks; if we try to
+        // deallocate the static object we allocated, and overwrote,
+        // we would be doing so at C++ teardown time, which is after
+        // the final Python GIL is released, and we can't use the API
+        // then.
+        // (The members will still be destructed, but they also don't
+        // do any deallocation.)
+    }
+};
+
+static const GreenletGlobals mod_globs(0);
+
 // Protected by the GIL. Incremented when we create a main greenlet,
 // in a new thread, decremented when it is destroyed.
 static Py_ssize_t total_main_greenlets;
@@ -860,10 +928,10 @@ g_switchstack(void)
 }
 
 static int
-g_calltrace(BorrowedObject tracefunc,
-            BorrowedObject event,
-            BorrowedGreenlet origin,
-            BorrowedGreenlet target)
+g_calltrace(const BorrowedObject tracefunc,
+            const ImmortalEventName& event,
+            const BorrowedGreenlet origin,
+            const BorrowedGreenlet target)
 {
     OutParam exc_type, exc_val, exc_tb;
     PyThreadState* tstate;
@@ -874,8 +942,10 @@ g_calltrace(BorrowedObject tracefunc,
     // TODO: This calls tracefunc(event, (origin, target)). Add a shortcut
     // function for that that's specialized to avoid the Py_BuildValue
     // string parsing, or start with just using "ON" format with PyTuple_Pack(2,
-    // origin, target). That seems like what the N format is meant for.
-    OwnedObject retval(PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target));
+    // origin, target). That seems like what the N format is meant
+    // for.
+    // XXX: Why does event not automatically cast back to a PyObject?
+    OwnedObject retval(PyObject_CallFunction(tracefunc, "O(OO)", static_cast<PyObject*>(event), origin, target));
     tstate->tracing--;
     TSTATE_USE_TRACING(tstate) =
         (tstate->tracing <= 0 &&
@@ -922,7 +992,7 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
 
         if (tracefunc) {
             if (g_calltrace(tracefunc,
-                            args ? ts_event_switch : ts_event_throw,
+                            args ? mod_globs.event_switch : mod_globs.event_throw,
                             origin,
                             current) < 0) {
                 /* Turn trace errors into switch throws */
@@ -979,7 +1049,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     if (!state.has_main_greenlet()) {
         Py_XDECREF(args);
         Py_XDECREF(kwargs);
-        PyErr_SetString(PyExc_GreenletError, "cannot switch to a different thread");
+        PyErr_SetString(mod_globs.PyExc_GreenletError, "cannot switch to a different thread");
         return NULL;
     }
 
@@ -995,7 +1065,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     if (run_info == NULL || run_info != state.borrow_main_greenlet()) {
         Py_XDECREF(args);
         Py_XDECREF(kwargs);
-        PyErr_SetString(PyExc_GreenletError,
+        PyErr_SetString(mod_globs.PyExc_GreenletError,
                         run_info ?
                             "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
@@ -1029,7 +1099,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
 static PyObject*
 g_handle_exit(PyObject* result)
 {
-    if (result == NULL && PyErr_ExceptionMatches(PyExc_GreenletExit)) {
+    if (result == NULL && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)) {
         /* catch and ignore GreenletExit */
         OutParam val;
         PyErr_Fetch(OutParam(), val, OutParam());
@@ -1105,7 +1175,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     void* run_info = find_and_borrow_main_greenlet_in_lineage(self);
     if (run_info == NULL || run_info != state.borrow_main_greenlet()) {
         Py_DECREF(run);
-        PyErr_SetString(PyExc_GreenletError,
+        PyErr_SetString(mod_globs.PyExc_GreenletError,
                         run_info ?
                             "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
@@ -1179,7 +1249,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 
         if ((tracefunc = state.get_tracefunc()) != NULL) {
             if (g_calltrace(tracefunc,
-                            args ? ts_event_switch : ts_event_throw,
+                            args ? mod_globs.event_switch : mod_globs.event_throw,
                             origin,
                             self) < 0) {
                 /* Turn trace errors into switch throws */
@@ -1234,7 +1304,7 @@ static PyGreenlet*
 green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 {
     PyGreenlet* o =
-        (PyGreenlet*)PyBaseObject_Type.tp_new(type, ts_empty_tuple, ts_empty_dict);
+        (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o != NULL) {
         o->parent = GET_THREAD_STATE().state().get_or_establish_current();
 #if GREENLET_USE_CFRAME
@@ -1337,7 +1407,7 @@ kill_greenlet(PyGreenlet* self)
         oldparent = self->parent;
         self->parent = GET_THREAD_STATE().state().get_current();
         /* Send the greenlet a GreenletExit exception. */
-        PyErr_SetString(PyExc_GreenletExit, "Killing the greenlet because all references have vanished.");
+        PyErr_SetString(mod_globs.PyExc_GreenletExit, "Killing the greenlet because all references have vanished.");
         result = g_switch(self, NULL, NULL);
         tmp = self->parent;
         self->parent = oldparent;
@@ -1672,7 +1742,7 @@ PyDoc_STRVAR(
 static PyObject*
 green_throw(PyGreenlet* self, PyObject* args)
 {
-    PyObject* typ = PyExc_GreenletExit;
+    PyObject* typ = mod_globs.PyExc_GreenletExit;
     PyObject* val = NULL;
     PyObject* tb = NULL;
 
@@ -2396,6 +2466,7 @@ static struct PyModuleDef greenlet_module_def = {
     GreenMethods,
 };
 
+
 static PyObject*
 greenlet_internal_mod_init()
 {
@@ -2417,8 +2488,6 @@ greenlet_internal_mod_init()
     if (m == NULL) {
         return NULL;
     }
-    ts_event_switch = Greenlet_Intern("switch");
-    ts_event_throw = Greenlet_Intern("throw");
 
     if (PyType_Ready(&PyGreenlet_Type) < 0) {
         return NULL;
@@ -2444,32 +2513,19 @@ greenlet_internal_mod_init()
         return NULL;
     }
 #endif
-    PyExc_GreenletError = PyErr_NewException("greenlet.error", NULL, NULL);
-    if (PyExc_GreenletError == NULL) {
-        return NULL;
+    try {
+        new((void*)&mod_globs) GreenletGlobals;
     }
-    PyExc_GreenletExit =
-        PyErr_NewException("greenlet.GreenletExit", PyExc_BaseException, NULL);
-    if (PyExc_GreenletExit == NULL) {
-        return NULL;
-    }
-
-    ts_empty_tuple = PyTuple_New(0);
-    if (ts_empty_tuple == NULL) {
-        return NULL;
-    }
-
-    ts_empty_dict = PyDict_New();
-    if (ts_empty_dict == NULL) {
+    catch (const GeneralInitError& e) {
         return NULL;
     }
 
     Py_INCREF(&PyGreenlet_Type);
     PyModule_AddObject(m, "greenlet", (PyObject*)&PyGreenlet_Type);
-    Py_INCREF(PyExc_GreenletError);
-    PyModule_AddObject(m, "error", PyExc_GreenletError);
-    Py_INCREF(PyExc_GreenletExit);
-    PyModule_AddObject(m, "GreenletExit", PyExc_GreenletExit);
+    Py_INCREF(mod_globs.PyExc_GreenletError);
+    PyModule_AddObject(m, "error", mod_globs.PyExc_GreenletError);
+    Py_INCREF(mod_globs.PyExc_GreenletExit);
+    PyModule_AddObject(m, "GreenletExit", mod_globs.PyExc_GreenletExit);
 
     PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(1));
     PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(1));
@@ -2496,8 +2552,8 @@ greenlet_internal_mod_init()
     _PyGreenlet_API[PyGreenlet_Type_NUM] = (void*)&PyGreenlet_Type;
 
     /* exceptions */
-    _PyGreenlet_API[PyExc_GreenletError_NUM] = (void*)PyExc_GreenletError;
-    _PyGreenlet_API[PyExc_GreenletExit_NUM] = (void*)PyExc_GreenletExit;
+    _PyGreenlet_API[PyExc_GreenletError_NUM] = (void*)mod_globs.PyExc_GreenletError;
+    _PyGreenlet_API[PyExc_GreenletExit_NUM] = (void*)mod_globs.PyExc_GreenletExit;
 
     /* methods */
     _PyGreenlet_API[PyGreenlet_New_NUM] = (void*)PyGreenlet_New;

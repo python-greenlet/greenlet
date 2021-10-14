@@ -238,6 +238,23 @@ namespace greenlet
 
     };
 
+    class ImmortalObject : public PyObjectPointer<>
+    {
+    private:
+        G_NO_COPIES_OF_CLS(ImmortalObject);
+    public:
+        // CAUTION: Constructing from a PyObject*
+        // steals the reference.
+        explicit ImmortalObject(PyObject* it) : PyObjectPointer<>(it)
+        {
+        }
+
+        operator PyObject*() const
+        {
+            return this->p;
+        }
+    };
+
     class OwnedObject : public PyObjectPointer<>
     {
     private:
