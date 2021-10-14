@@ -30,6 +30,8 @@ struct _PyMainGreenlet;
 #include <vector>
 #include <memory>
 
+extern PyTypeObject PyGreenlet_Type;
+
 // Define a special type for the main greenlets. This way it can have
 // a thread state pointer without having to carry the expense of a
 // NULL field around on every other greenlet.
@@ -115,6 +117,17 @@ namespace greenlet
 
     typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
 
+    class TypeError : public std::runtime_error
+    {
+    public:
+        TypeError(const char* const what) : std::runtime_error(what)
+        {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_TypeError, what);
+            }
+        }
+    };
+
     // A set of classes to make reference counting rules in python
     // code explicit.
     //
@@ -125,6 +138,12 @@ namespace greenlet
     // That is, func(BorrowedReference x) called like ``PyObject* p =
     // ...; f(p)`` has 0 overhead. Similarly, they "unpack" to the
     // pointer type with 0 overhead.
+    //
+    // If there are no virtual functions, no complex inheritance (maybe?) and
+    // no destructor, these can be directly used as parameters in
+    // Python callbacks like tp_init: the layout is the same as a
+    // single pointer. The only thing that's safe to use is the base
+    // class, BorrowedObject.
     template <typename T=PyObject>
     class BorrowedReference
     {
@@ -136,14 +155,63 @@ namespace greenlet
         BorrowedReference(T* it) : p(it)
         {}
 
-        operator PyObject*() const
+        // passing to CPython function calls
+        /*operator PyObject*() const
+        {
+            return this->p;
+            }*/
+
+        operator T*() const
         {
             return this->p;
         }
+
+        T* operator->() const
+        {
+            return this->p;
+        }
+
+        bool operator==(const BorrowedReference& other) const
+        {
+            return other.p == this->p;
+        }
+
+        G_EXPLICIT_OP operator bool() const
+        {
+            return p != nullptr;
+        }
+    protected:
+        void _set_raw_pointer(void* t)
+        {
+            p = reinterpret_cast<T*>(t);
+        }
+        void* _get_raw_pointer() const
+        {
+            return p;
+        }
     };
 
-    typedef BorrowedReference<PyObject> Borrowed;
-    typedef BorrowedReference<PyGreenlet> BorrowedGreenlet;
+    typedef BorrowedReference<PyObject> BorrowedObject;
+    //typedef BorrowedReference<PyGreenlet> BorrowedGreenlet;
+
+    class BorrowedGreenlet : public BorrowedReference<PyGreenlet>
+    {
+    public:
+        BorrowedGreenlet() : BorrowedReference(nullptr)
+        {}
+
+        BorrowedGreenlet(PyGreenlet* it) : BorrowedReference(it)
+        {}
+
+        BorrowedGreenlet(const BorrowedObject& it) : BorrowedReference(nullptr)
+        {
+            if (!PyGreenlet_Check(it)) {
+                throw TypeError("Expected a greenlet");
+            }
+            _set_raw_pointer(static_cast<PyObject*>(it));
+        }
+
+    };
 
     class APIResult
     {

@@ -99,7 +99,7 @@ using greenlet::LockInitError;
 //     -------------------------------------------------------  -----   ----
 //     total                                                      103    299
 
-using greenlet::Borrowed;
+using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
 using greenlet::APIResult;
 using greenlet::OutParam;
@@ -181,7 +181,7 @@ The running greenlet's stack_start is undefined but not NULL.
    greenlet_thread_state.hpp for details.
 */
 
-extern PyTypeObject PyGreenlet_Type;
+
 
 
 static PyObject* ts_event_switch;
@@ -369,7 +369,7 @@ static ThreadStateCreator& GET_THREAD_STATE()
 
 
 static void
-green_clear_exc(PyGreenlet* g)
+green_clear_exc(BorrowedGreenlet g)
 {
 #if GREENLET_PY37
     g->exc_info = NULL;
@@ -783,8 +783,8 @@ g_switchstack(void)
 }
 
 static int
-g_calltrace(Borrowed tracefunc,
-            Borrowed event,
+g_calltrace(BorrowedObject tracefunc,
+            BorrowedObject event,
             BorrowedGreenlet origin,
             BorrowedGreenlet target)
 {
@@ -1205,12 +1205,12 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 }
 
 static int
-green_setrun(PyGreenlet* self, PyObject* nrun, void* c);
+green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* c);
 static int
-green_setparent(PyGreenlet* self, PyObject* nparent, void* c);
+green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c);
 
 static int
-green_init(PyGreenlet* self, PyObject* args, PyObject* kwargs)
+green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
 {
     PyObject* run = NULL;
     PyObject* nparent = NULL;
@@ -1712,7 +1712,7 @@ green_getrun(PyGreenlet* self, void* c)
 }
 
 static int
-green_setrun(PyGreenlet* self, PyObject* nrun, void* c)
+green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* c)
 {
     if (PyGreenlet_STARTED(self)) {
         PyErr_SetString(PyExc_AttributeError,
@@ -1721,8 +1721,13 @@ green_setrun(PyGreenlet* self, PyObject* nrun, void* c)
         return -1;
     }
     PyObject* old = self->run_callable;
-    self->run_callable = nrun;
-    Py_XINCREF(nrun);
+    // XXX: Temporary convert to a PyObject* manually.
+    // Only needed for Py2, which doesn't do a cast to PyObject*
+    // before a null check, leading to an ambiguous override for
+    // BorrowedObject == null;
+    PyObject* new_run = nrun;
+    self->run_callable = new_run;
+    Py_XINCREF(new_run);
     Py_XDECREF(old);
     return 0;
 }
@@ -1736,24 +1741,28 @@ green_getparent(PyGreenlet* self, void* c)
 }
 
 static int
-green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
+green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c)
 {
 
     PyGreenlet* run_info = NULL;
-    if (nparent == NULL) {
+    if (!nparent) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
         return -1;
     }
-    if (!PyGreenlet_Check(nparent)) {
-        PyErr_SetString(PyExc_TypeError, "parent must be a greenlet");
-        return -1;
-    }
-    for (PyGreenlet* p = (PyGreenlet*)nparent; p; p = p->parent) {
-        if (p == self) {
-            PyErr_SetString(PyExc_ValueError, "cyclic parent chain");
-            return -1;
+
+    BorrowedGreenlet new_parent;
+    try {
+        new_parent = nparent;
+        for (BorrowedGreenlet p = new_parent; p; p = p->parent) {
+            if (p == self) {
+                PyErr_SetString(PyExc_ValueError, "cyclic parent chain");
+                return -1;
+            }
+            run_info = PyGreenlet_ACTIVE(p) ? (PyGreenlet*)p->main_greenlet_s : NULL;
         }
-        run_info = PyGreenlet_ACTIVE(p) ? (PyGreenlet*)p->main_greenlet_s : NULL;
+    }
+    catch (greenlet::TypeError) {
+        return -1;
     }
     if (run_info == NULL) {
         PyErr_SetString(PyExc_ValueError,
@@ -1765,10 +1774,10 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* c)
                         "parent cannot be on a different thread");
         return -1;
     }
-    PyGreenlet* p = self->parent;
-    self->parent = (PyGreenlet*)nparent;
+    PyGreenlet* old_parent = self->parent;
+    self->parent = new_parent;
     Py_INCREF(nparent);
-    Py_XDECREF(p);
+    Py_XDECREF(old_parent);
     return 0;
 }
 
