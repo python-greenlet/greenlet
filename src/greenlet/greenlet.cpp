@@ -1325,14 +1325,25 @@ green_is_gc(PyGreenlet* self)
     int result = 0;
     /* Main greenlet can be garbage collected since it can only
        become unreachable if the underlying thread exited.
-       Active greenlet cannot be garbage collected, however. */
+       Active greenlets --- including those that are suspended ---
+       cannot be garbage collected, however.
+    */
     if (PyGreenlet_MAIN(self) || !PyGreenlet_ACTIVE(self)) {
         result = 1;
     }
     // The main greenlet pointer will eventually go away after the thread dies.
     if (self->main_greenlet_s && !self->main_greenlet_s->thread_state) {
         // Our thread is dead! We can never run again. Might as well
-        // GC us.
+        // GC us. Note that if a tuple containing only us and other
+        // immutable objects had been scanned before this, when we
+        // would have returned 0, the tuple will take itself out of GC
+        // tracking and never be investigated again. So that could
+        // result in both us and the tuple leaking due to an
+        // unreachable/uncollectable reference. The same goes for
+        // dictionaries.
+        //
+        // It's not a great idea to be changing our GC state on the
+        // fly.
         result = 1;
     }
     return result;

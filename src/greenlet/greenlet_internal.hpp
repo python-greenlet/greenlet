@@ -29,6 +29,7 @@ struct _PyMainGreenlet;
 
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 extern PyTypeObject PyGreenlet_Type;
 
