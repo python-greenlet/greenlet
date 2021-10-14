@@ -149,25 +149,13 @@ namespace greenlet
     {
     private:
         PyObject* p;
-        //G_NO_COPIES_OF_CLS(APIResult);
+        // We can't use G_NO_COPIES_OF_CLS(APIResult) because we need
+        // one copy constructor.
+        G_NO_ASSIGNMENT_OF_CLS(APIResult);
     public:
         APIResult(PyObject* it) : p(it)
         {
         }
-
-        // To allow declaring these and passing them to
-        // PyErr_Fetch we implement the empty constructor,
-        // and the address operator.
-        APIResult() : p(nullptr)
-        {
-        }
-
-        PyObject** operator&()
-        {
-            return &this->p;
-        }
-
-        APIResult& operator=(APIResult& other) = delete;
         // TODO: In C++11, this should be the move constructor.
         // In the common case of ``APIResult x = Py_SomeFunction()``,
         // the call to the copy constructor will be elided completely.
@@ -181,7 +169,7 @@ namespace greenlet
             Py_XDECREF(p);
         }
 
-        explicit operator bool() const
+        G_EXPLICIT_OP operator bool() const
         {
             return p != nullptr;
         }
@@ -192,7 +180,6 @@ namespace greenlet
     private:
         PyObject* p;
         G_NO_COPIES_OF_CLS(OutParam);
-        friend class Stolen;
     public:
         // To allow declaring these and passing them to
         // PyErr_Fetch we implement the empty constructor,
@@ -206,15 +193,33 @@ namespace greenlet
             return &this->p;
         }
 
+        // This allows us to pass one directly without the &
+        operator PyObject**()
+        {
+            return &this->p;
+        }
+
         // We don't want to be able to pass these to Py_DECREF and
-        // such so we don't have the  PyObject conversion,
+        // such so we don't have the implicit PyObject* conversion.
+
+        inline PyObject* disown()
+        {
+            PyObject* result = this->p;
+            this->p = nullptr;
+            return result;
+        }
+
+        G_EXPLICIT_OP operator bool() const
+        {
+            return p != nullptr;
+        }
 
         ~OutParam()
         {
             Py_XDECREF(p);
         }
     };
-
+    /*
     class Stolen
     {
     private:
@@ -230,6 +235,7 @@ namespace greenlet
             return this->p;
         }
     };
+    */
 
 };
 
@@ -247,5 +253,5 @@ static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs
 #endif
 
 // Local Variables:
-// flycheck-clang-include-path: ("../../include" "/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7")
+// flycheck-clang-include-path: ("../../include" "/opt/local/Library/Frameworks/Python.framework/Versions/3.10/include/python3.10")
 // End:

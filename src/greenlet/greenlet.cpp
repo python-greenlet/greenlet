@@ -14,11 +14,96 @@ using greenlet::ThreadState;
 using greenlet::Mutex;
 using greenlet::LockGuard;
 using greenlet::LockInitError;
+
+// Helpers for reference counting.
+// XXX: running the test cases for greenlet 1.1.2 under Python 3.10+pydebug
+// with zope.testrunner's "report refcounts" option shows a growth of
+// 515 references when running 90 tests at a steady state (10 repeats)
+// Running in verbose mode and adding objgraph to report gives us this
+// invo in a steady state:
+// tuple                 2807       +16
+// list                  1721       +14
+// function              6294       +11
+// dict                  3610        +9
+// cell                   698        +9
+// greenlet                73        +8
+// method                  98        +5
+// Genlet                  36        +4
+// list_iterator           27        +3
+// getset_descriptor      914        +2
+//   sum detail refcount=55942    sys refcount=379356   change=523
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.cell                                                9     20
+//     builtins.dict                                                9     82
+//     builtins.function                                           11     28
+//     builtins.getset_descriptor                                   2      2
+//     builtins.list                                               14     37
+//     builtins.list_iterator                                       3      3
+//     builtins.method                                              5      5
+//     builtins.method_descriptor                                   0      9
+//     builtins.traceback                                           1      2
+//     builtins.tuple                                              16     20
+//     builtins.type                                                2     19
+//     builtins.weakref                                             2      2
+//     greenlet.GreenletExit                                        1      1
+//     greenlet.greenlet                                            8     26
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.Genlet                  4     26
+//     greenlet.tests.test_greenlet.convoluted                      1      2
+//     -------------------------------------------------------  -----   ----
+//     total                                                       89    286
+//
+// The merge ("Merge: 5d76ab4 7d85029" ) commit
+// 772045446e4a4ac278297666d633ae35a3cfb737, the first part of the C++
+// rewrite, reports a growth of 583 references when running 95 tests
+// at a steady state.
+// Running in verbose mode and adding objgraph to report gives us this
+// info in a steady state:
+
+// function              6416       +21
+// tuple                 2864       +20
+// list                  1728       +13
+// cell                   717       +10
+// dict                  3616        +8
+// getset_descriptor      958        +6
+// method                  93        +4
+// Genlet                  40        +4
+// weakref               1568        +3
+// type                   952        +3
+//   sum detail refcount=56466    sys refcount=381354   change=595
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.cell                                               10     18
+//     builtins.dict                                                8     82
+//     builtins.function                                           21     37
+//     builtins.getset_descriptor                                   6      6
+//     builtins.list                                               13     38
+//     builtins.list_iterator                                       3      3
+//     builtins.method                                              4      4
+//     builtins.method_descriptor                                   0      7
+//     builtins.set                                                 2      2
+//     builtins.tuple                                              20     24
+//     builtins.type                                                3     29
+//     builtins.weakref                                             3      3
+//     greenlet.greenlet                                            2      2
+//     greenlet.main_greenlet                                       1     14
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.Genlet                  4     26
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     -------------------------------------------------------  -----   ----
+//     total                                                      103    299
+
 using greenlet::Borrowed;
 using greenlet::BorrowedGreenlet;
 using greenlet::APIResult;
 using greenlet::OutParam;
-using greenlet::Stolen;
+
 
 #include "structmember.h"
 
@@ -705,7 +790,7 @@ g_calltrace(Borrowed tracefunc,
 {
     OutParam exc_type, exc_val, exc_tb;
     PyThreadState* tstate;
-    PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
+    PyErr_Fetch(exc_type, exc_val, exc_tb);
     tstate = PyThreadState_GET();
     tstate->tracing++;
     TSTATE_USE_TRACING(tstate) = 0;
@@ -723,7 +808,7 @@ g_calltrace(Borrowed tracefunc,
         return -1;
     }
 
-    PyErr_Restore(Stolen(exc_type), Stolen(exc_val), Stolen(exc_tb));
+    PyErr_Restore(exc_type.disown(), exc_val.disown(), exc_tb.disown());
     return 0;
 }
 
@@ -865,15 +950,15 @@ g_handle_exit(PyObject* result)
 {
     if (result == NULL && PyErr_ExceptionMatches(PyExc_GreenletExit)) {
         /* catch and ignore GreenletExit */
-        PyObject *exc, *val, *tb;
-        PyErr_Fetch(&exc, &val, &tb);
-        if (val == NULL) {
+        OutParam val;
+        PyErr_Fetch(OutParam(), val, OutParam());
+        if (!val) {
             Py_INCREF(Py_None);
-            val = Py_None;
+            result = Py_None;
         }
-        result = val;
-        Py_DECREF(exc);
-        Py_XDECREF(tb);
+        else {
+            result = val.disown();
+        }
     }
     if (result != NULL) {
         /* package the result into a 1-tuple */

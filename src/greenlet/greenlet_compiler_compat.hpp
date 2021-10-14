@@ -16,20 +16,28 @@ typedef signed long long int64_t;
 typedef unsigned int uint32_t;
 #define nullptr NULL
 #define G_HAS_METHOD_DELETE 0
+// Use G_EXPLICIT_OP as the prefix for operator methods
+// that should be explicit. Old MSVC doesn't support explicit operator
+// methods.
+#define G_EXPLICIT_OP
 #else
 #include <cstdint>
 #define G_HAS_METHOD_DELETE 1
+#define G_EXPLICIT_OP explicit
 #endif
 
 #if G_HAS_METHOD_DELETE == 1
 #    define G_NO_COPIES_OF_CLS(Cls) public:     \
     Cls(const Cls& other) = delete; \
     Cls& operator=(const Cls& other) = delete
-
+#    define G_NO_ASSIGNMENT_OF_CLS(Cls) public:  \
+    Cls& operator=(const Cls& other) = delete
 #else
 #    define G_NO_COPIES_OF_CLS(Cls) private: \
     Cls(const Cls& other); \
     Cls& operator=(const Cls& other)
+#    define G_NO_ASSIGNMENT_OF_CLS(Cls) private: \
+        Cls& operator=(const Cls& other)
 #endif
 
 // CAUTION: MSVC is stupidly picky:
