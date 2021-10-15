@@ -83,16 +83,16 @@ private:
     OwnedGreenlet current_greenlet;
     /*  Weak reference to the switching-to greenlet during the slp
         switch */
-    PyGreenlet* target_greenlet_w;
+    BorrowedGreenlet target_greenlet_w;
     /* NULL if error, otherwise weak refernce to args tuple to pass around during slp switch */
     PyObject* switch_args_w;
     PyObject* switch_kwargs_w;
 
     /* Strong reference to the switching from greenlet after the switch */
-    PyGreenlet* origin_greenlet_s;
+    OwnedGreenlet origin_greenlet_s;
 
     /* Strong reference to the trace function, if any. */
-    OwnedObject tracefunc_s;
+    OwnedObject tracefunc;
 
     /* A vector of PyGreenlet pointers representing things that need
        deleted when this thread is running. The vector owns the
@@ -115,7 +115,7 @@ public:
         switch_args_w(0),
         switch_kwargs_w(0),
         origin_greenlet_s(0),
-        tracefunc_s(0),
+        tracefunc(0),
         _switchstack_use_tracing(0)
     {
     };
@@ -214,31 +214,41 @@ public:
 
     inline void make_target_current()
     {
-        assert(this->origin_greenlet_s == NULL);
-
-        Py_ssize_t old_target_refs = Py_REFCNT(this->target_greenlet_w);
+        assert(!this->origin_greenlet_s);
+        Py_ssize_t old_target_refs = this->target_greenlet_w.REFCNT();
         Py_ssize_t old_current_refs = this->current_greenlet.REFCNT();
+        Py_ssize_t old_current_expected_refs;
+        Py_ssize_t old_current_refs_at_end;
+
         // The target is weak refd.
-
-
-        // XXX: temporary monkey business
-        PyGreenlet* old_target = this->target_greenlet_w;
-        PyGreenlet* old_current = this->current_greenlet.borrow();
+        {
+        BorrowedGreenlet old_target = this->target_greenlet_w;
+        //PyGreenlet* old_target = this->target_greenlet_w;
+        //PyGreenlet* old_current = this->current_greenlet.borrow();
+        // because the next line decrefs current and increfs target
+        //Py_INCREF(old_current);
+        OwnedGreenlet old_current = this->current_greenlet;
         Py_ssize_t new_current_expected_refs = old_target_refs + 1;
-        Py_ssize_t old_current_expected_refs = (old_current == old_target)
+        old_current_expected_refs = (old_current == old_target)
             ? new_current_expected_refs
             : old_current_refs;
-        // because the next line decrefs current and increfs target
-        Py_INCREF(old_current);
+
+
+        assert(old_current.REFCNT() == old_current_refs + 1);
+
         this->current_greenlet = this->target_greenlet_w;
+
         assert(this->current_greenlet.borrow() == old_target);
         assert(this->current_greenlet.REFCNT() == (old_target_refs + 1));
-        assert(Py_REFCNT(old_current) == old_current_expected_refs);
+        assert(old_current.REFCNT() == old_current_expected_refs);
 
         this->origin_greenlet_s = old_current;
         assert(this->origin_greenlet_s == old_current);
-        assert(Py_REFCNT(this->origin_greenlet_s) == old_current_expected_refs);
-        assert(Py_REFCNT(old_current) == old_current_expected_refs);
+        old_current_refs_at_end = old_current.REFCNT() - 1; // about
+                                                            // to release
+        }
+        assert(this->origin_greenlet_s.REFCNT() == old_current_expected_refs);
+        assert(old_current_refs_at_end == old_current_expected_refs);
     }
 
 private:
@@ -327,7 +337,7 @@ public:
         return true;
     };
 
-    inline PyGreenlet* borrow_target() const
+    inline BorrowedGreenlet borrow_target() const
     {
         return this->target_greenlet_w;
     };
@@ -353,16 +363,14 @@ public:
         return this->switch_kwargs_w;
     };
 
-    inline PyGreenlet* borrow_origin() const
+    inline BorrowedGreenlet borrow_origin() const
     {
         return this->origin_greenlet_s;
     };
 
     inline PyGreenlet* release_ownership_of_origin()
     {
-        PyGreenlet* result = this->origin_greenlet_s;
-        this->origin_greenlet_s = NULL;
-        return result;
+        return this->origin_greenlet_s.relinquish_ownership();
     }
 
     /**
@@ -370,7 +378,7 @@ public:
      */
     inline OwnedObject get_tracefunc() const
     {
-        return tracefunc_s;
+        return tracefunc;
     };
 
 
@@ -378,12 +386,12 @@ public:
     {
         assert(tracefunc);
         if (tracefunc == BorrowedObject(Py_None)) {
-            this->tracefunc_s.CLEAR();
+            this->tracefunc.CLEAR();
         }
         else {
             Py_ssize_t old_refs = Py_REFCNT(tracefunc);
-            this->tracefunc_s = tracefunc;
-            assert(this->tracefunc_s.REFCNT() == old_refs + 1);
+            this->tracefunc = tracefunc;
+            assert(this->tracefunc.REFCNT() == old_refs + 1);
         }
     }
 
@@ -411,7 +419,7 @@ public:
         // be in progress as the thread dies.
         assert(this->origin_greenlet_s == nullptr);
 
-        this->tracefunc_s.CLEAR();
+        this->tracefunc.CLEAR();
 
         // Forcibly GC as much as we can.
         this->clear_deleteme_list(true);

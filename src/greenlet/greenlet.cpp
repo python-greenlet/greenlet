@@ -178,6 +178,42 @@ using greenlet::Require;
 //     -------------------------------------------------------  -----   ----
 //     total                                                       96    278
 
+//Progress with the commit that adds this comment:
+// tuple                 2846       +18
+// list                  1734       +13
+// function              6322       +11
+// dict                  3623        +8
+// cell                   687        +7
+// getset_descriptor      958        +6
+// Genlet                  40        +4
+// weakref               1569        +3
+// type                   953        +3
+// list_iterator           30        +3
+//   sum detail refcount=56042    sys refcount=380784   change=492
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.cell                                                7     13
+//     builtins.dict                                                8     62
+//     builtins.function                                           11     23
+//     builtins.getset_descriptor                                   6      6
+//     builtins.list                                               13     38
+//     builtins.list_iterator                                       3      3
+//     builtins.method_descriptor                                   0      7
+//     builtins.set                                                 2      2
+//     builtins.tuple                                              18     22
+//     builtins.type                                                3     29
+//     builtins.weakref                                             3      3
+//     greenlet.greenlet                                            2      2
+//     greenlet.main_greenlet                                       1     15
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.Genlet                  4     22
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     -------------------------------------------------------  -----   ----
+//     total                                                       84    251
+
 using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
 using greenlet::OwnedObject;
@@ -807,7 +843,6 @@ static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
 {
     // XXX: The ownership rules can be simplified here.
     PyGreenlet* const target = state->borrow_target();
-    //PyGreenlet* old_current_new_origin = state->borrow_current();
     PyThreadState* tstate = PyThreadState_GET();
     tstate->recursion_depth = target->recursion_depth;
     tstate->frame = target->top_frame;
@@ -840,18 +875,9 @@ static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
     */
     tstate->cframe->use_tracing = state->switchstack_use_tracing();
 #endif
-    assert(state->borrow_origin() == NULL);
+    assert(!state->borrow_origin());
     state->make_target_current();
-    // Py_INCREF(target); // XXX: Simplify ownership rules
-    // state->release_ownership_of_current_and_steal_new_current(target);
-    // state->steal_ownership_as_origin(old_current_new_origin);
-    /*
-      incref(target);
-      old_current = state->current;
-      state->current = target;
-      state->origin = old_current;
 
-*/
 
     state->wref_target(NULL);
 }
@@ -1006,7 +1032,8 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
     state.wref_switch_args_kwargs(NULL, NULL);
     if (err < 0) {
         /* Turn switch errors into switch throws */
-        assert(state.borrow_origin() == NULL);
+        assert(PyErr_Occurred());
+        assert(!state.borrow_origin());
         Py_CLEAR(kwargs);
         Py_CLEAR(args);
     }
@@ -1152,10 +1179,9 @@ g_handle_exit(PyObject* result)
 static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 {
     int err;
-    PyObject* run;
-    PyObject *exc, *val, *tb;
+    PyErrFetchParam t, v, tb;
     ThreadState& state = GET_THREAD_STATE();
-    PyGreenlet* self = state.borrow_target();
+    BorrowedGreenlet self = state.borrow_target();
     PyObject* args = state.borrow_switch_args();
     PyObject* kwargs = state.borrow_switch_kwargs();
 #if GREENLET_USE_CFRAME
@@ -1168,7 +1194,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     CFrame trace_info;
 #endif
     /* save exception in case getattr clears it */
-    PyErr_Fetch(&exc, &val, &tb);
+    PyErr_Fetch(t, v, tb);
     /*
        self.run is the object to call in the new greenlet.
        This could run arbitrary python code and switch greenlets!
@@ -1176,16 +1202,17 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
        attribute if they set it manually on an instance, instead of
        putting it into the dict. Why? No Idea.
     */
-    run = PyObject_GetAttrString((PyObject*)self, "run");
-    if (run == NULL) {
-        Py_XDECREF(exc);
-        Py_XDECREF(val);
-        Py_XDECREF(tb);
+    OwnedObject run = self.PyGetAttrString("run");
+    //PyObject* run = PyObject_GetAttrString((PyObject*)self.borrow(), "run");
+    if (!run) {
         return -1;
     }
 
     /* restore saved exception */
-    PyErr_Restore(exc, val, tb);
+    PyErr_Restore(t.relinquish_ownership(),
+                  v.relinquish_ownership(),
+                  tb.relinquish_ownership());
+    //PyErr_Restore(t, v, tb);
 
     /* recheck the state in case getattr caused thread switches */
     /*
@@ -1198,7 +1225,6 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     /* recheck run_info in case greenlet reparented anywhere above */
     void* run_info = find_and_borrow_main_greenlet_in_lineage(self);
     if (run_info == NULL || run_info != state.borrow_main_greenlet()) {
-        Py_DECREF(run);
         PyErr_SetString(mod_globs.PyExc_GreenletError,
                         run_info ?
                             "cannot switch to a different thread" :
@@ -1211,7 +1237,6 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
      * XXX: Is this true now that they're thread local?
      */
     if (PyGreenlet_STARTED(self)) {
-        Py_DECREF(run);
         state.wref_switch_args_kwargs(args, kwargs);
         return 1;
     }
@@ -1257,6 +1282,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     if (err == 1) {
         /* in the new greenlet */
         /* stack variables from above are no good and also will not unwind! */
+        // EXCEPT: That can't be true, we access run, among others, here.
         PyGreenlet* origin;
         PyObject* result;
         PyGreenlet* parent;
@@ -1267,7 +1293,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 
         Py_CLEAR(self->run_callable); // XXX: We could clear this much
                                       // earlier, right?
-        assert(self->main_greenlet_s == NULL);
+        assert(!self->main_greenlet_s);
         self->main_greenlet_s = state.get_main_greenlet();
         assert(self->main_greenlet_s);
 
@@ -1287,17 +1313,22 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 
         Py_DECREF(origin);
 
+        // XXX: See below. Got to be careful with the lifetime here.
+        //OwnedObject result(nullptr);
         if (args == NULL) {
             /* pending exception */
             result = NULL;
         }
         else {
             /* call g.run(*args, **kwargs) */
-            result = PyObject_Call(run, args, kwargs);
+            //result = run.PyCall(args, kwargs);
+            result = PyObject_Call(run.borrow(), args, kwargs);
             Py_DECREF(args);
             Py_XDECREF(kwargs);
         }
-        Py_DECREF(run);
+        //Py_DECREF(run);
+        // XXX: Watch the scope of this result. It gets passed
+        // up the chain.
         result = g_handle_exit(result);
 
         /* jump back to parent */
@@ -1308,10 +1339,10 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
              * in which case we throw *current* exception
              * to the next parent in chain.
              */
-            assert(result == NULL);
+            assert(!result);
         }
         /* We ran out of parents, cannot continue */
-        PyErr_WriteUnraisable((PyObject*)self);
+        PyErr_WriteUnraisable(self.borrow());
         Py_FatalError("greenlets cannot continue");
     }
     /* back in the parent */

@@ -333,7 +333,8 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         # Greenlet that implicitly switches to parent
         g2 = greenlet(lambda: None, parent=g1)
         # AttributeError should propagate to us, no fatal errors
-        self.assertRaises(AttributeError, g2.switch)
+        with self.assertRaises(AttributeError):
+            g2.switch()
 
     def test_throw_exception_not_lost(self):
         class mygreenlet(greenlet):

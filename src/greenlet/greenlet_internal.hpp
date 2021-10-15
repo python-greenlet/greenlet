@@ -235,6 +235,10 @@ namespace greenlet
         inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(PyMainGreenlet* arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(const PyObject* arg) const G_NOEXCEPT;
+        // PyObject_Call(this, args, kwargs);
+        inline OwnedObject PyCall(const BorrowedObject args,
+                                  const BorrowedObject kwargs) const G_NOEXCEPT;
+
     protected:
         void _set_raw_pointer(void* t)
         {
@@ -250,9 +254,6 @@ namespace greenlet
     class OwnedReference : public PyObjectPointer<T>
     {
     private:
-        // We can't use G_NO_COPIES_OF_CLS(OwnedObject) because we need
-        // one copy constructor.
-        G_NO_ASSIGNMENT_OF_CLS(OwnedReference<T>);
         friend class OwnedList;
     public:
         // CAUTION: Constructing from a PyObject*
@@ -266,6 +267,19 @@ namespace greenlet
         OwnedReference(const OwnedReference<T>& other) : PyObjectPointer<T>(other.p)
         {
             Py_XINCREF(this->p);
+        }
+
+        // XXX: I'd prefer to do things like this with
+        // a call to std::move or std::swap, but I'm having issues
+        // making that work...
+
+        OwnedReference<T>& operator=(const OwnedReference<T>& other)
+        {
+            Py_XINCREF(other.p);
+            T* tmp = this->p;
+            this->p = other.p;
+            Py_XDECREF(tmp);
+            return *this;
         }
 
         OwnedReference<T>& operator=(T* const other)
@@ -391,6 +405,11 @@ namespace greenlet
         BorrowedGreenlet(const OwnedGreenlet& it) : BorrowedReference(it.borrow())
         {}
 
+        PyObject* borrow()
+        {
+            return reinterpret_cast<PyObject*>(this->p);
+        }
+
     };
 
     class ImmortalObject : public PyObjectPointer<>
@@ -415,7 +434,7 @@ namespace greenlet
     inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const G_NOEXCEPT
     {
         assert(this->p);
-        return OwnedObject(PyObject_GetAttrString(this->p, name));
+        return OwnedObject(PyObject_GetAttrString(reinterpret_cast<PyObject*>(this->p), name));
     }
 
     template<typename T>
@@ -442,6 +461,14 @@ namespace greenlet
     {
         assert(this->p);
         return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject args,
+                                                  const BorrowedObject kwargs) const G_NOEXCEPT
+    {
+        assert(this->p);
+        return OwnedObject(PyObject_Call(this->p, args, kwargs));
     }
 
     class OwnedList : public OwnedObject
@@ -625,6 +652,7 @@ namespace greenlet
 
 
 };
+
 
 /**
   * Forward declarations needed in multiple files.
