@@ -805,8 +805,8 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState* state)
 static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
 {
     // XXX: The ownership rules can be simplified here.
-    PyGreenlet* target = state->borrow_target();
-    PyGreenlet* origin = state->borrow_current();
+    PyGreenlet* const target = state->borrow_target();
+    //PyGreenlet* old_current_new_origin = state->borrow_current();
     PyThreadState* tstate = PyThreadState_GET();
     tstate->recursion_depth = target->recursion_depth;
     tstate->frame = target->top_frame;
@@ -840,9 +840,18 @@ static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
     tstate->cframe->use_tracing = state->switchstack_use_tracing();
 #endif
     assert(state->borrow_origin() == NULL);
-    Py_INCREF(target); // XXX: Simplify ownership rules
-    state->release_ownership_of_current_and_steal_new_current(target);
-    state->steal_ownership_as_origin(origin);
+    state->make_target_current();
+    // Py_INCREF(target); // XXX: Simplify ownership rules
+    // state->release_ownership_of_current_and_steal_new_current(target);
+    // state->steal_ownership_as_origin(old_current_new_origin);
+    /*
+      incref(target);
+      old_current = state->current;
+      state->current = target;
+      state->origin = old_current;
+
+*/
+
     state->wref_target(NULL);
 }
 
@@ -1316,7 +1325,7 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o != NULL) {
-        o->parent = GET_THREAD_STATE().state().get_or_establish_current();
+        o->parent = GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership();
 #if GREENLET_USE_CFRAME
         /*
           The PyThreadState->cframe pointer usually points to memory on the
@@ -1415,7 +1424,8 @@ kill_greenlet(PyGreenlet* self)
         //     return -1;
         // }
         oldparent = self->parent;
-        self->parent = GET_THREAD_STATE().state().get_current();
+        // XXX: Temporary monkey business.
+        self->parent = GET_THREAD_STATE().state().get_current().acquire();
         /* Send the greenlet a GreenletExit exception. */
         PyErr_SetString(mod_globs.PyExc_GreenletExit, "Killing the greenlet because all references have vanished.");
         result = g_switch(self, NULL, NULL);
@@ -2159,7 +2169,7 @@ green_repr(PyGreenlet* self)
 static PyGreenlet*
 PyGreenlet_GetCurrent(void)
 {
-    return GET_THREAD_STATE().state().get_or_establish_current();
+    return GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership();
 }
 
 static int
@@ -2351,7 +2361,8 @@ PyDoc_STRVAR(mod_getcurrent_doc,
 static PyObject*
 mod_getcurrent(PyObject* self)
 {
-    return GET_THREAD_STATE().state().get_or_establish_current_object();
+    PyObject* result = GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership_o();
+    return result;
 }
 
 PyDoc_STRVAR(mod_settrace_doc,
@@ -2528,7 +2539,7 @@ greenlet_internal_mod_init()
         // shouldn't be encouraged so don't add new items here.
         for (const char* const* p = copy_on_greentype; *p; p++) {
             OwnedObject o = m.PyRequireAttrString(*p);
-            PyDict_SetItemString(PyGreenlet_Type.tp_dict, *p, o.get());
+            PyDict_SetItemString(PyGreenlet_Type.tp_dict, *p, o.borrow());
         }
 
         /*
@@ -2560,7 +2571,7 @@ greenlet_internal_mod_init()
                                                NULL)));
         m.PyAddObject("_C_API", c_api_object);
         assert(c_api_object.REFCNT() == 2);
-        return m.get();
+        return m.borrow(); // But really it's the main reference.
     }
     catch (const LockInitError& e) {
         PyErr_SetString(PyExc_MemoryError, e.what());

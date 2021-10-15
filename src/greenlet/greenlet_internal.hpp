@@ -173,10 +173,14 @@ namespace greenlet
     // single pointer. Only subclasses with trivial constructors that
     // do nothing but set the single pointer member are safe to use
     // that way.
-    class OwnedObject;
+    template<typename T>
+    class OwnedReference;
+
     template<typename T>
     class BorrowedReference;
+
     typedef BorrowedReference<PyObject> BorrowedObject;
+    typedef OwnedReference<PyObject> OwnedObject;
 
     // This is the base class for thnigs that can be done with a
     // PyObject pointer. It assumes nothing about memory management.
@@ -195,9 +199,13 @@ namespace greenlet
         // level, because then we could be passed to Py_DECREF/INCREF,
         // but we want nothing to do with memory management. If you
         // know better, then you can use the get() method, like on a
-        // std::shared_ptr.
+        // std::shared_ptr. Except we name it borrow() to clarify that
+        // if this is a reference-tracked object, the pointer you get
+        // back will go away when the object does.
+        // TODO: This should probably not exist here, but be moved
+        // down to relevant sub-types.
 
-        T* get() const noexcept
+        T* borrow() const G_NOEXCEPT
         {
             return this->p;
         }
@@ -207,26 +215,26 @@ namespace greenlet
             return this->p;
         }
 
-        bool operator==(const PyObjectPointer& other) const noexcept
+        bool operator==(const PyObjectPointer& other) const G_NOEXCEPT
         {
             return other.p == this->p;
         }
 
-        G_EXPLICIT_OP operator bool() const noexcept
+        G_EXPLICIT_OP operator bool() const G_NOEXCEPT
         {
             return p != nullptr;
         }
 
-        inline Py_ssize_t REFCNT() const noexcept
+        inline Py_ssize_t REFCNT() const G_NOEXCEPT
         {
             return Py_REFCNT(p);
         }
 
-        inline OwnedObject PyGetAttrString(const char* const name) const noexcept;
+        inline OwnedObject PyGetAttrString(const char* const name) const G_NOEXCEPT;
         inline OwnedObject PyRequireAttrString(const char* const name) const;
-        inline OwnedObject PyCall(const BorrowedObject& arg) const noexcept;
-        inline OwnedObject PyCall(PyMainGreenlet* arg) const noexcept;
-        inline OwnedObject PyCall(const PyObject* arg) const noexcept;
+        inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
+        inline OwnedObject PyCall(PyMainGreenlet* arg) const G_NOEXCEPT;
+        inline OwnedObject PyCall(const PyObject* arg) const G_NOEXCEPT;
     protected:
         void _set_raw_pointer(void* t)
         {
@@ -235,6 +243,98 @@ namespace greenlet
         void* _get_raw_pointer() const
         {
             return p;
+        }
+    };
+
+    template<typename T=PyObject>
+    class OwnedReference : public PyObjectPointer<T>
+    {
+    private:
+        // We can't use G_NO_COPIES_OF_CLS(OwnedObject) because we need
+        // one copy constructor.
+        G_NO_ASSIGNMENT_OF_CLS(OwnedReference<T>);
+        friend class OwnedList;
+    public:
+        // CAUTION: Constructing from a PyObject*
+        // steals the reference.
+        explicit OwnedReference(T* it) : PyObjectPointer<T>(it)
+        {
+        }
+        // TODO: In C++11, this should be the move constructor.
+        // In the common case of ``OwnedObject x = Py_SomeFunction()``,
+        // the call to the copy constructor will be elided completely.
+        OwnedReference(const OwnedReference<T>& other) : PyObjectPointer<T>(other.p)
+        {
+            Py_XINCREF(this->p);
+        }
+
+        virtual ~OwnedReference()
+        {
+            Py_CLEAR(this->p);
+        }
+
+        void CLEAR()
+        {
+            Py_CLEAR(this->p);
+        }
+    };
+
+    class OwnedGreenlet : public OwnedReference<PyGreenlet>
+    {
+    private:
+
+    public:
+        OwnedGreenlet() : OwnedReference(nullptr)
+        {}
+
+        OwnedGreenlet(const OwnedGreenlet& other) : OwnedReference(other)
+        {
+        }
+
+        explicit OwnedGreenlet(PyGreenlet* it) : OwnedReference(it)
+        {}
+        // explicit OwnedGreenlet(PyMainGreenlet* it) :
+        //     OwnedReference(reinterpret_cast<PyGreenlet*>(it))
+        // {}
+
+        OwnedGreenlet& operator=(const OwnedGreenlet& other)
+        {
+            return this->operator=(other.borrow());
+        }
+
+        OwnedGreenlet& operator=(PyMainGreenlet* const other)
+        {
+            return this->operator=(reinterpret_cast<PyGreenlet*>(other));
+        }
+
+        OwnedGreenlet& operator=(PyGreenlet* const other)
+        {
+            Py_XINCREF(other);
+            PyGreenlet* tmp = this->p;
+            this->p = other;
+            Py_XDECREF(tmp);
+            return *this;
+        }
+
+        PyGreenlet* relinquish_ownership()
+        {
+            PyGreenlet* result = this->p;
+            this->p = nullptr;
+            return result;
+        }
+
+        PyObject* relinquish_ownership_o()
+        {
+            return reinterpret_cast<PyObject*>(relinquish_ownership());
+        }
+
+        PyGreenlet* acquire()
+        {
+            // Return a new reference.
+            // TODO: This will go away when we have reference objects
+            // throughout the code.
+            Py_INCREF(this->p);
+            return this->p;
         }
     };
 
@@ -275,6 +375,9 @@ namespace greenlet
             _set_raw_pointer(static_cast<PyObject*>(it));
         }
 
+        BorrowedGreenlet(const OwnedGreenlet& it) : BorrowedReference(it.borrow())
+        {}
+
     };
 
     class ImmortalObject : public PyObjectPointer<>
@@ -294,35 +397,9 @@ namespace greenlet
         }
     };
 
-    class OwnedObject : public PyObjectPointer<>
-    {
-    private:
-        // We can't use G_NO_COPIES_OF_CLS(OwnedObject) because we need
-        // one copy constructor.
-        G_NO_ASSIGNMENT_OF_CLS(OwnedObject);
-        friend class OwnedList;
-    public:
-        // CAUTION: Constructing from a PyObject*
-        // steals the reference.
-        explicit OwnedObject(PyObject* it) : PyObjectPointer<>(it)
-        {
-        }
-        // TODO: In C++11, this should be the move constructor.
-        // In the common case of ``OwnedObject x = Py_SomeFunction()``,
-        // the call to the copy constructor will be elided completely.
-        OwnedObject(const OwnedObject& other) : PyObjectPointer<>(other.p)
-        {
-            Py_XINCREF(this->p);
-        }
-
-        virtual ~OwnedObject()
-        {
-            Py_CLEAR(p);
-        }
-    };
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const noexcept
+    inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject(PyObject_GetAttrString(this->p, name));
@@ -336,19 +413,19 @@ namespace greenlet
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject& arg) const noexcept
+    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject& arg) const G_NOEXCEPT
     {
-        return this->PyCall(arg.get());
+        return this->PyCall(arg.borrow());
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(PyMainGreenlet* arg) const noexcept
+    inline OwnedObject PyObjectPointer<T>::PyCall(PyMainGreenlet* arg) const G_NOEXCEPT
     {
         return this->PyCall(reinterpret_cast<const PyObject*>(arg));
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const noexcept
+    inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
@@ -453,7 +530,7 @@ namespace greenlet
             // The caller already owns a reference they will deref
             // when their variable goes out of scope, we still need to
             // incref/decref.
-            this->PyAddObject(name, new_object.get());
+            this->PyAddObject(name, new_object.borrow());
 
         }
 

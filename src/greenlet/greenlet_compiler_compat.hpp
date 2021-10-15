@@ -20,10 +20,12 @@ typedef unsigned int uint32_t;
 // that should be explicit. Old MSVC doesn't support explicit operator
 // methods.
 #define G_EXPLICIT_OP
+#define G_NOEXCEPT
 #else
 #include <cstdint>
 #define G_HAS_METHOD_DELETE 1
 #define G_EXPLICIT_OP explicit
+#define G_NOEXCEPT noexcept
 #endif
 
 #if G_HAS_METHOD_DELETE == 1

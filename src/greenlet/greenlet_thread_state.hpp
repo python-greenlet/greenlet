@@ -80,7 +80,7 @@ private:
     PyMainGreenlet* main_greenlet_s;
 
     /* Strong reference to the current greenlet. */
-    PyGreenlet* current_greenlet_s;
+    OwnedGreenlet current_greenlet;
     /*  Weak reference to the switching-to greenlet during the slp
         switch */
     PyGreenlet* target_greenlet_w;
@@ -110,7 +110,7 @@ public:
 
     ThreadState() :
         main_greenlet_s(0),
-        current_greenlet_s(0),
+        current_greenlet(),
         target_greenlet_w(0),
         switch_args_w(0),
         switch_kwargs_w(0),
@@ -138,15 +138,18 @@ public:
     inline PyMainGreenlet* borrow_main_greenlet()
     {
         if (!this->main_greenlet_s) {
-            assert(!this->current_greenlet_s);
+            assert(!this->current_greenlet);
             // steal the reference
             this->main_greenlet_s = green_create_main();
             if (this->main_greenlet_s) {
+                // 2 refs: The returned one, and the self ref
+                assert(Py_REFCNT(this->main_greenlet_s) == 2);
                 this->main_greenlet_s->thread_state = this;
-                this->set_current((PyGreenlet*)this->main_greenlet_s);
+                this->current_greenlet = this->main_greenlet_s;
                 assert(Py_REFCNT(this->main_greenlet_s) == 3);
             }
         }
+        assert(Py_REFCNT(this->main_greenlet_s) >= 2);
         return this->main_greenlet_s;
     };
 
@@ -157,40 +160,39 @@ public:
         return g;
     }
 
-    inline PyGreenlet* borrow_current() const
+    inline BorrowedGreenlet borrow_current() const
     {
-        return this->current_greenlet_s;
+        return this->current_greenlet;
     };
 
-    inline PyGreenlet* get_current()
+    inline OwnedGreenlet get_current()
     {
-        Py_INCREF(this->current_greenlet_s);
-        return this->current_greenlet_s;
+        return this->current_greenlet;
     };
 
     inline bool is_current(const void* obj) const
     {
-        return this->current_greenlet_s == obj;
+        return this->current_greenlet.borrow() == obj;
     }
 
-    inline PyGreenlet* get_or_establish_current()
+    inline OwnedGreenlet get_or_establish_current()
     {
         if (!this->ensure_current_greenlet()) {
-            return NULL;
+            return OwnedGreenlet();
         }
         return this->get_current();
     }
 
-    inline PyObject* get_or_establish_current_object()
-    {
-        return reinterpret_cast<PyObject*>(this->get_or_establish_current());
-    };
+    // inline PyObject* get_or_establish_current_object()
+    // {
+    //     return reinterpret_cast<PyObject*>(this->get_or_establish_current());
+    // };
 
-    inline void set_current(PyGreenlet* new_greenlet)
+    inline void set_current(const OwnedGreenlet& new_greenlet)
     {
-        Py_INCREF(new_greenlet);
-        Py_XDECREF(this->current_greenlet_s);
-        this->current_greenlet_s = new_greenlet;
+        // Py_INCREF(new_greenlet);
+        // Py_XDECREF(this->current_greenlet);
+        this->current_greenlet = new_greenlet;
     };
 
     /**
@@ -199,9 +201,44 @@ public:
      * pointer to the current reference, or steal it somewhere.
      * XXX: Deprecated, confusing.
      */
-    inline void release_ownership_of_current_and_steal_new_current(PyGreenlet* new_target)
+    // inline void release_ownership_of_current_and_steal_new_current(PyGreenlet* new_target)
+    // {
+    //     this->current_greenlet = new_target;
+    // }
+    // inline void steal_ownership_as_origin(PyGreenlet* new_origin)
+    // {
+    //     assert(this->origin_greenlet_s == NULL);
+    //     assert(new_origin != NULL);
+    //     this->origin_greenlet_s = new_origin;
+    // };
+
+    inline void make_target_current()
     {
-        this->current_greenlet_s = new_target;
+        assert(this->origin_greenlet_s == NULL);
+
+        Py_ssize_t old_target_refs = Py_REFCNT(this->target_greenlet_w);
+        Py_ssize_t old_current_refs = this->current_greenlet.REFCNT();
+        // The target is weak refd.
+
+
+        // XXX: temporary monkey business
+        PyGreenlet* old_target = this->target_greenlet_w;
+        PyGreenlet* old_current = this->current_greenlet.borrow();
+        Py_ssize_t new_current_expected_refs = old_target_refs + 1;
+        Py_ssize_t old_current_expected_refs = (old_current == old_target)
+            ? new_current_expected_refs
+            : old_current_refs;
+        // because the next line decrefs current and increfs target
+        Py_INCREF(old_current);
+        this->current_greenlet = this->target_greenlet_w;
+        assert(this->current_greenlet.borrow() == old_target);
+        assert(this->current_greenlet.REFCNT() == (old_target_refs + 1));
+        assert(Py_REFCNT(old_current) == old_current_expected_refs);
+
+        this->origin_greenlet_s = old_current;
+        assert(this->origin_greenlet_s == old_current);
+        assert(Py_REFCNT(this->origin_greenlet_s) == old_current_expected_refs);
+        assert(Py_REFCNT(old_current) == old_current_expected_refs);
     }
 
 private:
@@ -274,7 +311,7 @@ public:
         // which, if it needs cleaning, can result in greenlet
         // switches or thread switches.
 
-        if (!this->current_greenlet_s) {
+        if (!this->current_greenlet) {
             assert(!this->main_greenlet_s);
             if (!this->borrow_main_greenlet()) {
                 return false;
@@ -284,7 +321,7 @@ public:
            it stores them in the thread dict; delete them now. */
 
 
-        assert(this->current_greenlet_s->main_greenlet_s == this->main_greenlet_s);
+        assert(this->current_greenlet->main_greenlet_s == this->main_greenlet_s);
         assert(this->main_greenlet_s->super.main_greenlet_s == this->main_greenlet_s);
         this->clear_deleteme_list();
         return true;
@@ -328,12 +365,6 @@ public:
         return result;
     }
 
-    inline void steal_ownership_as_origin(PyGreenlet* new_origin)
-    {
-        assert(this->origin_greenlet_s == NULL);
-        assert(new_origin != NULL);
-        this->origin_greenlet_s = new_origin;
-    };
 
     /**
      * Returns a new reference, or NULL.
@@ -394,15 +425,16 @@ public:
         // It's possible that there is some other greenlet that
         // switched to us, leaving a reference to the main greenlet
         // on the stack, somewhere uncollectable. Try to detect that.
-        if (this->current_greenlet_s == (void*)this->main_greenlet_s && this->current_greenlet_s) {
+        if (this->current_greenlet.borrow() == (void*)this->main_greenlet_s && this->current_greenlet) {
             assert(PyGreenlet_MAIN(this->main_greenlet_s));
-            assert(!this->current_greenlet_s->top_frame);
+            assert(!this->current_greenlet->top_frame);
             assert(this->main_greenlet_s->super.main_greenlet_s == this->main_greenlet_s);
             // Break a cycle we know about, the self reference
             // the main greenlet keeps.
             Py_CLEAR(this->main_greenlet_s->super.main_greenlet_s);
             // Drop one reference we hold.
-            Py_CLEAR(this->current_greenlet_s);
+            this->current_greenlet.CLEAR();
+            assert(!this->current_greenlet);
             // Only our reference to the main greenlet should be left,
             // But hold onto the pointer in case we need to do extra cleanup.
             PyMainGreenlet* old_main_greenlet = this->main_greenlet_s;
@@ -451,7 +483,7 @@ public:
                                           // from the list.
                             // back to one reference. Can *it* be
                             // found?
-                            assert(Py_REFCNT(function_w) == 1);
+                            assert(function_w.REFCNT() == 1);
                             refs = get_referrers.PyCall(function_w);
                             if (refs && refs.empty()) {
                                 // Nope, it can't be found so it won't
@@ -468,11 +500,13 @@ public:
         // because otherwise deallocing it would fail to raise an
         // exception in it (the thread is dead) and put it back in our
         // deleteme list.
-        if (this->current_greenlet_s) {
-            PyGreenlet* g = this->current_greenlet_s;
+        if (this->current_greenlet) {
+            OwnedGreenlet& g = this->current_greenlet;
             assert(!g->top_frame);
             Py_CLEAR(g->main_greenlet_s);
-            Py_DECREF(this->current_greenlet_s);
+            // XXX: This could now put us in an invalid state, with
+            // this->current_greenlet not being valid anymore.
+            Py_DECREF(this->current_greenlet.borrow());
         }
 
         if (this->main_greenlet_s) {
