@@ -571,8 +571,8 @@ typedef std::vector<ThreadState*> cleanup_queue_t;
 #else
 class cleanup_queue_t {
 public:
-    inline ssize_t size() { return 0; };
-    inline bool empty() { return true; };
+    inline ssize_t size() const { return 0; };
+    inline bool empty() const { return true; };
     inline void pop_back()
     {
         throw std::out_of_range("empty queue.");

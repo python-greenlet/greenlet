@@ -89,6 +89,9 @@ struct PyModuleDef {
     // Then several more fields we're not currently using.
 };
 #define PyModuleDef_HEAD_INIT 1
+// NOTE: On Python 3, this returns a new reference (the module isn't
+// permanently in sys.modules yet until this is returned from the init
+// function), but the Python 2 version returns a *borrowed* reference.
 PyObject* PyModule_Create(PyModuleDef* m)
 {
     return Py_InitModule(m->m_name, m->m_methods);

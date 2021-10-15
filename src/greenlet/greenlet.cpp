@@ -14,6 +14,8 @@ using greenlet::ThreadState;
 using greenlet::Mutex;
 using greenlet::LockGuard;
 using greenlet::LockInitError;
+using greenlet::PyErrOccurred;
+using greenlet::Require;
 
 // Helpers for reference counting.
 // XXX: running the test cases for greenlet 1.1.2 under Python 3.10+pydebug
@@ -181,6 +183,7 @@ using greenlet::BorrowedGreenlet;
 using greenlet::OwnedObject;
 using greenlet::OutParam;
 using greenlet::ImmortalObject;
+using greenlet::CreatedModule;
 
 
 #include "structmember.h"
@@ -259,12 +262,7 @@ The running greenlet's stack_start is undefined but not NULL.
    greenlet_thread_state.hpp for details.
 */
 
-class GeneralInitError : public std::runtime_error
-{
-public:
-    GeneralInitError() : std::runtime_error("")
-    {}
-};
+
 
 class ImmortalEventName : public ImmortalObject
 {
@@ -275,15 +273,7 @@ public:
     {}
 };
 
-static inline PyObject*
-Steal(PyObject* p)
-{
-    if (!p) {
-        assert(PyErr_Occurred());
-        throw GeneralInitError();
-    }
-    return p;
-};
+
 
 // This encapsulates what were previously module global "constants"
 // established at init time.
@@ -301,6 +291,8 @@ public:
     const ImmortalObject PyExc_GreenletExit;
     const ImmortalObject empty_tuple;
     const ImmortalObject empty_dict;
+    Mutex* const thread_states_to_destroy_lock;
+    greenlet::cleanup_queue_t thread_states_to_destroy;
 
     GreenletGlobals(const int dummy) :
         event_switch(0),
@@ -308,16 +300,18 @@ public:
         PyExc_GreenletError(0),
         PyExc_GreenletExit(0),
         empty_tuple(0),
-        empty_dict(0)
+        empty_dict(0),
+        thread_states_to_destroy_lock(0)
     {}
 
     GreenletGlobals() :
-        event_switch(Steal(Greenlet_Intern("switch"))),
-        event_throw(Steal(Greenlet_Intern("throw"))),
-        PyExc_GreenletError(Steal(PyErr_NewException("greenlet.error", NULL, NULL))),
-        PyExc_GreenletExit(Steal(PyErr_NewException("greenlet.GreenletExit", PyExc_BaseException, NULL))),
-        empty_tuple(Steal(PyTuple_New(0))),
-        empty_dict(Steal(PyDict_New()))
+        event_switch(Require(Greenlet_Intern("switch"))),
+        event_throw(Require(Greenlet_Intern("throw"))),
+        PyExc_GreenletError(Require(PyErr_NewException("greenlet.error", NULL, NULL))),
+        PyExc_GreenletExit(Require(PyErr_NewException("greenlet.GreenletExit", PyExc_BaseException, NULL))),
+        empty_tuple(Require(PyTuple_New(0))),
+        empty_dict(Require(PyDict_New())),
+        thread_states_to_destroy_lock(new Mutex())
     {}
 
     ~GreenletGlobals()
@@ -331,6 +325,26 @@ public:
         // (The members will still be destructed, but they also don't
         // do any deallocation.)
     }
+
+    void queue_to_destroy(ThreadState* ts) const
+    {
+        // we're currently accessed through a static const object,
+        // implicitly marking our members as const, so code can't just
+        // call push_back (or pop_back) without casting away the
+        // const.
+        //
+        // Do that for callers.
+        greenlet::cleanup_queue_t& q = const_cast<greenlet::cleanup_queue_t&>(this->thread_states_to_destroy);
+        q.push_back(ts);
+    }
+
+    ThreadState* take_next_to_destroy() const
+    {
+        greenlet::cleanup_queue_t& q = const_cast<greenlet::cleanup_queue_t&>(this->thread_states_to_destroy);
+        ThreadState* result = q.back();
+        q.pop_back();
+        return result;
+    }
 };
 
 static const GreenletGlobals mod_globs(0);
@@ -338,9 +352,6 @@ static const GreenletGlobals mod_globs(0);
 // Protected by the GIL. Incremented when we create a main greenlet,
 // in a new thread, decremented when it is destroyed.
 static Py_ssize_t total_main_greenlets;
-
-static Mutex* thread_states_to_destroy_lock;
-static greenlet::cleanup_queue_t thread_states_to_destroy;
 
 struct ThreadState_DestroyWithGIL
 {
@@ -390,7 +401,7 @@ struct ThreadState_DestroyNoGIL
         // lock short.
         // TODO: On platforms that support it, use ``pthread_atfork`` to
         // drop this lock.
-        LockGuard cleanup_lock(*thread_states_to_destroy_lock);
+        LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
 
         if (state && state->has_main_greenlet()) {
             // Because we don't have the GIL, this is a race condition.
@@ -402,8 +413,8 @@ struct ThreadState_DestroyNoGIL
                 return;
             }
 
-            thread_states_to_destroy.push_back(state);
-            if (thread_states_to_destroy.size() == 1) {
+            mod_globs.queue_to_destroy(state);
+            if (mod_globs.thread_states_to_destroy.size() == 1) {
                 // We added the first item to the queue. We need to schedule
                 // the cleanup.
                 int result = Py_AddPendingCall(ThreadState_DestroyNoGIL::DestroyQueueWithGIL,
@@ -426,12 +437,11 @@ struct ThreadState_DestroyNoGIL
         while (1) {
             ThreadState* to_destroy;
             {
-                LockGuard cleanup_lock(*thread_states_to_destroy_lock);
-                if (thread_states_to_destroy.empty()) {
+                LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
+                if (mod_globs.thread_states_to_destroy.empty()) {
                     break;
                 }
-                to_destroy = thread_states_to_destroy.back();
-                thread_states_to_destroy.pop_back();
+                to_destroy = mod_globs.take_next_to_destroy();
             }
             // Drop the lock while we do the actual deletion.
             ThreadState_DestroyWithGIL::DestroyWithGIL(to_destroy);
@@ -2421,8 +2431,8 @@ PyDoc_STRVAR(mod_get_pending_cleanup_count_doc,
 static PyObject*
 mod_get_pending_cleanup_count(PyObject* mod)
 {
-    LockGuard cleanup_lock(*thread_states_to_destroy_lock);
-    return PyLong_FromSize_t(thread_states_to_destroy.size());
+    LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
+    return PyLong_FromSize_t(mod_globs.thread_states_to_destroy.size());
 }
 
 PyDoc_STRVAR(mod_get_total_main_greenlets_doc,
@@ -2470,109 +2480,96 @@ static struct PyModuleDef greenlet_module_def = {
 static PyObject*
 greenlet_internal_mod_init()
 {
-    PyObject* m = NULL;
-    const char* const*  p = NULL;
-    PyObject* c_api_object;
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
 
     GREENLET_NOINLINE_INIT();
+
     try {
-        thread_states_to_destroy_lock = new Mutex;
+        CreatedModule m(greenlet_module_def);
+
+        Require(PyType_Ready(&PyGreenlet_Type));
+
+        PyMainGreenlet_Type.tp_base = &PyGreenlet_Type;
+        Py_INCREF(&PyGreenlet_Type);
+        // On Py27, if we don't manually inherit the flags, we don't get
+        // Py_TPFLAGS_HAVE_CLASS, which breaks lots of things, notably
+        // type checking for the subclass. We also wind up inheriting
+        // HAVE_GC, which means we must set those fields as well, since if
+        // its explicitly set they don't get copied
+        PyMainGreenlet_Type.tp_flags = G_TPFLAGS_DEFAULT;
+        PyMainGreenlet_Type.tp_traverse = (traverseproc)green_traverse;
+        PyMainGreenlet_Type.tp_clear = (inquiry)green_clear;
+        PyMainGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;
+        PyMainGreenlet_Type.tp_dealloc = (destructor)maingreen_dealloc;
+
+        Require(PyType_Ready(&PyMainGreenlet_Type));
+
+#if G_USE_STANDARD_THREADING == 0
+        Require(PyType_Ready(&PyGreenletCleanup_Type));
+#endif
+
+        new((void*)&mod_globs) GreenletGlobals;
+
+        m.PyAddObject("greenlet", PyGreenlet_Type);
+        m.PyAddObject("error", mod_globs.PyExc_GreenletError);
+        m.PyAddObject("GreenletExit", mod_globs.PyExc_GreenletExit);
+
+        m.PyAddObject("GREENLET_USE_GC", 1);
+        m.PyAddObject("GREENLET_USE_TRACING", 1);
+        // The macros are eithre 0 or 1; the 0 case can be interpreted
+        // the same as NULL, which is ambiguous with a pointer.
+        m.PyAddObject("GREENLET_USE_CONTEXT_VARS", (long)GREENLET_PY37);
+        m.PyAddObject("GREENLET_USE_STANDARD_THREADING", (long)G_USE_STANDARD_THREADING);
+
+        /* also publish module-level data as attributes of the greentype. */
+        // XXX: This is weird, and enables a strange pattern of
+        // confusing the class greenlet with the module greenlet; with
+        // the exception of (possibly) ``getcurrent()``, this
+        // shouldn't be encouraged so don't add new items here.
+        for (const char* const* p = copy_on_greentype; *p; p++) {
+            OwnedObject o = m.PyRequireAttrString(*p);
+            PyDict_SetItemString(PyGreenlet_Type.tp_dict, *p, o.get());
+        }
+
+        /*
+         * Expose C API
+         */
+
+        /* types */
+        _PyGreenlet_API[PyGreenlet_Type_NUM] = (void*)&PyGreenlet_Type;
+
+        /* exceptions */
+        _PyGreenlet_API[PyExc_GreenletError_NUM] = (void*)mod_globs.PyExc_GreenletError;
+        _PyGreenlet_API[PyExc_GreenletExit_NUM] = (void*)mod_globs.PyExc_GreenletExit;
+
+        /* methods */
+        _PyGreenlet_API[PyGreenlet_New_NUM] = (void*)PyGreenlet_New;
+        _PyGreenlet_API[PyGreenlet_GetCurrent_NUM] = (void*)PyGreenlet_GetCurrent;
+        _PyGreenlet_API[PyGreenlet_Throw_NUM] = (void*)PyGreenlet_Throw;
+        _PyGreenlet_API[PyGreenlet_Switch_NUM] = (void*)PyGreenlet_Switch;
+        _PyGreenlet_API[PyGreenlet_SetParent_NUM] = (void*)PyGreenlet_SetParent;
+
+        /* XXX: Note that our module name is ``greenlet._greenlet``, but for
+           backwards compatibility with existing C code, we need the _C_API to
+           be directly in greenlet.
+        */
+        const OwnedObject c_api_object(Require(
+                                           PyCapsule_New(
+                                               (void*)_PyGreenlet_API,
+                                               "greenlet._C_API",
+                                               NULL)));
+        m.PyAddObject("_C_API", c_api_object);
+        assert(c_api_object.REFCNT() == 2);
+        return m.get();
     }
     catch (const LockInitError& e) {
         PyErr_SetString(PyExc_MemoryError, e.what());
         return NULL;
     }
-
-    m = PyModule_Create(&greenlet_module_def);
-    if (m == NULL) {
+    catch (const PyErrOccurred& e) {
         return NULL;
     }
 
-    if (PyType_Ready(&PyGreenlet_Type) < 0) {
-        return NULL;
-    }
-    PyMainGreenlet_Type.tp_base = &PyGreenlet_Type;
-    Py_INCREF(&PyGreenlet_Type);
-    // On Py27, if we don't manually inherit the flags, we don't get
-    // Py_TPFLAGS_HAVE_CLASS, which breaks lots of things, notably
-    // type checking for the subclass. We also wind up inheriting
-    // HAVE_GC, which means we must set those fields as well, since if
-    // its explicitly set they don't get copied
-    PyMainGreenlet_Type.tp_flags = G_TPFLAGS_DEFAULT;
-    PyMainGreenlet_Type.tp_traverse = (traverseproc)green_traverse;
-    PyMainGreenlet_Type.tp_clear = (inquiry)green_clear;
-    PyMainGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;
-    PyMainGreenlet_Type.tp_dealloc = (destructor)maingreen_dealloc;
-
-    if (PyType_Ready(&PyMainGreenlet_Type) < 0) {
-        return NULL;
-    }
-#if G_USE_STANDARD_THREADING == 0
-    if (PyType_Ready(&PyGreenletCleanup_Type) < 0) {
-        return NULL;
-    }
-#endif
-    try {
-        new((void*)&mod_globs) GreenletGlobals;
-    }
-    catch (const GeneralInitError& e) {
-        return NULL;
-    }
-
-    Py_INCREF(&PyGreenlet_Type);
-    PyModule_AddObject(m, "greenlet", (PyObject*)&PyGreenlet_Type);
-    Py_INCREF(mod_globs.PyExc_GreenletError);
-    PyModule_AddObject(m, "error", mod_globs.PyExc_GreenletError);
-    Py_INCREF(mod_globs.PyExc_GreenletExit);
-    PyModule_AddObject(m, "GreenletExit", mod_globs.PyExc_GreenletExit);
-
-    PyModule_AddObject(m, "GREENLET_USE_GC", PyBool_FromLong(1));
-    PyModule_AddObject(m, "GREENLET_USE_TRACING", PyBool_FromLong(1));
-    PyModule_AddObject(
-        m, "GREENLET_USE_CONTEXT_VARS", PyBool_FromLong(GREENLET_PY37));
-    PyModule_AddObject(m, "GREENLET_USE_STANDARD_THREADING", PyBool_FromLong(G_USE_STANDARD_THREADING));
-
-    /* also publish module-level data as attributes of the greentype. */
-    /* XXX: Why? */
-    for (p = copy_on_greentype; *p; p++) {
-        PyObject* o = PyObject_GetAttrString(m, *p);
-        if (!o) {
-            continue;
-        }
-        PyDict_SetItemString(PyGreenlet_Type.tp_dict, *p, o);
-        Py_DECREF(o);
-    }
-
-    /*
-     * Expose C API
-     */
-
-    /* types */
-    _PyGreenlet_API[PyGreenlet_Type_NUM] = (void*)&PyGreenlet_Type;
-
-    /* exceptions */
-    _PyGreenlet_API[PyExc_GreenletError_NUM] = (void*)mod_globs.PyExc_GreenletError;
-    _PyGreenlet_API[PyExc_GreenletExit_NUM] = (void*)mod_globs.PyExc_GreenletExit;
-
-    /* methods */
-    _PyGreenlet_API[PyGreenlet_New_NUM] = (void*)PyGreenlet_New;
-    _PyGreenlet_API[PyGreenlet_GetCurrent_NUM] = (void*)PyGreenlet_GetCurrent;
-    _PyGreenlet_API[PyGreenlet_Throw_NUM] = (void*)PyGreenlet_Throw;
-    _PyGreenlet_API[PyGreenlet_Switch_NUM] = (void*)PyGreenlet_Switch;
-    _PyGreenlet_API[PyGreenlet_SetParent_NUM] = (void*)PyGreenlet_SetParent;
-
-    /* XXX: Note that our module name is ``greenlet._greenlet``, but for
-       backwards compatibility with existing C code, we need the _C_API to
-       be directly in greenlet.
-    */
-    c_api_object =
-        PyCapsule_New((void*)_PyGreenlet_API, "greenlet._C_API", NULL);
-    if (c_api_object != NULL) {
-        PyModule_AddObject(m, "_C_API", c_api_object);
-    }
-
-    return m;
 }
 
 

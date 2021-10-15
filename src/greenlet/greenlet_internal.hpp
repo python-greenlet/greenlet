@@ -129,6 +129,33 @@ namespace greenlet
         }
     };
 
+    class PyErrOccurred : public std::runtime_error
+    {
+    public:
+        PyErrOccurred() : std::runtime_error("")
+        {
+            assert(PyErr_Occurred());
+        }
+    };
+
+    static inline PyObject*
+    Require(PyObject* p)
+    {
+        if (!p) {
+            throw PyErrOccurred();
+        }
+        return p;
+    };
+
+    static inline void
+    Require(const int retval)
+    {
+        if (retval < 0) {
+            assert(PyErr_Occurred());
+            throw PyErrOccurred();
+        }
+    };
+
     // A set of classes to make reference counting rules in python
     // code explicit.
     //
@@ -164,30 +191,42 @@ namespace greenlet
         PyObjectPointer(T* it) : p(it)
         {}
 
+        // We don't allow automatic casting to PyObject* at this
+        // level, because then we could be passed to Py_DECREF/INCREF,
+        // but we want nothing to do with memory management. If you
+        // know better, then you can use the get() method, like on a
+        // std::shared_ptr.
+
+        T* get() const noexcept
+        {
+            return this->p;
+        }
+
         T* operator->() const
         {
             return this->p;
         }
 
-        bool operator==(const PyObjectPointer& other) const
+        bool operator==(const PyObjectPointer& other) const noexcept
         {
             return other.p == this->p;
         }
 
-        G_EXPLICIT_OP operator bool() const
+        G_EXPLICIT_OP operator bool() const noexcept
         {
             return p != nullptr;
         }
 
-        inline Py_ssize_t REFCNT() const
+        inline Py_ssize_t REFCNT() const noexcept
         {
             return Py_REFCNT(p);
         }
 
-        inline OwnedObject PyGetAttrString(const char* const name) const;
-        inline OwnedObject PyCall(const BorrowedObject& arg) const;
-        inline OwnedObject PyCall(PyMainGreenlet* arg) const;
-        inline OwnedObject PyCall(const PyObject* arg) const;
+        inline OwnedObject PyGetAttrString(const char* const name) const noexcept;
+        inline OwnedObject PyRequireAttrString(const char* const name) const;
+        inline OwnedObject PyCall(const BorrowedObject& arg) const noexcept;
+        inline OwnedObject PyCall(PyMainGreenlet* arg) const noexcept;
+        inline OwnedObject PyCall(const PyObject* arg) const noexcept;
     protected:
         void _set_raw_pointer(void* t)
         {
@@ -283,26 +322,33 @@ namespace greenlet
     };
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const
+    inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const noexcept
     {
         assert(this->p);
         return OwnedObject(PyObject_GetAttrString(this->p, name));
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject& arg) const
+    inline OwnedObject PyObjectPointer<T>::PyRequireAttrString(const char* const name) const
     {
-        return this->PyCall(static_cast<PyObject*>(arg));
+        assert(this->p);
+        return OwnedObject(Require(PyObject_GetAttrString(this->p, name)));
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(PyMainGreenlet* arg) const
+    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject& arg) const noexcept
+    {
+        return this->PyCall(arg.get());
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyCall(PyMainGreenlet* arg) const noexcept
     {
         return this->PyCall(reinterpret_cast<const PyObject*>(arg));
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const
+    inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const noexcept
     {
         assert(this->p);
         return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
@@ -363,6 +409,69 @@ namespace greenlet
         inline void clear()
         {
             PyList_SetSlice(p, 0, PyList_GET_SIZE(p), NULL);
+        }
+    };
+
+    // Use this to represent the module object used at module init
+    // time.
+    // This could either be a borrowed (Py2) or new (Py3) reference;
+    // either way, we don't want to do any memory management
+    // on it here, Python itself will handle that.
+    // XXX: Actually, that's not quite right. On Python 3, if an
+    // exception occurs before we return to the interpreter, this will
+    // leak; but all previous versions also had that problem.
+    class CreatedModule : public PyObjectPointer<>
+    {
+    private:
+        G_NO_COPIES_OF_CLS(CreatedModule);
+    public:
+        CreatedModule(PyModuleDef& mod_def) : PyObjectPointer<>(
+            Require(PyModule_Create(&mod_def)))
+        {
+        }
+
+        // PyAddObject(): Add a reference to the object to the module.
+        // On return, the reference count of the object is unchanged.
+        //
+        // The docs warn that PyModule_AddObject only steals the
+        // reference on success, so if it fails after we've incref'd
+        // or allocated, we're responsible for the decref.
+        void PyAddObject(const char* name, const long new_bool)
+        {
+            PyObject* p = Require(PyBool_FromLong(new_bool));
+            try {
+                this->PyAddObject(name, p);
+            }
+            catch (const PyErrOccurred& e) {
+                Py_DECREF(p);
+                throw;
+            }
+        }
+
+        void PyAddObject(const char* name, const OwnedObject& new_object)
+        {
+            // The caller already owns a reference they will deref
+            // when their variable goes out of scope, we still need to
+            // incref/decref.
+            this->PyAddObject(name, new_object.get());
+
+        }
+
+        void PyAddObject(const char* name, const PyTypeObject& type)
+        {
+            this->PyAddObject(name, reinterpret_cast<const PyObject*>(&type));
+        }
+
+        void PyAddObject(const char* name, const PyObject* p)
+        {
+            Py_INCREF(p);
+            try {
+                Require(PyModule_AddObject(this->p, name, const_cast<PyObject*>(p)));
+            }
+            catch (const PyErrOccurred& e) {
+                Py_DECREF(p);
+                throw;
+            }
         }
     };
 

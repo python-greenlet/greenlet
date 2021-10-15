@@ -44,7 +44,10 @@ slp_switch(void)
     void* rbx;
     unsigned int csr;
     unsigned short cw;
-    register long *stackref, stsizediff;
+    /* This used to be declared 'register', but that does nothing in
+    modern compilers and is explicitly forbidden in some new
+    standards. */
+    long *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("fstcw %0" : "=m" (cw));
     __asm__ volatile ("stmxcsr %0" : "=m" (csr));
@@ -76,7 +79,7 @@ slp_switch(void)
  * further self-processing support
  */
 
-/* 
+/*
  * if you want to add self-inspection tools, place them
  * here. See the x86_msvc for the necessary defines.
  * These features are highly experimental und not
