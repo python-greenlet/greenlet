@@ -181,7 +181,8 @@ using greenlet::Require;
 using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
 using greenlet::OwnedObject;
-using greenlet::OutParam;
+using greenlet::PyErrFetchParam;
+using greenlet::PyArgParseParam;
 using greenlet::ImmortalObject;
 using greenlet::CreatedModule;
 
@@ -947,12 +948,12 @@ g_switchstack(void)
 }
 
 static int
-g_calltrace(const BorrowedObject tracefunc,
+g_calltrace(const OwnedObject& tracefunc,
             const ImmortalEventName& event,
             const BorrowedGreenlet origin,
             const BorrowedGreenlet target)
 {
-    OutParam exc_type, exc_val, exc_tb;
+    PyErrFetchParam exc_type, exc_val, exc_tb;
     PyThreadState* tstate;
     PyErr_Fetch(exc_type, exc_val, exc_tb);
     tstate = PyThreadState_GET();
@@ -964,7 +965,10 @@ g_calltrace(const BorrowedObject tracefunc,
     // origin, target). That seems like what the N format is meant
     // for.
     // XXX: Why does event not automatically cast back to a PyObject?
-    OwnedObject retval(PyObject_CallFunction(tracefunc, "O(OO)", static_cast<PyObject*>(event), origin, target));
+    // It tries to call the "deleted constructor ImmortalEventName
+    // const" instead.
+    OwnedObject retval(PyObject_CallFunction(tracefunc.borrow(),
+                                             "O(OO)", event.borrow(), origin, target));
     tstate->tracing--;
     TSTATE_USE_TRACING(tstate) =
         (tstate->tracing <= 0 &&
@@ -974,11 +978,13 @@ g_calltrace(const BorrowedObject tracefunc,
         // In case of exceptions trace function is removed,
         // and any existing exception is replaced with the tracing
         // exception.
-        GET_THREAD_STATE().state().del_tracefunc();
+        GET_THREAD_STATE().state().set_tracefunc(Py_None);
         return -1;
     }
 
-    PyErr_Restore(exc_type.disown(), exc_val.disown(), exc_tb.disown());
+    PyErr_Restore(exc_type.relinquish_ownership(),
+                  exc_val.relinquish_ownership(),
+                  exc_tb.relinquish_ownership());
     return 0;
 }
 
@@ -1007,7 +1013,7 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
     else {
         PyGreenlet* origin = state.release_ownership_of_origin();
         PyGreenlet* current = state.borrow_current();
-        PyObject* tracefunc = state.get_tracefunc();
+        OwnedObject tracefunc = state.get_tracefunc();
 
         if (tracefunc) {
             if (g_calltrace(tracefunc,
@@ -1018,7 +1024,6 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
                 Py_CLEAR(kwargs);
                 Py_CLEAR(args);
             }
-            Py_DECREF(tracefunc);
         }
 
         Py_DECREF(origin);
@@ -1120,14 +1125,14 @@ g_handle_exit(PyObject* result)
 {
     if (result == NULL && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)) {
         /* catch and ignore GreenletExit */
-        OutParam val;
-        PyErr_Fetch(OutParam(), val, OutParam());
+        PyErrFetchParam val;
+        PyErr_Fetch(PyErrFetchParam(), val, PyErrFetchParam());
         if (!val) {
             Py_INCREF(Py_None);
             result = Py_None;
         }
         else {
-            result = val.disown();
+            result = val.relinquish_ownership();
         }
     }
     if (result != NULL) {
@@ -1251,8 +1256,8 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     */
     if (err == 1) {
         /* in the new greenlet */
+        /* stack variables from above are no good and also will not unwind! */
         PyGreenlet* origin;
-        PyObject* tracefunc;
         PyObject* result;
         PyGreenlet* parent;
         self->stack_start = (char*)1; /* running */
@@ -1266,16 +1271,18 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
         self->main_greenlet_s = state.get_main_greenlet();
         assert(self->main_greenlet_s);
 
-        if ((tracefunc = state.get_tracefunc()) != NULL) {
-            if (g_calltrace(tracefunc,
-                            args ? mod_globs.event_switch : mod_globs.event_throw,
-                            origin,
-                            self) < 0) {
-                /* Turn trace errors into switch throws */
-                Py_CLEAR(kwargs);
-                Py_CLEAR(args);
+        {
+            OwnedObject tracefunc(state.get_tracefunc());
+            if (tracefunc) {
+                if (g_calltrace(tracefunc,
+                                args ? mod_globs.event_switch : mod_globs.event_throw,
+                                origin,
+                                self) < 0) {
+                    /* Turn trace errors into switch throws */
+                    Py_CLEAR(kwargs);
+                    Py_CLEAR(args);
+                }
             }
-            Py_DECREF(tracefunc);
         }
 
         Py_DECREF(origin);
@@ -2372,24 +2379,19 @@ PyDoc_STRVAR(mod_settrace_doc,
 static PyObject*
 mod_settrace(PyObject* self, PyObject* args)
 {
-    PyObject* tracefunc;
+    PyArgParseParam tracefunc;
     if (!PyArg_ParseTuple(args, "O", &tracefunc)) {
         return NULL;
     }
     ThreadState& state = GET_THREAD_STATE();
-    PyObject* previous = state.get_tracefunc();
-    if (previous == NULL) {
+    OwnedObject previous = state.get_tracefunc();
+    if (!previous) {
         previous = Py_None;
-        Py_INCREF(previous);
     }
 
-    if (tracefunc == Py_None) {
-        state.del_tracefunc();
-    }
-    else {
-        state.set_tracefunc(tracefunc);
-    }
-    return previous;
+    state.set_tracefunc(tracefunc);
+
+    return previous.relinquish_ownership();
 }
 
 PyDoc_STRVAR(mod_gettrace_doc,
@@ -2400,12 +2402,11 @@ PyDoc_STRVAR(mod_gettrace_doc,
 static PyObject*
 mod_gettrace(PyObject* self)
 {
-    PyObject* tracefunc = GET_THREAD_STATE().state().get_tracefunc();
-    if (tracefunc == NULL) {
+    OwnedObject tracefunc = GET_THREAD_STATE().state().get_tracefunc();
+    if (!tracefunc) {
         tracefunc = Py_None;
-        Py_INCREF(tracefunc);
     }
-    return tracefunc;
+    return tracefunc.relinquish_ownership();
 }
 
 PyDoc_STRVAR(mod_set_thread_local_doc,

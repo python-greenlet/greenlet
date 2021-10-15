@@ -92,7 +92,7 @@ private:
     PyGreenlet* origin_greenlet_s;
 
     /* Strong reference to the trace function, if any. */
-    PyObject* tracefunc_s;
+    OwnedObject tracefunc_s;
 
     /* A vector of PyGreenlet pointers representing things that need
        deleted when this thread is running. The vector owns the
@@ -365,27 +365,26 @@ public:
         return result;
     }
 
-
     /**
-     * Returns a new reference, or NULL.
+     * Returns a new reference, or a false object.
      */
-    inline PyObject* get_tracefunc() const
+    inline OwnedObject get_tracefunc() const
     {
-        Py_XINCREF(this->tracefunc_s);
         return tracefunc_s;
     };
 
-    inline void del_tracefunc()
-    {
-        Py_CLEAR(this->tracefunc_s);
-    }
 
-    inline void set_tracefunc(PyObject* tracefunc)
+    inline void set_tracefunc(BorrowedObject tracefunc)
     {
         assert(tracefunc);
-        Py_INCREF(tracefunc);
-        Py_CLEAR(this->tracefunc_s);
-        this->tracefunc_s = tracefunc;
+        if (tracefunc == BorrowedObject(Py_None)) {
+            this->tracefunc_s.CLEAR();
+        }
+        else {
+            Py_ssize_t old_refs = Py_REFCNT(tracefunc);
+            this->tracefunc_s = tracefunc;
+            assert(this->tracefunc_s.REFCNT() == old_refs + 1);
+        }
     }
 
     /**
@@ -412,7 +411,7 @@ public:
         // be in progress as the thread dies.
         assert(this->origin_greenlet_s == nullptr);
 
-        Py_CLEAR(this->tracefunc_s);
+        this->tracefunc_s.CLEAR();
 
         // Forcibly GC as much as we can.
         this->clear_deleteme_list(true);

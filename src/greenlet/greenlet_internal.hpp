@@ -268,6 +268,22 @@ namespace greenlet
             Py_XINCREF(this->p);
         }
 
+        OwnedReference<T>& operator=(T* const other)
+        {
+            Py_XINCREF(other);
+            T* tmp = this->p;
+            this->p = other;
+            Py_XDECREF(tmp);
+            return *this;
+        }
+
+        T* relinquish_ownership()
+        {
+            T* result = this->p;
+            this->p = nullptr;
+            return result;
+        }
+
         virtual ~OwnedReference()
         {
             Py_CLEAR(this->p);
@@ -309,10 +325,7 @@ namespace greenlet
 
         OwnedGreenlet& operator=(PyGreenlet* const other)
         {
-            Py_XINCREF(other);
-            PyGreenlet* tmp = this->p;
-            this->p = other;
-            Py_XDECREF(tmp);
+            OwnedReference<PyGreenlet>::operator=(other);
             return *this;
         }
 
@@ -552,24 +565,24 @@ namespace greenlet
         }
     };
 
-    class OutParam : public PyObjectPointer<>
+    class PyErrFetchParam : public PyObjectPointer<>
     {
         // Not an owned object, because we can't be initialized with
         // one, and we only sometimes acquire ownership.
     private:
-        G_NO_COPIES_OF_CLS(OutParam);
+        G_NO_COPIES_OF_CLS(PyErrFetchParam);
     public:
         // To allow declaring these and passing them to
         // PyErr_Fetch we implement the empty constructor,
         // and the address operator.
-        OutParam() : PyObjectPointer<>(nullptr)
+        PyErrFetchParam() : PyObjectPointer<>(nullptr)
         {
         }
 
-        PyObject** operator&()
-        {
-            return &this->p;
-        }
+        // PyObject** operator&()
+        // {
+        //     return &this->p;
+        // }
 
         // This allows us to pass one directly without the &
         operator PyObject**()
@@ -580,35 +593,36 @@ namespace greenlet
         // We don't want to be able to pass these to Py_DECREF and
         // such so we don't have the implicit PyObject* conversion.
 
-        inline PyObject* disown()
+        inline PyObject* relinquish_ownership()
         {
             PyObject* result = this->p;
             this->p = nullptr;
             return result;
         }
 
-        ~OutParam()
+        ~PyErrFetchParam()
         {
             Py_XDECREF(p);
         }
     };
-    /*
-    class Stolen
+
+    // PyArg_Parse's O argument returns a borrowed reference.
+    class PyArgParseParam : public BorrowedObject
     {
     private:
-        PyObject* p;
-        G_NO_COPIES_OF_CLS(Stolen);
+        G_NO_COPIES_OF_CLS(PyArgParseParam);
     public:
-        Stolen(OutParam& param) : p(param.p)
+        PyArgParseParam() : BorrowedObject(nullptr)
         {
-            param.p = nullptr;
         }
-        operator PyObject*() const
+
+        PyObject** operator&()
         {
-            return this->p;
+            return &this->p;
         }
+
     };
-    */
+
 
 };
 
