@@ -1294,7 +1294,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
         Py_CLEAR(self->run_callable); // XXX: We could clear this much
                                       // earlier, right?
         assert(!self->main_greenlet_s);
-        self->main_greenlet_s = state.get_main_greenlet();
+        self->main_greenlet_s = state.get_main_greenlet().acquire();
         assert(self->main_greenlet_s);
 
         {
@@ -1342,7 +1342,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
             assert(!result);
         }
         /* We ran out of parents, cannot continue */
-        PyErr_WriteUnraisable(self.borrow());
+        PyErr_WriteUnraisable(self.borrow_o());
         Py_FatalError("greenlets cannot continue");
     }
     /* back in the parent */

@@ -210,14 +210,25 @@ namespace greenlet
             return this->p;
         }
 
+        PyObject* borrow_o() const G_NOEXCEPT
+        {
+            return reinterpret_cast<PyObject*>(this->p);
+        }
+
         T* operator->() const
         {
             return this->p;
         }
 
-        bool operator==(const PyObjectPointer& other) const G_NOEXCEPT
+        bool operator==(const PyObjectPointer<T>& other) const G_NOEXCEPT
         {
             return other.p == this->p;
+        }
+
+        template<typename X>
+        bool operator==(const PyObjectPointer<X>& other) const G_NOEXCEPT
+        {
+            return this->borrow_o() == other.borrow_o();
         }
 
         G_EXPLICIT_OP operator bool() const G_NOEXCEPT
@@ -261,7 +272,9 @@ namespace greenlet
         explicit OwnedReference(T* it) : PyObjectPointer<T>(it)
         {
         }
-        // TODO: In C++11, this should be the move constructor.
+        // It would be good to make use of the C++11 distinction
+        // between move and copy operations, e.g., constructing from a
+        // pointer should be a move operation.
         // In the common case of ``OwnedObject x = Py_SomeFunction()``,
         // the call to the copy constructor will be elided completely.
         OwnedReference(const OwnedReference<T>& other) : PyObjectPointer<T>(other.p)
@@ -309,43 +322,64 @@ namespace greenlet
         }
     };
 
-    class OwnedGreenlet : public OwnedReference<PyGreenlet>
+    template<typename T>
+    class _OwnedGreenlet;
+
+    typedef _OwnedGreenlet<PyGreenlet> OwnedGreenlet;
+    typedef _OwnedGreenlet<PyMainGreenlet> OwnedMainGreenlet;
+
+    template<typename T=PyGreenlet>
+    class _OwnedGreenlet: public OwnedReference<T>
     {
     private:
 
     public:
-        OwnedGreenlet() : OwnedReference(nullptr)
+        _OwnedGreenlet() : OwnedReference<T>(nullptr)
         {}
 
-        OwnedGreenlet(const OwnedGreenlet& other) : OwnedReference(other)
+        _OwnedGreenlet(const _OwnedGreenlet<T>& other) : OwnedReference<T>(other)
         {
         }
-
-        explicit OwnedGreenlet(PyGreenlet* it) : OwnedReference(it)
+        // Steals a reference.
+        explicit _OwnedGreenlet(PyGreenlet* it) : OwnedReference<T>(it)
         {}
-        // explicit OwnedGreenlet(PyMainGreenlet* it) :
+        // explicit _OwnedGreenlet(PyMainGreenlet* it) :
         //     OwnedReference(reinterpret_cast<PyGreenlet*>(it))
         // {}
 
-        OwnedGreenlet& operator=(const OwnedGreenlet& other)
+        _OwnedGreenlet<T>& operator=(const OwnedGreenlet& other)
         {
             return this->operator=(other.borrow());
         }
 
-        OwnedGreenlet& operator=(PyMainGreenlet* const other)
+        void steal(T* other)
         {
-            return this->operator=(reinterpret_cast<PyGreenlet*>(other));
+            assert(this->p == nullptr);
+            this->p = other;
         }
 
-        OwnedGreenlet& operator=(PyGreenlet* const other)
+        _OwnedGreenlet<T>& operator=(const OwnedMainGreenlet& other)
         {
-            OwnedReference<PyGreenlet>::operator=(other);
+            PyMainGreenlet* owned = other.acquire();
+            Py_XDECREF(this->p);
+            this->p = reinterpret_cast<T*>(owned);
             return *this;
         }
 
-        PyGreenlet* relinquish_ownership()
+        // _OwnedGreenlet& operator=(PyMainGreenlet* const other)
+        // {
+        //     return this->operator=(reinterpret_cast<T*>(other));
+        // }
+
+        _OwnedGreenlet<T>& operator=(T* const other)
         {
-            PyGreenlet* result = this->p;
+            OwnedReference<T>::operator=(other);
+            return *this;
+        }
+
+        T* relinquish_ownership()
+        {
+            T* result = this->p;
             this->p = nullptr;
             return result;
         }
@@ -355,15 +389,16 @@ namespace greenlet
             return reinterpret_cast<PyObject*>(relinquish_ownership());
         }
 
-        PyGreenlet* acquire()
+        T* acquire() const
         {
             // Return a new reference.
-            // TODO: This will go away when we have reference objects
+            // TODO: This may go away when we have reference objects
             // throughout the code.
             Py_INCREF(this->p);
             return this->p;
         }
     };
+
 
     template <typename T=PyObject>
     class BorrowedReference : public PyObjectPointer<T>
@@ -385,31 +420,36 @@ namespace greenlet
     typedef BorrowedReference<PyObject> BorrowedObject;
     //typedef BorrowedReference<PyGreenlet> BorrowedGreenlet;
 
-    class BorrowedGreenlet : public BorrowedReference<PyGreenlet>
+    template<typename T=PyGreenlet>
+    class _BorrowedGreenlet : public BorrowedReference<T>
     {
     public:
-        BorrowedGreenlet() : BorrowedReference(nullptr)
+        _BorrowedGreenlet() : BorrowedReference<T>(nullptr)
         {}
 
-        BorrowedGreenlet(PyGreenlet* it) : BorrowedReference(it)
+        _BorrowedGreenlet(T* it) : BorrowedReference<T>(it)
         {}
 
-        BorrowedGreenlet(const BorrowedObject& it) : BorrowedReference(nullptr)
+        _BorrowedGreenlet(const BorrowedObject& it) : BorrowedReference<T>(nullptr)
         {
             if (!PyGreenlet_Check(it)) {
                 throw TypeError("Expected a greenlet");
             }
-            _set_raw_pointer(static_cast<PyObject*>(it));
+            this->_set_raw_pointer(static_cast<PyObject*>(it));
         }
 
-        BorrowedGreenlet(const OwnedGreenlet& it) : BorrowedReference(it.borrow())
+        _BorrowedGreenlet(const OwnedGreenlet& it) : BorrowedReference<T>(it.borrow())
         {}
 
-        PyObject* borrow()
-        {
-            return reinterpret_cast<PyObject*>(this->p);
-        }
+    };
 
+    typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
+
+    class BorrowedMainGreenlet : public _BorrowedGreenlet<PyMainGreenlet>
+    {
+    public:
+        BorrowedMainGreenlet(OwnedMainGreenlet& it) : _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
+        {}
     };
 
     class ImmortalObject : public PyObjectPointer<>
