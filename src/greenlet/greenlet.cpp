@@ -216,6 +216,7 @@ using greenlet::Require;
 
 using greenlet::BorrowedObject;
 using greenlet::BorrowedGreenlet;
+using greenlet::BorrowedMainGreenlet;
 using greenlet::OwnedObject;
 using greenlet::PyErrFetchParam;
 using greenlet::PyArgParseParam;
@@ -598,7 +599,7 @@ green_create_main(void)
 }
 
 
-static PyMainGreenlet*
+static BorrowedMainGreenlet
 find_and_borrow_main_greenlet_in_lineage(const BorrowedGreenlet& start)
 {
     PyGreenlet* g(start);
@@ -607,11 +608,11 @@ find_and_borrow_main_greenlet_in_lineage(const BorrowedGreenlet& start)
         if (g == NULL) {
             /* garbage collected greenlet in chain */
             // XXX: WHAT?
-            return NULL;
+            return BorrowedMainGreenlet(nullptr);
         }
     }
     // XXX: What about the actual main greenlet?
-    return g->main_greenlet_s;
+    return BorrowedMainGreenlet(g->main_greenlet_s);
 }
 
 /***********************************************************/
@@ -1114,12 +1115,12 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     // it gets queued to this thread, and ``kill_greenlet()`` switches
     // back into the greenlet
 
-    void* run_info = find_and_borrow_main_greenlet_in_lineage(target);
-    if (run_info == NULL || run_info != state.borrow_main_greenlet()) {
+    BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(target);
+    if (!main_greenlet || main_greenlet != state.borrow_main_greenlet()) {
         Py_XDECREF(args);
         Py_XDECREF(kwargs);
         PyErr_SetString(mod_globs.PyExc_GreenletError,
-                        run_info ?
+                        main_greenlet ?
                             "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
         return NULL;
@@ -1157,8 +1158,7 @@ g_handle_exit(const OwnedObject& greenlet_result)
         PyErrFetchParam val;
         PyErr_Fetch(PyErrFetchParam(), val, PyErrFetchParam());
         if (!val) {
-            Py_INCREF(Py_None);
-            return OwnedObject(Py_None);
+            return OwnedObject::None();
         }
         return OwnedObject(val.relinquish_ownership());
     }
@@ -1218,10 +1218,10 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     */
 
     /* recheck run_info in case greenlet reparented anywhere above */
-    void* run_info = find_and_borrow_main_greenlet_in_lineage(self);
-    if (run_info == NULL || run_info != state.borrow_main_greenlet()) {
+    BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(self);
+    if (!main_greenlet || main_greenlet != state.borrow_main_greenlet()) {
         PyErr_SetString(mod_globs.PyExc_GreenletError,
-                        run_info ?
+                        main_greenlet ?
                             "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
         return -1;
@@ -2357,8 +2357,7 @@ PyDoc_STRVAR(mod_getcurrent_doc,
 static PyObject*
 mod_getcurrent(PyObject* self)
 {
-    PyObject* result = GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership_o();
-    return result;
+    return GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership_o();
 }
 
 PyDoc_STRVAR(mod_settrace_doc,

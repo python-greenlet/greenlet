@@ -293,6 +293,12 @@ namespace greenlet
             Py_XINCREF(this->p);
         }
 
+        static OwnedReference<T> None()
+        {
+            Py_INCREF(Py_None);
+            return OwnedReference<T>(Py_None);
+        }
+
         // XXX: I'd prefer to do things like this with
         // a call to std::move or std::swap, but I'm having issues
         // making that work...
@@ -300,7 +306,7 @@ namespace greenlet
         OwnedReference<T>& operator=(const OwnedReference<T>& other)
         {
             Py_XINCREF(other.p);
-            T* tmp = this->p;
+            const T* tmp = this->p;
             this->p = other.p;
             Py_XDECREF(tmp);
             return *this;
@@ -375,8 +381,15 @@ namespace greenlet
         _OwnedGreenlet(const _OwnedGreenlet<T>& other) : OwnedReference<T>(other)
         {
         }
+        _OwnedGreenlet(OwnedMainGreenlet& other) :
+            OwnedReference<T>(reinterpret_cast<T*>(other.acquire()))
+        {
+        }
         // Steals a reference.
         explicit _OwnedGreenlet(PyGreenlet* it) : OwnedReference<T>(it)
+        {}
+        explicit _OwnedGreenlet(PyMainGreenlet* it) :
+            OwnedReference<T>(reinterpret_cast<T*>(it))
         {}
         // explicit _OwnedGreenlet(PyMainGreenlet* it) :
         //     OwnedReference(reinterpret_cast<PyGreenlet*>(it))
@@ -472,6 +485,8 @@ namespace greenlet
     {
     public:
         BorrowedMainGreenlet(OwnedMainGreenlet& it) : _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
+        {}
+        BorrowedMainGreenlet(PyMainGreenlet* it) : _BorrowedGreenlet<PyMainGreenlet>(it)
         {}
     };
 

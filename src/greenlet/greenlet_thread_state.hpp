@@ -115,11 +115,27 @@ public:
         target_greenlet(0),
         switch_args_w(0),
         switch_kwargs_w(0),
-        origin_greenlet(0),
+        origin_greenlet(),
         tracefunc(0),
         _switchstack_use_tracing(0)
     {
-    };
+        //TODO: It would be really nice to create the main greenlet
+        // and initialize the current greenlet to it when this object is
+        // created. But that leads to leaks/test failures. Why? I
+        // suspect its flaky tests that believe they know what APIs do
+        // and do not initialize the main greenlet.
+
+        // if(!this->main_greenlet) {
+        //     // We failed to create the main greenlet. That's bad.
+        //     Py_FatalError("Failed to create main greenlet");
+        //     throw PyErrOccurred();
+        // }
+        // // The main greenlet starts with 2 refs: The returned one, and
+        // // the internal self ref. We then copied it to the current
+        // // greenlet.
+        // assert(this->main_greenlet.REFCNT() == 3);
+        // this->main_greenlet->thread_state = this;
+    }
 
     inline int switchstack_use_tracing()
     {
@@ -179,7 +195,7 @@ public:
         if (!this->ensure_current_greenlet()) {
             return OwnedGreenlet();
         }
-        return this->get_current();
+        return this->current_greenlet;
     }
 
     /**
