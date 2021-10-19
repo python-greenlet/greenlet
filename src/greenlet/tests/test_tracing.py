@@ -1,6 +1,7 @@
 import sys
-import unittest
 import greenlet
+
+from . import TestCase
 
 class SomeError(Exception):
     pass
@@ -25,7 +26,7 @@ class GreenletTracer(object):
         greenlet.settrace(self.oldtrace)
 
 
-class TestGreenletTracing(unittest.TestCase):
+class TestGreenletTracing(TestCase):
     """
     Tests of ``greenlet.settrace()``
     """
@@ -85,7 +86,7 @@ class PythonTracer(object):
 def tpt_callback():
     return 42
 
-class TestPythonTracing(unittest.TestCase):
+class TestPythonTracing(TestCase):
     """
     Tests of the interaction of ``sys.settrace()``
     with greenlet facilities.

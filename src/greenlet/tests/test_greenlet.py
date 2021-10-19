@@ -6,11 +6,12 @@ import gc
 import sys
 import time
 import threading
-import unittest
+
 from abc import ABCMeta, abstractmethod
 
 from greenlet import greenlet
-from . import Cleanup
+from . import TestCase
+from .leakcheck import fails_leakcheck
 
 # We manually manage locks in many tests
 # pylint:disable=consider-using-with
@@ -38,8 +39,9 @@ def send_exception(g, exc):
     g1.switch(exc)
 
 
-class TestGreenlet(Cleanup, unittest.TestCase):
-    def test_simple(self):
+class TestGreenlet(TestCase):
+
+    def _do_simple_test(self):
         lst = []
 
         def f():
@@ -53,6 +55,9 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         g.switch()
         lst.append(4)
         self.assertEqual(lst, list(range(5)))
+
+    def test_simple(self):
+        self._do_simple_test()
 
     def test_switch_no_run_raises_AttributeError(self):
         g = greenlet()
@@ -119,7 +124,7 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         success = []
 
         def f():
-            self.test_simple()
+            self._do_simple_test()
             success.append(True)
         ths = [threading.Thread(target=f) for i in range(10)]
         for th in ths:
@@ -361,7 +366,8 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         g = mygreenlet(lambda: None)
         self.assertRaises(SomeError, g.throw, SomeError())
 
-    def test_throw_doesnt_crash(self):
+    @fails_leakcheck
+    def test_throw_to_dead_thread_doesnt_crash(self):
         result = []
         def worker():
             greenlet.getcurrent().parent.switch()
@@ -669,7 +675,7 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
 
 
-class TestGreenletSetParentErrors(Cleanup, unittest.TestCase):
+class TestGreenletSetParentErrors(TestCase):
     def test_threaded_reparent(self):
         data = {}
         created_event = threading.Event()
@@ -804,16 +810,17 @@ class TestGreenletSetParentErrors(Cleanup, unittest.TestCase):
         # Let it finish
         g.switch()
 
-    def test_trivial_cycle(self, glet=None):
-        if glet is None:
-            glet = greenlet(lambda: None)
+    def _check_trivial_cycle(self, glet):
         with self.assertRaises(ValueError) as exc:
             glet.parent = glet
         self.assertEqual(str(exc.exception), "cyclic parent chain")
 
-    def test_trivial_cycle_main(self):
-        self.test_trivial_cycle(greenlet.getcurrent())
+    def test_trivial_cycle(self):
+        glet = greenlet(lambda: None)
+        self._check_trivial_cycle(glet)
 
+    def test_trivial_cycle_main(self):
+        self._check_trivial_cycle(greenlet.getcurrent())
 
     def test_deeper_cycle(self):
         g1 = greenlet(lambda: None)
@@ -827,7 +834,7 @@ class TestGreenletSetParentErrors(Cleanup, unittest.TestCase):
         self.assertEqual(str(exc.exception), "cyclic parent chain")
 
 
-class TestRepr(Cleanup, unittest.TestCase):
+class TestRepr(TestCase):
 
     def assertEndsWith(self, got, suffix):
         self.assertTrue(got.endswith(suffix), (got, suffix))
@@ -901,7 +908,7 @@ class TestRepr(Cleanup, unittest.TestCase):
             )
 
 
-class TestMainGreenlet(Cleanup, unittest.TestCase):
+class TestMainGreenlet(TestCase):
     # Tests some implementation details, and relies on some
     # implementation details.
 
@@ -924,4 +931,5 @@ class TestMainGreenlet(Cleanup, unittest.TestCase):
         self.assertIsInstance(greenlet.getcurrent(), greenlet)
 
 if __name__ == '__main__':
+    import unittest
     unittest.main()

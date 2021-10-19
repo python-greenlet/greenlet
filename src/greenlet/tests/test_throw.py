@@ -1,14 +1,15 @@
 import sys
-import unittest
+
 
 from greenlet import greenlet
-
+from . import TestCase
+from .leakcheck import fails_leakcheck
 
 def switch(*args):
     return greenlet.getcurrent().parent.switch(*args)
 
 
-class ThrowTests(unittest.TestCase):
+class ThrowTests(TestCase):
     def test_class(self):
         def f():
             try:
@@ -59,6 +60,7 @@ class ThrowTests(unittest.TestCase):
         res = g.throw()    # immediately eaten by the already-dead greenlet
         self.assertTrue(isinstance(res, greenlet.GreenletExit))
 
+    @fails_leakcheck
     def test_throw_goes_to_original_parent(self):
         main = greenlet.getcurrent()
 
@@ -75,7 +77,8 @@ class ThrowTests(unittest.TestCase):
 
         g1 = greenlet(f1)
         g2 = greenlet(f2, parent=g1)
-        self.assertRaises(IndexError, g2.throw, IndexError)
+        with self.assertRaises(IndexError):
+            g2.throw(IndexError)
         self.assertTrue(g2.dead)
         self.assertTrue(g1.dead)
 

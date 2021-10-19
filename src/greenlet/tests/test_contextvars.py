@@ -1,13 +1,15 @@
 from __future__ import print_function
-import unittest
+
 import gc
 import sys
 
 from functools import partial
+from unittest import skipUnless
+from unittest import skipIf
 
 from greenlet import greenlet
 from greenlet import getcurrent
-from . import Cleanup
+from . import TestCase
 
 try:
     from contextvars import Context
@@ -17,8 +19,8 @@ except ImportError:
     Context = ContextVar = copy_context = None
 
 # We don't support testing if greenlet's built-in context var support is disabled.
-@unittest.skipUnless(Context is not None, "ContextVar not supported")
-class ContextVarsTests(Cleanup, unittest.TestCase):
+@skipUnless(Context is not None, "ContextVar not supported")
+class ContextVarsTests(TestCase):
     def _new_ctx_run(self, *args, **kwargs):
         return copy_context().run(*args, **kwargs)
 
@@ -123,6 +125,7 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
         let2.switch()
 
     def test_context_assignment_while_running(self):
+        # pylint:disable=too-many-statements
         id_var = ContextVar("id", default=None)
 
         def target():
@@ -259,8 +262,8 @@ class ContextVarsTests(Cleanup, unittest.TestCase):
         gr = None
         thread = None
 
-@unittest.skipIf(Context is not None, "ContextVar supported")
-class NoContextVarsTests(unittest.TestCase):
+@skipIf(Context is not None, "ContextVar supported")
+class NoContextVarsTests(TestCase):
     def test_contextvars_errors(self):
         let1 = greenlet(getcurrent().switch)
         self.assertFalse(hasattr(let1, 'gr_context'))

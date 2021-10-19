@@ -1,13 +1,13 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-import unittest
+
 
 import greenlet
 from . import _test_extension_cpp
+from . import TestCase
 
-
-class CPPTests(unittest.TestCase):
+class CPPTests(TestCase):
     def test_exception_switch(self):
         greenlets = []
         for i in range(4):

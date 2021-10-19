@@ -107,6 +107,7 @@ test_new_greenlet(PyObject* self, PyObject* callable)
     }
 
     result = PyGreenlet_Switch(greenlet, NULL, NULL);
+    Py_CLEAR(greenlet);
     if (result == NULL) {
         return NULL;
     }

@@ -4,11 +4,13 @@ from __future__ import print_function
 
 import sys
 import os
-import unittest
+from unittest import TestCase as NonLeakingTestCase
 
 import greenlet
 
-class VersionTests(unittest.TestCase):
+# No reason to run this multiple times under leakchecks,
+# it doesn't do anything.
+class VersionTests(NonLeakingTestCase):
     def test_version(self):
         def find_dominating_file(name):
             if os.path.exists(name):
@@ -29,7 +31,7 @@ class VersionTests(unittest.TestCase):
         try:
             setup_py = find_dominating_file('setup.py')
         except AssertionError as e:
-            raise unittest.SkipTest("Unable to find setup.py; must be out of tree. " + str(e))
+            self.skipTest("Unable to find setup.py; must be out of tree. " + str(e))
 
 
         invoke_setup = "%s %s --version" % (sys.executable, setup_py)

@@ -2,24 +2,26 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import sys
-import unittest
 
 import greenlet
 from . import _test_extension
+from . import TestCase
 
+# pylint:disable=c-extension-no-member
 
-class CAPITests(unittest.TestCase):
+class CAPITests(TestCase):
     def test_switch(self):
         self.assertEqual(
             50, _test_extension.test_switch(greenlet.greenlet(lambda: 50)))
 
     def test_switch_kwargs(self):
-        def foo(x, y):
+        def adder(x, y):
             return x * y
-        g = greenlet.greenlet(foo)
+        g = greenlet.greenlet(adder)
         self.assertEqual(6, _test_extension.test_switch_kwargs(g, x=3, y=2))
 
     def test_setparent(self):
+        # pylint:disable=disallowed-name
         def foo():
             def bar():
                 greenlet.getcurrent().parent.switch()
@@ -54,7 +56,7 @@ class CAPITests(unittest.TestCase):
     def test_throw(self):
         seen = []
 
-        def foo():
+        def foo():         # pylint:disable=disallowed-name
             try:
                 greenlet.getcurrent().parent.switch()
             except ValueError:
@@ -109,4 +111,5 @@ class CAPITests(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    import unittest
     unittest.main()

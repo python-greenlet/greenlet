@@ -2,7 +2,7 @@
 Testing scenarios that may have leaked.
 """
 from __future__ import print_function, absolute_import, division
-import unittest
+
 import sys
 import gc
 
@@ -11,10 +11,10 @@ import weakref
 import threading
 
 import greenlet
+from . import TestCase
+from .leakcheck import fails_leakcheck
 
-from . import Cleanup
-
-class TestLeaks(Cleanup, unittest.TestCase):
+class TestLeaks(TestCase):
 
     def test_arg_refs(self):
         args = ('a', 'b', 'c')
@@ -92,9 +92,9 @@ class TestLeaks(Cleanup, unittest.TestCase):
         for g in gg:
             self.assertIsNone(g())
 
-    def test_issue251_killing_cross_thread_leaks_list(self,
-                                                      manually_collect_background=True,
-                                                      explicit_reference_to_switch=False):
+    def _check_issue251(self,
+                        manually_collect_background=True,
+                        explicit_reference_to_switch=False):
         # See https://github.com/python-greenlet/greenlet/issues/251
         # Killing a greenlet (probably not the main one)
         # in one thread from another thread would
@@ -210,11 +210,14 @@ class TestLeaks(Cleanup, unittest.TestCase):
             # like to write a test that proves that the main greenlet
             # sticks around, and we can on my machine (macOS 11.6,
             # MacPorts builds of everything) but we can't write that
-            # same test on other platforms
+            # same test on other platforms. However, hopefully iteration
+            # done by leakcheck will find it.
             pass
 
+    def test_issue251_killing_cross_thread_leaks_list(self):
+        self._check_issue251()
 
-
+    @fails_leakcheck
     def test_issue251_issue252_need_to_collect_in_background(self):
         # Between greenlet 1.1.2 and the next version, this was still
         # failing because the leak of the list still exists when we
@@ -233,9 +236,10 @@ class TestLeaks(Cleanup, unittest.TestCase):
         #
         # Note that this test sometimes spuriously passes on Linux,
         # for some reason, but I've never seen it pass on macOS.
-        self.test_issue251_killing_cross_thread_leaks_list(manually_collect_background=False)
+        self._check_issue251(manually_collect_background=False)
 
+    @fails_leakcheck
     def test_issue251_issue252_explicit_reference_not_collectable(self):
-        self.test_issue251_killing_cross_thread_leaks_list(
+        self._check_issue251(
             manually_collect_background=False,
             explicit_reference_to_switch=True)
