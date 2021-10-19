@@ -31,6 +31,7 @@ struct _PyMainGreenlet;
 #include <memory>
 #include <stdexcept>
 
+
 extern PyTypeObject PyGreenlet_Type;
 
 // Define a special type for the main greenlets. This way it can have
@@ -192,7 +193,7 @@ namespace greenlet
     protected:
         T* p;
     public:
-        PyObjectPointer(T* it) : p(it)
+        explicit PyObjectPointer(T* it=nullptr) : p(it)
         {}
 
         // We don't allow automatic casting to PyObject* at this
@@ -215,9 +216,19 @@ namespace greenlet
             return reinterpret_cast<PyObject*>(this->p);
         }
 
-        T* operator->() const
+        T* operator->() const G_NOEXCEPT
         {
             return this->p;
+        }
+
+        bool is_None() const G_NOEXCEPT
+        {
+            return this->p == Py_None;
+        }
+
+        bool operator==(const PyObject* const p) const G_NOEXCEPT
+        {
+            return reinterpret_cast<PyObject*>(this->p) == p;
         }
 
         bool operator==(const PyObjectPointer<T>& other) const G_NOEXCEPT
@@ -238,7 +249,7 @@ namespace greenlet
 
         inline Py_ssize_t REFCNT() const G_NOEXCEPT
         {
-            return Py_REFCNT(p);
+            return p ? Py_REFCNT(p) : -42;
         }
 
         inline OwnedObject PyGetAttrString(const char* const name) const G_NOEXCEPT;
@@ -304,11 +315,31 @@ namespace greenlet
             return *this;
         }
 
+        OwnedReference<T>& operator=(const BorrowedReference<T> other)
+        {
+            return this->operator=(other.borrow());
+        }
+
+        inline void steal(T* other)
+        {
+            assert(this->p == nullptr);
+            this->p = other;
+        }
+
         T* relinquish_ownership()
         {
             T* result = this->p;
             this->p = nullptr;
             return result;
+        }
+
+        T* acquire() const
+        {
+            // Return a new reference.
+            // TODO: This may go away when we have reference objects
+            // throughout the code.
+            Py_XINCREF(this->p);
+            return this->p;
         }
 
         virtual ~OwnedReference()
@@ -327,6 +358,10 @@ namespace greenlet
 
     typedef _OwnedGreenlet<PyGreenlet> OwnedGreenlet;
     typedef _OwnedGreenlet<PyMainGreenlet> OwnedMainGreenlet;
+
+    template<typename T>
+    class _BorrowedGreenlet;
+    typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
 
     template<typename T=PyGreenlet>
     class _OwnedGreenlet: public OwnedReference<T>
@@ -347,16 +382,12 @@ namespace greenlet
         //     OwnedReference(reinterpret_cast<PyGreenlet*>(it))
         // {}
 
-        _OwnedGreenlet<T>& operator=(const OwnedGreenlet& other)
+        inline _OwnedGreenlet<T>& operator=(const OwnedGreenlet& other)
         {
             return this->operator=(other.borrow());
         }
 
-        void steal(T* other)
-        {
-            assert(this->p == nullptr);
-            this->p = other;
-        }
+        inline _OwnedGreenlet<T>& operator=(const BorrowedGreenlet& other);
 
         _OwnedGreenlet<T>& operator=(const OwnedMainGreenlet& other)
         {
@@ -389,14 +420,6 @@ namespace greenlet
             return reinterpret_cast<PyObject*>(relinquish_ownership());
         }
 
-        T* acquire() const
-        {
-            // Return a new reference.
-            // TODO: This may go away when we have reference objects
-            // throughout the code.
-            Py_INCREF(this->p);
-            return this->p;
-        }
     };
 
 
@@ -451,6 +474,13 @@ namespace greenlet
         BorrowedMainGreenlet(OwnedMainGreenlet& it) : _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
         {}
     };
+
+    template<typename T>
+    _OwnedGreenlet<T>& _OwnedGreenlet<T>::operator=(const BorrowedGreenlet& other)
+    {
+        return this->operator=(other.borrow());
+    }
+
 
     class ImmortalObject : public PyObjectPointer<>
     {
@@ -646,12 +676,14 @@ namespace greenlet
         {
         }
 
-        // PyObject** operator&()
-        // {
-        //     return &this->p;
-        // }
+        PyObject** operator&()
+        {
+            return &this->p;
+        }
 
-        // This allows us to pass one directly without the &
+        // This allows us to pass one directly without the &,
+        // BUT it has higher precedence than the bool operator
+        // if it's not explicit.
         operator PyObject**()
         {
             return &this->p;
@@ -673,14 +705,15 @@ namespace greenlet
         }
     };
 
-    // PyArg_Parse's O argument returns a borrowed reference.
-    class PyArgParseParam : public BorrowedObject
+    class OwnedErrPiece : public OwnedObject
     {
     private:
-        G_NO_COPIES_OF_CLS(PyArgParseParam);
+
     public:
-        PyArgParseParam() : BorrowedObject(nullptr)
+        // Unlike OwnedObject, this increments the refcount.
+        OwnedErrPiece(PyObject* p=nullptr) : OwnedObject(p)
         {
+            this->acquire();
         }
 
         PyObject** operator&()
@@ -688,6 +721,123 @@ namespace greenlet
             return &this->p;
         }
 
+        operator PyObject*() const
+        {
+            return this->p;
+        }
+
+        operator PyTypeObject*() const
+        {
+            return reinterpret_cast<PyTypeObject*>(this->p);
+        }
+    };
+
+    class PyErrPieces
+    {
+    private:
+        OwnedErrPiece type;
+        OwnedErrPiece instance;
+        OwnedErrPiece traceback;
+        bool restored;
+    public:
+        // Takes new references; if we're destroyed before
+        // restoring the error, we drop the references.
+        PyErrPieces(PyObject* t, PyObject* v, PyObject* tb) :
+            type(t),
+            instance(v),
+            traceback(tb),
+            restored(0)
+        {
+            this->normalize();
+        }
+
+        PyErrPieces() :
+            restored(0)
+        {
+            // PyErr_Fetch transfers ownership to us, so
+            // we don't actually need to INCREF; but we *do*
+            // need to DECREF if we're not restored.
+            PyErrFetchParam t, v, tb;
+            PyErr_Fetch(&t, &v, &tb);
+            type.steal(t.relinquish_ownership());
+            instance.steal(v.relinquish_ownership());
+            traceback.steal(tb.relinquish_ownership());
+        }
+
+        void PyErrRestore()
+        {
+            // can only do this once
+            assert(!this->restored);
+            this->restored = true;
+            PyErr_Restore(
+                this->type.relinquish_ownership(),
+                this->instance.relinquish_ownership(),
+                this->traceback.relinquish_ownership());
+        }
+
+    private:
+        void normalize()
+        {
+            // First, check the traceback argument, replacing None,
+            // with NULL
+            if (traceback.is_None()) {
+                traceback = nullptr;
+            }
+
+            if (traceback && !PyTraceBack_Check(traceback.borrow())) {
+                PyErr_SetString(PyExc_TypeError,
+                                "throw() third argument must be a traceback object");
+                throw PyErrOccurred();
+            }
+
+            if (PyExceptionClass_Check(type)) {
+                // If we just had a type, we'll now have a type and
+                // instance.
+                // The type's refcount will have gone up by one
+                // because of the instance and the instance will have
+                // a refcount of one. Either way, we owned, and still
+                // do own, exactly one reference.
+                PyErr_NormalizeException(&type, &instance, &traceback);
+
+            }
+            else if (PyExceptionInstance_Check(type)) {
+                /* Raising an instance. The value should be a dummy. */
+                if (instance && !instance.is_None()) {
+                    PyErr_SetString(
+                                    PyExc_TypeError,
+                                    "instance exception may not have a separate value");
+                    throw PyErrOccurred();
+                }
+                /* Normalize to raise <class>, <instance> */
+                instance = type;
+                Py_ssize_t type_count = Py_REFCNT(Py_TYPE(instance.borrow()));
+                type = PyExceptionInstance_Class(instance.borrow());
+                assert(type.REFCNT() == type_count + 1);
+            }
+            else {
+                /* Not something you can raise. throw() fails. */
+                PyErr_Format(PyExc_TypeError,
+                     "exceptions must be classes, or instances, not %s",
+                             Py_TYPE(type.borrow())->tp_name);
+                throw PyErrOccurred();
+            }
+        }
+    };
+
+    // PyArg_Parse's O argument returns a borrowed reference.
+    class PyArgParseParam : public BorrowedObject
+    {
+    private:
+        G_NO_COPIES_OF_CLS(PyArgParseParam);
+    public:
+        explicit PyArgParseParam(PyObject* p=nullptr) : BorrowedObject(p)
+        {
+        }
+
+        PyObject** operator&()
+        {
+            return &this->p;
+        }
     };
 
 

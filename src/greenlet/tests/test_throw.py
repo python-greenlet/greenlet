@@ -98,3 +98,31 @@ class ThrowTests(unittest.TestCase):
         self.assertEqual(res, "caught")
         self.assertTrue(g2.dead)
         self.assertTrue(g1.dead)
+
+    def test_non_traceback_param(self):
+        with self.assertRaises(TypeError) as exc:
+            greenlet.getcurrent().throw(
+                Exception,
+                Exception(),
+                self
+            )
+        self.assertEqual(str(exc.exception),
+                         "throw() third argument must be a traceback object")
+
+    def test_instance_of_wrong_type(self):
+        with self.assertRaises(TypeError) as exc:
+            greenlet.getcurrent().throw(
+                Exception(),
+                BaseException()
+            )
+
+        self.assertEqual(str(exc.exception),
+                         "instance exception may not have a separate value")
+
+    def test_not_throwable(self):
+        with self.assertRaises(TypeError) as exc:
+            greenlet.getcurrent().throw(
+                "abc"
+            )
+        self.assertEqual(str(exc.exception),
+                         "exceptions must be classes, or instances, not str")

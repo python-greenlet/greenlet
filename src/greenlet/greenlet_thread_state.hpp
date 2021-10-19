@@ -182,19 +182,6 @@ public:
         return this->get_current();
     }
 
-    // inline PyObject* get_or_establish_current_object()
-    // {
-    //     return reinterpret_cast<PyObject*>(this->get_or_establish_current());
-    // };
-
-    inline void set_current(const OwnedGreenlet& new_greenlet)
-    {
-        // Py_INCREF(new_greenlet);
-        // Py_XDECREF(this->current_greenlet);
-        this->current_greenlet = new_greenlet;
-    };
-
-
     /**
      * The target greenlet becomes the new current greenlet, and the
      * current greenlet becomes the origin greenlet. There cannot
@@ -227,7 +214,7 @@ public:
 
         this->current_greenlet = this->target_greenlet;
 
-        assert(this->current_greenlet.borrow() == old_target);
+        assert(this->current_greenlet.borrow() == old_target.borrow());
         assert(this->current_greenlet.REFCNT() == (old_target_refs + 1));
         assert(old_current.REFCNT() == old_current_expected_refs);
 
@@ -473,7 +460,7 @@ public:
                         // This happens in older versions of CPython
                         // that create a bound method object somewhere
                         // on the stack that we'll never get back to.
-                        if (PyCFunction_GetFunction(refs.at(0)) == (PyCFunction)green_switch) {
+                        if (PyCFunction_GetFunction(refs.at(0).borrow()) == (PyCFunction)green_switch) {
                             BorrowedObject function_w = refs.at(0);
                             refs.clear(); // destroy the reference
                                           // from the list.
@@ -581,15 +568,15 @@ public:
     };
     inline PyGreenlet* borrow_current()
     {
-        return this->state().borrow_current();
+        return this->state().borrow_current().borrow();
     };
     inline PyGreenlet* borrow_origin()
     {
-        return this->state().borrow_origin();
+        return this->state().borrow_origin().borrow();
     };
     inline PyMainGreenlet* borrow_main_greenlet()
     {
-        return this->state().borrow_main_greenlet();
+        return this->state().borrow_main_greenlet().borrow();
     };
 
 };

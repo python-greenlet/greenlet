@@ -73,5 +73,40 @@ class CAPITests(unittest.TestCase):
             'take that sucka!',
             "message doesn't match")
 
+    def test_non_traceback_param(self):
+        with self.assertRaises(TypeError) as exc:
+            _test_extension.test_throw_exact(
+                greenlet.getcurrent(),
+                Exception,
+                Exception(),
+                self
+            )
+        self.assertEqual(str(exc.exception),
+                         "throw() third argument must be a traceback object")
+
+    def test_instance_of_wrong_type(self):
+        with self.assertRaises(TypeError) as exc:
+            _test_extension.test_throw_exact(
+                greenlet.getcurrent(),
+                Exception(),
+                BaseException(),
+                None,
+            )
+
+        self.assertEqual(str(exc.exception),
+                         "instance exception may not have a separate value")
+
+    def test_not_throwable(self):
+        with self.assertRaises(TypeError) as exc:
+            _test_extension.test_throw_exact(
+                greenlet.getcurrent(),
+                "abc",
+                None,
+                None,
+            )
+        self.assertEqual(str(exc.exception),
+                         "exceptions must be classes, or instances, not str")
+
+
 if __name__ == '__main__':
     unittest.main()

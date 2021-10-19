@@ -17,6 +17,10 @@
   ``getcurrent()`` before exiting a thread to allow its main greenlet
   to be cleaned up. See `issue 252 <https://github.com/python-greenlet/greenlet/issues/251>`_.
 
+- Fix the C API ``PyGreenlet_Throw`` to perform the same error
+  checking that the Python API ``greenlet.throw()`` does. Previously,
+  it did no error checking.
+
 1.1.2 (2021-09-29)
 ==================
 

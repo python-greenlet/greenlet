@@ -54,6 +54,20 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         lst.append(4)
         self.assertEqual(lst, list(range(5)))
 
+    def test_switch_no_run_raises_AttributeError(self):
+        g = greenlet()
+        with self.assertRaises(AttributeError) as exc:
+            g.switch()
+
+        self.assertIn("run", str(exc.exception))
+
+    def test_throw_no_run_raises_AttributeError(self):
+        g = greenlet()
+        with self.assertRaises(AttributeError) as exc:
+            g.throw(SomeError)
+
+        self.assertIn("run", str(exc.exception))
+
     def test_parent_equals_None(self):
         g = greenlet(parent=None)
         self.assertIsNotNone(g)

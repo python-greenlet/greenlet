@@ -221,6 +221,7 @@ using greenlet::PyErrFetchParam;
 using greenlet::PyArgParseParam;
 using greenlet::ImmortalObject;
 using greenlet::CreatedModule;
+using greenlet::PyErrPieces;
 
 
 #include "structmember.h"
@@ -407,7 +408,7 @@ struct ThreadState_DestroyWithGIL
         // state -> main greenlet
         // main greenlet -> main greenlet
         assert(state->has_main_greenlet());
-        PyMainGreenlet* main = state->borrow_main_greenlet();
+        PyMainGreenlet* main(state->borrow_main_greenlet());
         // When we need to do cross-thread operations, we check this.
         // A NULL value means the thread died some time ago.
         // We do this here, rather than in a Python dealloc function
@@ -598,7 +599,7 @@ green_create_main(void)
 
 
 static PyMainGreenlet*
-find_and_borrow_main_greenlet_in_lineage(PyGreenlet* g)
+find_and_borrow_main_greenlet_in_lineage(BorrowedGreenlet g)
 {
     while (!PyGreenlet_STARTED(g)) {
         g = g->parent;
@@ -784,8 +785,8 @@ g_save(PyGreenlet* g, char* stop)
 
 static void GREENLET_NOINLINE(slp_restore_state)(ThreadState* state)
 {
-    PyGreenlet* g = state->borrow_target();
-    PyGreenlet* owner = state->borrow_current();
+    PyGreenlet* g(state->borrow_target());
+    PyGreenlet* owner(state->borrow_current());
 
 #ifdef SLP_BEFORE_RESTORE_STATE
     SLP_BEFORE_RESTORE_STATE();
@@ -811,7 +812,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState* state)
 {
     /* must free all the C stack up to target_stop */
     char* target_stop = state->borrow_target()->stack_stop;
-    PyGreenlet* owner = state->borrow_current();
+    PyGreenlet* owner(state->borrow_current());
     assert(owner->stack_saved == 0);
     if (owner->stack_start == NULL) {
         owner = owner->stack_prev; /* not saved if dying */
@@ -842,7 +843,7 @@ static int GREENLET_NOINLINE(slp_save_state)(char* stackref, ThreadState* state)
 static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState* state)
 {
     // XXX: The ownership rules can be simplified here.
-    PyGreenlet* const target = state->borrow_target();
+    PyGreenlet* const target(state->borrow_target());
     PyThreadState* tstate = PyThreadState_GET();
     tstate->recursion_depth = target->recursion_depth;
     tstate->frame = target->top_frame;
@@ -922,7 +923,7 @@ g_switchstack(void)
 
     { /* save state */
         ThreadState& state = GET_THREAD_STATE();
-        PyGreenlet* current = state.borrow_current();
+        PyGreenlet* current(state.borrow_current());
         PyThreadState* tstate = PyThreadState_GET();
         current->recursion_depth = tstate->recursion_depth;
         current->top_frame = tstate->frame;
@@ -958,11 +959,11 @@ g_switchstack(void)
     int err = slp_switch();
 
     if (err < 0) { /* error */
-        PyGreenlet* current = GET_THREAD_STATE().borrow_current();
+        PyGreenlet* current(GET_THREAD_STATE().borrow_current());
         current->top_frame = NULL;
         green_clear_exc(current);
 
-        assert(GET_THREAD_STATE().borrow_origin() == NULL);
+        assert(!GET_THREAD_STATE().borrow_origin());
         GET_THREAD_STATE().state().wref_target(NULL);
     }
     else {
@@ -979,9 +980,8 @@ g_calltrace(const OwnedObject& tracefunc,
             const BorrowedGreenlet origin,
             const BorrowedGreenlet target)
 {
-    PyErrFetchParam exc_type, exc_val, exc_tb;
     PyThreadState* tstate;
-    PyErr_Fetch(exc_type, exc_val, exc_tb);
+    PyErrPieces saved_exc;
     tstate = PyThreadState_GET();
     tstate->tracing++;
     TSTATE_USE_TRACING(tstate) = 0;
@@ -994,7 +994,9 @@ g_calltrace(const OwnedObject& tracefunc,
     // It tries to call the "deleted constructor ImmortalEventName
     // const" instead.
     OwnedObject retval(PyObject_CallFunction(tracefunc.borrow(),
-                                             "O(OO)", event.borrow(), origin, target));
+                                             "O(OO)", event.borrow(),
+                                             origin,
+                                             target));
     tstate->tracing--;
     TSTATE_USE_TRACING(tstate) =
         (tstate->tracing <= 0 &&
@@ -1004,13 +1006,12 @@ g_calltrace(const OwnedObject& tracefunc,
         // In case of exceptions trace function is removed,
         // and any existing exception is replaced with the tracing
         // exception.
+        assert(PyErr_Occurred());
         GET_THREAD_STATE().state().set_tracefunc(Py_None);
         return -1;
     }
 
-    PyErr_Restore(exc_type.relinquish_ownership(),
-                  exc_val.relinquish_ownership(),
-                  exc_tb.relinquish_ownership());
+    saved_exc.PyErrRestore();
     return 0;
 }
 
@@ -1039,7 +1040,7 @@ static GREENLET_NOINLINE_P(PyObject*, g_switch_finish)(int err)
     }
     else {
         PyGreenlet* origin = state.release_ownership_of_origin();
-        PyGreenlet* current = state.borrow_current();
+        PyGreenlet* current(state.borrow_current());
         OwnedObject tracefunc = state.get_tracefunc();
 
         if (tracefunc) {
@@ -1104,7 +1105,7 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
         return NULL;
     }
 
-    assert(state.borrow_current() != nullptr);
+    assert(state.borrow_current());
     // Switching greenlets used to attempt to clean out ones that need
     // deleted *if* we detected a thread switch. Should it still do
     // that?
@@ -1179,7 +1180,7 @@ g_handle_exit(PyObject* result)
 static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 {
     int err;
-    PyErrFetchParam t, v, tb;
+
     ThreadState& state = GET_THREAD_STATE();
     BorrowedGreenlet self = state.borrow_target();
     PyObject* args = state.borrow_switch_args();
@@ -1194,7 +1195,8 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     CFrame trace_info;
 #endif
     /* save exception in case getattr clears it */
-    PyErr_Fetch(t, v, tb);
+    PyErrPieces saved;
+
     /*
        self.run is the object to call in the new greenlet.
        This could run arbitrary python code and switch greenlets!
@@ -1203,16 +1205,12 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
        putting it into the dict. Why? No Idea.
     */
     OwnedObject run = self.PyGetAttrString("run");
-    //PyObject* run = PyObject_GetAttrString((PyObject*)self.borrow(), "run");
     if (!run) {
         return -1;
     }
 
     /* restore saved exception */
-    PyErr_Restore(t.relinquish_ownership(),
-                  v.relinquish_ownership(),
-                  tb.relinquish_ownership());
-    //PyErr_Restore(t, v, tb);
+    saved.PyErrRestore();
 
     /* recheck the state in case getattr caused thread switches */
     /*
@@ -1260,7 +1258,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
         self->stack_prev = (state.borrow_current())->stack_prev;
     }
     else {
-        self->stack_prev = state.borrow_current();
+        self->stack_prev = state.borrow_current().borrow();
     }
     self->top_frame = NULL;
     green_clear_exc(self);
@@ -1269,7 +1267,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     /* restore arguments in case they are clobbered
      * XXX: Still needed now they're thread local?
      */
-    state.wref_target(self);
+    state.wref_target(self.borrow());
     state.wref_switch_args_kwargs(args, kwargs);
 
     /* perform the initial switch */
@@ -1420,8 +1418,8 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c);
 static int
 green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
 {
-    PyObject* run = NULL;
-    PyObject* nparent = NULL;
+    PyArgParseParam run;
+    PyArgParseParam nparent;
     static const char* const kwlist[] = {
         "run",
         "parent",
@@ -1430,16 +1428,16 @@ green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
 
     // recall: The O specifier does NOT increase the reference count.
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "|OO:green", (char**)kwlist, &run, &nparent)) {
+             args, kwargs, "|OO:green", (char**)kwlist, &run, &nparent)) {
         return -1;
     }
 
-    if (run != NULL) {
+    if (run) {
         if (green_setrun(self, run, NULL)) {
             return -1;
         }
     }
-    if (nparent != NULL && nparent != Py_None) {
+    if (nparent && !nparent.is_None()) {
         return green_setparent(self, nparent, NULL);
     }
     return 0;
@@ -1735,11 +1733,12 @@ single_result(PyObject* results)
 }
 
 static PyObject*
-throw_greenlet(PyGreenlet* self, PyObject* typ, PyObject* val, PyObject* tb)
+throw_greenlet(PyGreenlet* self, PyErrPieces& err_pieces)
 {
     /* Note: _consumes_ a reference to typ, val, tb */
     PyObject* result = NULL;
-    PyErr_Restore(typ, val, tb);
+    err_pieces.PyErrRestore();
+
     if (PyGreenlet_STARTED(self) && !PyGreenlet_ACTIVE(self)) {
         /* dead greenlet: turn GreenletExit into a regular return */
         result = g_handle_exit(result);
@@ -1800,63 +1799,22 @@ PyDoc_STRVAR(
 static PyObject*
 green_throw(PyGreenlet* self, PyObject* args)
 {
-    PyObject* typ = mod_globs.PyExc_GreenletExit;
-    PyObject* val = NULL;
-    PyObject* tb = NULL;
+    PyArgParseParam typ(mod_globs.PyExc_GreenletExit);
+    PyArgParseParam val;
+    PyArgParseParam tb;
 
     if (!PyArg_ParseTuple(args, "|OOO:throw", &typ, &val, &tb)) {
         return NULL;
     }
 
-    /* First, check the traceback argument, replacing None, with NULL */
-    if (tb == Py_None) {
-        tb = NULL;
+    try {
+        PyErrPieces err_pieces(typ.borrow(), val.borrow(), tb.borrow());
+
+        return throw_greenlet(self, err_pieces);
     }
-    else if (tb != NULL && !PyTraceBack_Check(tb)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "throw() third argument must be a traceback object");
+    catch (const PyErrOccurred& x) {
         return NULL;
     }
-
-    Py_INCREF(typ);
-    Py_XINCREF(val);
-    Py_XINCREF(tb);
-
-    if (PyExceptionClass_Check(typ)) {
-        PyErr_NormalizeException(&typ, &val, &tb);
-    }
-    else if (PyExceptionInstance_Check(typ)) {
-        /* Raising an instance. The value should be a dummy. */
-        if (val && val != Py_None) {
-            PyErr_SetString(
-                PyExc_TypeError,
-                "instance exception may not have a separate value");
-            goto failed_throw;
-        }
-        else {
-            /* Normalize to raise <class>, <instance> */
-            Py_XDECREF(val);
-            val = typ;
-            typ = PyExceptionInstance_Class(typ);
-            Py_INCREF(typ);
-        }
-    }
-    else {
-        /* Not something you can raise. throw() fails. */
-        PyErr_Format(PyExc_TypeError,
-                     "exceptions must be classes, or instances, not %s",
-                     Py_TYPE(typ)->tp_name);
-        goto failed_throw;
-    }
-
-    return throw_greenlet(self, typ, val, tb);
-
-failed_throw:
-    /* Didn't use our arguments, so restore their original refcounts */
-    Py_DECREF(typ);
-    Py_XDECREF(val);
-    Py_XDECREF(tb);
-    return NULL;
 }
 
 static int
@@ -1947,7 +1905,7 @@ green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* c)
     // Only needed for Py2, which doesn't do a cast to PyObject*
     // before a null check, leading to an ambiguous override for
     // BorrowedObject == null;
-    PyObject* new_run = nrun;
+    PyObject* new_run(nrun);
     self->run_callable = new_run;
     Py_XINCREF(new_run);
     Py_XDECREF(old);
@@ -1997,7 +1955,7 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c)
         return -1;
     }
     PyGreenlet* old_parent = self->parent;
-    self->parent = new_parent;
+    self->parent = new_parent.borrow();
     Py_INCREF(nparent);
     Py_XDECREF(old_parent);
     return 0;
@@ -2288,10 +2246,13 @@ PyGreenlet_Throw(PyGreenlet* self, PyObject* typ, PyObject* val, PyObject* tb)
         PyErr_BadArgument();
         return NULL;
     }
-    Py_INCREF(typ);
-    Py_XINCREF(val);
-    Py_XINCREF(tb);
-    return throw_greenlet(self, typ, val, tb);
+    try {
+        PyErrPieces err_pieces(typ, val, tb);
+        return throw_greenlet(self, err_pieces);
+    }
+    catch(const PyErrOccurred& x) {
+        return NULL;
+    }
 }
 
 /** End C API ****************************************************************/
@@ -2448,10 +2409,10 @@ PyDoc_STRVAR(mod_set_thread_local_doc,
 static PyObject*
 mod_set_thread_local(PyObject* mod, PyObject* args)
 {
-    PyObject* key;
-    PyObject* value;
+    PyArgParseParam key;
+    PyArgParseParam value;
     PyObject* result = NULL;
-    // PyArg borrows refs, do not decrement.
+
     if (PyArg_UnpackTuple(args, "set_thread_local", 2, 2, &key, &value)) {
         if(PyDict_SetItem(
                           PyThreadState_GetDict(), // borrow
