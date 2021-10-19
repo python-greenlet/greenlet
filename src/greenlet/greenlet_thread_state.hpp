@@ -110,8 +110,8 @@ private:
 public:
 
     ThreadState() :
-        main_greenlet(),
-        current_greenlet(),
+        main_greenlet(green_create_main()),
+        current_greenlet(main_greenlet),
         target_greenlet(0),
         switch_args_w(0),
         switch_kwargs_w(0),
@@ -119,22 +119,16 @@ public:
         tracefunc(0),
         _switchstack_use_tracing(0)
     {
-        //TODO: It would be really nice to create the main greenlet
-        // and initialize the current greenlet to it when this object is
-        // created. But that leads to leaks/test failures. Why? I
-        // suspect its flaky tests that believe they know what APIs do
-        // and do not initialize the main greenlet.
-
-        // if(!this->main_greenlet) {
-        //     // We failed to create the main greenlet. That's bad.
-        //     Py_FatalError("Failed to create main greenlet");
-        //     throw PyErrOccurred();
-        // }
-        // // The main greenlet starts with 2 refs: The returned one, and
-        // // the internal self ref. We then copied it to the current
-        // // greenlet.
-        // assert(this->main_greenlet.REFCNT() == 3);
-        // this->main_greenlet->thread_state = this;
+        if(!this->main_greenlet) {
+            // We failed to create the main greenlet. That's bad.
+            Py_FatalError("Failed to create main greenlet");
+            throw PyErrOccurred();
+        }
+        // The main greenlet starts with 2 refs: The returned one, and
+        // the internal self ref. We then copied it to the current
+        // greenlet.
+        assert(this->main_greenlet.REFCNT() == 3);
+        this->main_greenlet->thread_state = this;
     }
 
     inline int switchstack_use_tracing()
@@ -154,18 +148,7 @@ public:
 
     inline BorrowedMainGreenlet borrow_main_greenlet()
     {
-        if (!this->main_greenlet) {
-            assert(!this->current_greenlet);
-            // steal the reference
-            this->main_greenlet.steal(green_create_main());
-            if (this->main_greenlet) {
-                // 2 refs: The returned one, and the self ref
-                assert(this->main_greenlet.REFCNT() == 2);
-                this->main_greenlet->thread_state = this;
-                this->current_greenlet = this->main_greenlet;
-                assert(this->main_greenlet.REFCNT() == 3);
-            }
-        }
+        assert(this->main_greenlet);
         assert(this->main_greenlet.REFCNT() >= 2);
         return this->main_greenlet;
     };
@@ -180,22 +163,23 @@ public:
         return this->current_greenlet;
     };
 
+    /**
+     * In addition to returning a new reference to the currunt
+     * greenlet, this perfroms any maintenance needed.
+     */
     inline OwnedGreenlet get_current()
     {
+        /* green_dealloc() cannot delete greenlets from other threads, so
+           it stores them in the thread dict; delete them now. */
+        this->clear_deleteme_list();
+        assert(this->current_greenlet->main_greenlet_s == this->main_greenlet.borrow());
+        assert(this->main_greenlet->super.main_greenlet_s == this->main_greenlet.borrow());
         return this->current_greenlet;
     };
 
     inline bool is_current(const void* obj) const
     {
         return this->current_greenlet.borrow() == obj;
-    }
-
-    inline OwnedGreenlet get_or_establish_current()
-    {
-        if (!this->ensure_current_greenlet()) {
-            return OwnedGreenlet();
-        }
-        return this->current_greenlet;
     }
 
     /**
@@ -277,7 +261,7 @@ private:
                         assert(!PyGreenlet_ACTIVE(to_del));
 
                         // We're holding a borrowed reference to the last
-                        // frome we executed. Since we borrowed it, the
+                        // frame we executed. Since we borrowed it, the
                         // normal traversal, clear, and dealloc functions
                         // ignore it, meaning it leaks. (The thread state
                         // object can't find it to clear it when that's
@@ -295,7 +279,7 @@ private:
                 // deleted again, triggering calls to green_dealloc()
                 // in the correct thread (if we're not murdering).
                 // This may run arbitrary Python code and switch
-                // threads.
+                // threads or greenlets!
                 Py_DECREF(to_del);
                 if (PyErr_Occurred()) {
                     PyErr_WriteUnraisable(nullptr);
@@ -306,28 +290,6 @@ private:
     }
 
 public:
-    inline bool ensure_current_greenlet()
-    {
-        // called from STATE_OK. That macro previously
-        // expanded to a function that checked ts_delkey,
-        // which, if it needs cleaning, can result in greenlet
-        // switches or thread switches.
-
-        if (!this->current_greenlet) {
-            assert(!this->main_greenlet);
-            if (!(this->borrow_main_greenlet())) {
-                return false;
-            }
-        }
-        /* green_dealloc() cannot delete greenlets from other threads, so
-           it stores them in the thread dict; delete them now. */
-
-
-        assert(this->current_greenlet->main_greenlet_s == this->main_greenlet.borrow());
-        assert(this->main_greenlet->super.main_greenlet_s == this->main_greenlet.borrow());
-        this->clear_deleteme_list();
-        return true;
-    };
 
     inline BorrowedGreenlet borrow_target() const
     {

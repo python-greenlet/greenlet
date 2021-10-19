@@ -1359,7 +1359,7 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o != NULL) {
-        o->parent = GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership();
+        o->parent = GET_THREAD_STATE().state().get_current().relinquish_ownership();
 #if GREENLET_USE_CFRAME
         /*
           The PyThreadState->cframe pointer usually points to memory on the
@@ -2162,7 +2162,7 @@ green_repr(PyGreenlet* self)
 static PyGreenlet*
 PyGreenlet_GetCurrent(void)
 {
-    return GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership();
+    return GET_THREAD_STATE().state().get_current().relinquish_ownership();
 }
 
 static int
@@ -2357,7 +2357,7 @@ PyDoc_STRVAR(mod_getcurrent_doc,
 static PyObject*
 mod_getcurrent(PyObject* self)
 {
-    return GET_THREAD_STATE().state().get_or_establish_current().relinquish_ownership_o();
+    return GET_THREAD_STATE().state().get_current().relinquish_ownership_o();
 }
 
 PyDoc_STRVAR(mod_settrace_doc,

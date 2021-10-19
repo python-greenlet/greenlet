@@ -178,11 +178,11 @@ class TestGreenlet(Cleanup, unittest.TestCase):
             del g1
             gc.collect()
             bg_glet_created_running_and_no_longer_ref_in_bg.set()
-            fg_ref_released.wait(10)
+            fg_ref_released.wait(3)
             #print("Triggering")
             greenlet()   # trigger release
             bg_should_be_clear.set()
-            ok_to_exit_bg_thread.wait(10)
+            ok_to_exit_bg_thread.wait(3)
             greenlet() # One more time
             #print("Exiting")
         t = threading.Thread(target=f)
@@ -196,7 +196,7 @@ class TestGreenlet(Cleanup, unittest.TestCase):
         # g1 is not released immediately because it's from another thread
         self.assertEqual(seen, [])
         fg_ref_released.set()
-        bg_should_be_clear.wait(10)
+        bg_should_be_clear.wait(3)
         self.assertEqual(seen, [greenlet.GreenletExit])
         ok_to_exit_bg_thread.set()
         t.join(10)
