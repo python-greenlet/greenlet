@@ -226,22 +226,6 @@ namespace greenlet
             return this->p == Py_None;
         }
 
-        bool operator==(const PyObject* const p) const G_NOEXCEPT
-        {
-            return reinterpret_cast<PyObject*>(this->p) == p;
-        }
-
-        bool operator==(const PyObjectPointer<T>& other) const G_NOEXCEPT
-        {
-            return other.p == this->p;
-        }
-
-        template<typename X>
-        bool operator==(const PyObjectPointer<X>& other) const G_NOEXCEPT
-        {
-            return this->borrow_o() == other.borrow_o();
-        }
-
         G_EXPLICIT_OP operator bool() const G_NOEXCEPT
         {
             return p != nullptr;
@@ -271,6 +255,30 @@ namespace greenlet
             return p;
         }
     };
+
+    template<typename T>
+    inline bool operator==(const PyObjectPointer<T>& lhs, const void* const rhs) G_NOEXCEPT
+    {
+        return lhs.borrow_o() == rhs;
+    }
+
+    // template<typename T>
+    // inline bool operator==(const PyObjectPointer<T>& lhs, const PyObjectPointer<T>& rhs) G_NOEXCEPT
+    // {
+    //     return lhs.borrow_o() == rhs.borrow_o();
+    // }
+
+    template<typename T, typename X>
+    inline bool operator==(const PyObjectPointer<T>& lhs, const PyObjectPointer<X>& rhs) G_NOEXCEPT
+    {
+        return lhs.borrow_o() == rhs.borrow_o();
+    }
+
+    template<typename T, typename X>
+    inline bool operator!=(const PyObjectPointer<T>& lhs, const PyObjectPointer<X>& rhs) G_NOEXCEPT
+    {
+        return lhs.borrow_o() != rhs.borrow_o();
+    }
 
     template<typename T=PyObject>
     class OwnedReference : public PyObjectPointer<T>
