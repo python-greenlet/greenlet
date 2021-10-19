@@ -629,7 +629,7 @@ namespace greenlet
             try {
                 this->PyAddObject(name, p);
             }
-            catch (const PyErrOccurred& e) {
+            catch (const PyErrOccurred&) {
                 Py_DECREF(p);
                 throw;
             }
@@ -655,7 +655,7 @@ namespace greenlet
             try {
                 Require(PyModule_AddObject(this->p, name, const_cast<PyObject*>(p)));
             }
-            catch (const PyErrOccurred& e) {
+            catch (const PyErrOccurred&) {
                 Py_DECREF(p);
                 throw;
             }

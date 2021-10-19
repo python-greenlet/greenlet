@@ -599,8 +599,9 @@ green_create_main(void)
 
 
 static PyMainGreenlet*
-find_and_borrow_main_greenlet_in_lineage(BorrowedGreenlet g)
+find_and_borrow_main_greenlet_in_lineage(const BorrowedGreenlet& start)
 {
+    PyGreenlet* g(start);
     while (!PyGreenlet_STARTED(g)) {
         g = g->parent;
         if (g == NULL) {
@@ -1148,33 +1149,29 @@ g_switch(PyGreenlet* target, PyObject* args, PyObject* kwargs)
     return g_switch_finish(err);
 }
 
-static PyObject*
-g_handle_exit(PyObject* result)
+static OwnedObject
+g_handle_exit(const OwnedObject& greenlet_result)
 {
-    if (result == NULL && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)) {
+    if (!greenlet_result && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)) {
         /* catch and ignore GreenletExit */
         PyErrFetchParam val;
         PyErr_Fetch(PyErrFetchParam(), val, PyErrFetchParam());
         if (!val) {
             Py_INCREF(Py_None);
-            result = Py_None;
+            return OwnedObject(Py_None);
         }
-        else {
-            result = val.relinquish_ownership();
-        }
+        return OwnedObject(val.relinquish_ownership());
     }
-    if (result != NULL) {
-        /* package the result into a 1-tuple */
-        PyObject* r = result;
-        result = PyTuple_New(1);
-        if (result) {
-            PyTuple_SET_ITEM(result, 0, r);
-        }
-        else {
-            Py_DECREF(r);
-        }
+
+    if (greenlet_result) {
+        // package the result into a 1-tuple
+        // PyTuple_Pack increments the reference of its arguments,
+        // so we always need to decref the greenlet result;
+        // the owner will do that.
+        return OwnedObject(PyTuple_Pack(1, greenlet_result.borrow()));
     }
-    return result;
+
+    return OwnedObject(nullptr);
 }
 
 static int GREENLET_NOINLINE(g_initialstub)(void* mark)
@@ -1327,7 +1324,8 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
         //Py_DECREF(run);
         // XXX: Watch the scope of this result. It gets passed
         // up the chain.
-        result = g_handle_exit(result);
+        // This steals and then releases the reference to result
+        result = g_handle_exit(OwnedObject(result)).relinquish_ownership();
 
         /* jump back to parent */
         self->stack_start = NULL; /* dead */
@@ -1735,13 +1733,12 @@ single_result(PyObject* results)
 static PyObject*
 throw_greenlet(PyGreenlet* self, PyErrPieces& err_pieces)
 {
-    /* Note: _consumes_ a reference to typ, val, tb */
     PyObject* result = NULL;
     err_pieces.PyErrRestore();
-
+    assert(PyErr_Occurred());
     if (PyGreenlet_STARTED(self) && !PyGreenlet_ACTIVE(self)) {
         /* dead greenlet: turn GreenletExit into a regular return */
-        result = g_handle_exit(result);
+        result = g_handle_exit(OwnedObject(nullptr)).relinquish_ownership();
     }
     return single_result(g_switch(self, result, NULL));
 }
@@ -1812,7 +1809,7 @@ green_throw(PyGreenlet* self, PyObject* args)
 
         return throw_greenlet(self, err_pieces);
     }
-    catch (const PyErrOccurred& x) {
+    catch (const PyErrOccurred&) {
         return NULL;
     }
 }
@@ -1941,7 +1938,7 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c)
             run_info = PyGreenlet_ACTIVE(p) ? (PyGreenlet*)p->main_greenlet_s : NULL;
         }
     }
-    catch (greenlet::TypeError) {
+    catch (const greenlet::TypeError&) {
         return -1;
     }
     if (run_info == NULL) {
@@ -2250,7 +2247,7 @@ PyGreenlet_Throw(PyGreenlet* self, PyObject* typ, PyObject* val, PyObject* tb)
         PyErrPieces err_pieces(typ, val, tb);
         return throw_greenlet(self, err_pieces);
     }
-    catch(const PyErrOccurred& x) {
+    catch (const PyErrOccurred&) {
         return NULL;
     }
 }
@@ -2570,7 +2567,7 @@ greenlet_internal_mod_init()
         PyErr_SetString(PyExc_MemoryError, e.what());
         return NULL;
     }
-    catch (const PyErrOccurred& e) {
+    catch (const PyErrOccurred&) {
         return NULL;
     }
 
