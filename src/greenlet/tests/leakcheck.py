@@ -192,6 +192,9 @@ class _RefCountChecker(object):
             gc.collect()
 
         expect_failure = getattr(self.function, 'fails_leakcheck', False)
+        if expect_failure:
+            self.testcase.expect_greenlet_leak = True
+
         # Capture state before; the incremental will be
         # updated by each call to _growth_after
         growth = self._growth()

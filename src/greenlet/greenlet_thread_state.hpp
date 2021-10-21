@@ -2,10 +2,23 @@
 #define GREENLET_THREAD_STATE_HPP
 
 #include <stdexcept>
-#include <iostream>
+
 #include "greenlet_internal.hpp"
+#include "greenlet_refs.hpp"
 #include "greenlet_thread_support.hpp"
 
+using greenlet::refs::BorrowedObject;
+using greenlet::refs::BorrowedGreenlet;
+using greenlet::refs::BorrowedMainGreenlet;
+using greenlet::refs::OwnedMainGreenlet;
+using greenlet::refs::OwnedObject;
+using greenlet::refs::OwnedGreenlet;
+using greenlet::refs::OwnedList;
+using greenlet::refs::PyErrFetchParam;
+using greenlet::refs::PyArgParseParam;
+using greenlet::refs::ImmortalObject;
+using greenlet::refs::CreatedModule;
+using greenlet::refs::PyErrPieces;
 
 namespace greenlet {
 /**

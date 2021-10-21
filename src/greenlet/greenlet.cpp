@@ -8,6 +8,7 @@
 */
 #include <string>
 #include "greenlet_internal.hpp"
+#include "greenlet_refs.hpp"
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
 using greenlet::ThreadState;
@@ -214,15 +215,15 @@ using greenlet::Require;
 //     -------------------------------------------------------  -----   ----
 //     total                                                       84    251
 
-using greenlet::BorrowedObject;
-using greenlet::BorrowedGreenlet;
-using greenlet::BorrowedMainGreenlet;
-using greenlet::OwnedObject;
-using greenlet::PyErrFetchParam;
-using greenlet::PyArgParseParam;
-using greenlet::ImmortalObject;
-using greenlet::CreatedModule;
-using greenlet::PyErrPieces;
+using greenlet::refs::BorrowedObject;
+using greenlet::refs::BorrowedGreenlet;
+using greenlet::refs::BorrowedMainGreenlet;
+using greenlet::refs::OwnedObject;
+using greenlet::refs::PyErrFetchParam;
+using greenlet::refs::PyArgParseParam;
+using greenlet::refs::ImmortalObject;
+using greenlet::refs::CreatedModule;
+using greenlet::refs::PyErrPieces;
 
 
 #include "structmember.h"
