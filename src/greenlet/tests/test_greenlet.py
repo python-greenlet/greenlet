@@ -393,8 +393,10 @@ class TestGreenlet(TestCase):
         del result[:]
         # XXX: we ought to be able to automatically fix this.
         # See issue 252
-        self.expect_greenlet_leak = True
+        self.expect_greenlet_leak = True # direct us not to wait for it to go away
 
+
+    @fails_leakcheck
     def test_recursive_startup(self):
         class convoluted(greenlet):
             def __init__(self):
@@ -412,8 +414,9 @@ class TestGreenlet(TestCase):
         self.assertEqual(g.switch(42), 43)
         # Exits the running greenlet, otherwise it leaks
         # XXX: We should be able to automatically fix this
-        g.throw(greenlet.GreenletExit)
-        del g
+        #g.throw(greenlet.GreenletExit)
+        #del g
+        self.expect_greenlet_leak = True
 
     def test_threaded_updatecurrent(self):
         # released when main thread should execute

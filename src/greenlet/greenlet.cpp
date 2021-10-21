@@ -1209,13 +1209,6 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     /* restore saved exception */
     saved.PyErrRestore();
 
-    /* recheck the state in case getattr caused thread switches */
-    /*
-    if (!STATE_OK) {
-        Py_DECREF(run);
-        return -1;
-    }
-    */
 
     /* recheck run_info in case greenlet reparented anywhere above */
     BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(self);
@@ -1229,7 +1222,10 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
 
     /* by the time we got here another start could happen elsewhere,
      * that means it should now be a regular switch.
-     * XXX: Is this true now that they're thread local?
+     * This can happen if the Python code is a subclass that implements
+     * __getattribute__ or __getattr__, or makes ``run`` a descriptor;
+     * all of those can run arbitrary code that switches back into
+     * this greenlet.
      */
     if (PyGreenlet_STARTED(self)) {
         state.wref_switch_args_kwargs(args, kwargs);
@@ -1496,12 +1492,23 @@ kill_greenlet(PyGreenlet* self)
 static int
 green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 {
-    /* We must only visit referenced objects, i.e. only objects
-       Py_INCREF'ed by this greenlet (directly or indirectly):
-       - stack_prev is not visited: holds previous stack pointer, but it's not
-       referenced
-       - frames are not visited: alive greenlets are not garbage collected
-       anyway */
+    // We must only visit referenced objects, i.e. only objects
+    // Py_INCREF'ed by this greenlet (directly or indirectly):
+    //
+    // - stack_prev is not visited: holds previous stack pointer, but it's not
+    //    referenced
+    // - frames are not visited as we don't strongly reference them;
+    //    alive greenlets are not garbage collected
+    //    anyway. This can be a problem, however, if this greenlet is
+    //    never allowed to finish, and is referenced from the frame: we
+    //    have an uncollectable cycle in that case. Note that the
+    //    frame object itself is also frequently not even tracked by the GC
+    //    starting with Python 3.7 (frames are allocated by the
+    //    interpreter untracked, and only become tracked when their
+    //    evaluation is finished if they have a refcount > 1). All of
+    //    this is to say that we should probably strongly reference
+    //    the frame object. Doing so, while always allowing GC on a
+    //    greenlet, solves several leaks for us.
     Py_VISIT((PyObject*)self->parent);
     Py_VISIT(self->main_greenlet_s);
     Py_VISIT(self->run_callable);
@@ -1519,7 +1526,12 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 #endif
     Py_VISIT(self->dict);
     if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
-        Py_VISIT(self->top_frame);
+        // The thread is dead. Our implicit weak reference to the
+        // frame is now all that's left; we consider ourselves to
+        // strongly own it now.
+        if (self->top_frame) {
+            Py_VISIT(self->top_frame);
+        }
     }
     return 0;
 }

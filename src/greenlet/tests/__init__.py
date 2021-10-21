@@ -49,12 +49,16 @@ class TestCase(TestCaseMetaClass(
         "NewBase",
         (unittest.TestCase,),
         {})):
+
+    cleanup_attempt_sleep_duration = 0.001
+    cleanup_max_sleep_seconds = 1
+
     def wait_for_pending_cleanups(self,
                                   initial_active_threads=None,
                                   initial_main_greenlets=None):
         initial_active_threads = initial_active_threads or self.threads_before_test
         initial_main_greenlets = initial_main_greenlets or self.main_greenlets_before_test
-        sleep_time = 0.001
+        sleep_time = self.cleanup_attempt_sleep_duration
         # NOTE: This is racy! A Python-level thread object may be dead
         # and gone, but the C thread may not yet have fired its
         # destructors and added to the queue. There's no particular
@@ -65,7 +69,7 @@ class TestCase(TestCaseMetaClass(
 
         # Always sleep at least once to let other threads run
         sleep(sleep_time)
-        quit_after = time() + 5
+        quit_after = time() + self.cleanup_max_sleep_seconds
         # TODO: We could add an API that calls us back when a particular main greenlet is deleted?
         # It would have to drop the GIL
         while (
