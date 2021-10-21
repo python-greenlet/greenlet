@@ -70,8 +70,9 @@ else:
 
     if sys.platform == 'win32' and '64 bit' in sys.version:
         # this works when building with msvc, not with 64 bit gcc
-        # switch_x64_masm.obj can be created with setup_switch_x64_masm.cmd
-        extra_objects = [GREENLET_PLATFORM_DIR + 'switch_x64_masm.obj']
+        # switch_<platform>_masm.obj can be created with setup_switch_<platform>_masm.cmd
+        obj_fn = 'switch_arm64_masm.obj' if platform.machine() == 'ARM64' else 'switch_x64_masm.obj'
+        extra_objects = [os.path.join(GREENLET_PLATFORM_DIR, obj_fn)]
     else:
         extra_objects = []
 
