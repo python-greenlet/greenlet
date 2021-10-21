@@ -5,20 +5,20 @@
 
 slp_switch    
     ; push callee saved registers to stack
-	stp	x19, x20, [sp, #-16]!           
-	stp	x21, x22, [sp, #-16]!
-	stp	x23, x24, [sp, #-16]!
-	stp	x25, x26, [sp, #-16]!
-	stp	x27, x28, [sp, #-16]!
-	stp	x29, x30, [sp, #-16]!
-	stp	d8, d9, [sp, #-16]!
-	stp	d10, d11, [sp, #-16]!
-	stp	d12, d13, [sp, #-16]!
-	stp	d14, d15, [sp, #-16]!
+    stp    x19, x20, [sp, #-16]!
+    stp    x21, x22, [sp, #-16]!
+    stp    x23, x24, [sp, #-16]!
+    stp    x25, x26, [sp, #-16]!
+    stp    x27, x28, [sp, #-16]!
+    stp    x29, x30, [sp, #-16]!
+    stp    d8, d9, [sp, #-16]!
+    stp    d10, d11, [sp, #-16]!
+    stp    d12, d13, [sp, #-16]!
+    stp    d14, d15, [sp, #-16]!
 
     ; call slp_save_state_asm with stack pointer
     mov x0, sp
-	bl	slp_save_state_asm
+    bl    slp_save_state_asm
 
     ; early return for return value of 1 and -1
     cmp x0, #-1
