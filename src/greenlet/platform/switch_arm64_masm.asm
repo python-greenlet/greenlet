@@ -37,16 +37,16 @@ slp_switch
 
 RETURN
     ; pop registers from stack
-    ldp d14, d15, [SP], #16 
-    ldp d12, d13, [SP], #16 
-    ldp d10, d11, [SP], #16 
-    ldp d8, d9, [SP], #16 
-    ldp x29, x30, [SP], #16 
-    ldp x27, x28, [SP], #16 
-    ldp x25, x26, [SP], #16 
-    ldp x23, x24, [SP], #16
-    ldp x21, x22, [SP], #16 
-    ldp x19, x20, [SP], #16
+    ldp d14, d15, [sp], #16
+    ldp d12, d13, [sp], #16
+    ldp d10, d11, [sp], #16
+    ldp d8, d9, [sp], #16
+    ldp x29, x30, [sp], #16
+    ldp x27, x28, [sp], #16
+    ldp x25, x26, [sp], #16
+    ldp x23, x24, [sp], #16
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
 
     ret
 
