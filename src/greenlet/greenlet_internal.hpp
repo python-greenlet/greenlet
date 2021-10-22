@@ -20,7 +20,9 @@ namespace greenlet {
     class ThreadState;
 };
 struct _PyMainGreenlet;
+class SwitchingState;
 #define main_greenlet_ptr_t struct _PyMainGreenlet*
+#define switching_state_ptr_t SwitchingState*
 
 
 #include "greenlet.h"

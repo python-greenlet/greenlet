@@ -16,6 +16,7 @@ extern "C" {
 
 #ifndef GREENLET_MODULE
 #define main_greenlet_ptr_t void*
+#define switching_state_ptr_t void*
 #endif
 
 typedef struct _greenlet {
@@ -57,6 +58,7 @@ typedef struct _greenlet {
     // that we access via a pointer so that we can evolve this object in the
     // future without introducing ABI issues.
     PyObject* run_callable;
+    switching_state_ptr_t switching_state;
 } PyGreenlet;
 
 #define PyGreenlet_Check(op) PyObject_TypeCheck(op, &PyGreenlet_Type)

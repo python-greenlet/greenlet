@@ -134,15 +134,29 @@ class TestGreenlet(TestCase):
         self.assertEqual(len(success), len(ths))
 
     def test_exception(self):
+        import functools
+        p = functools.partial(print, file=sys.stderr)
         seen = []
         g1 = greenlet(fmain)
         g2 = greenlet(fmain)
+        p("***Created", g1, g2)
         g1.switch(seen)
+        p("***SWITCH 1")
         g2.switch(seen)
+        p("***SWITCH 2")
         g2.parent = g1
+        p("***Reparent")
         self.assertEqual(seen, [])
+        #with self.assertRaises(SomeError):
+        #    p("***Switching back")
+        #    g2.switch()
+        # Creating this as a bound method can reveal bugs that
+        # are hidden on newer versions of Python that avoid creating
+        # bound methods for direct expressions; IOW, don't use the `with`
+        # form!
         self.assertRaises(SomeError, g2.switch)
         self.assertEqual(seen, [SomeError])
+        p("***SWITCH TO DEAD")
         g2.switch()
         self.assertEqual(seen, [SomeError])
 

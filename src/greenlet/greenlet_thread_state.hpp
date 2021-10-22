@@ -19,6 +19,7 @@ using greenlet::refs::PyArgParseParam;
 using greenlet::refs::ImmortalObject;
 using greenlet::refs::CreatedModule;
 using greenlet::refs::PyErrPieces;
+using greenlet::refs::NewReference;
 
 namespace greenlet {
 /**
@@ -83,6 +84,9 @@ namespace greenlet {
  * it dynamically allocate this object so it can live until the
  * pending call runs.
  */
+
+
+
 class ThreadState {
 private:
     // As of commit 08ad1dd7012b101db953f492e0021fb08634afad
@@ -95,15 +99,16 @@ private:
 
     /* Strong reference to the current greenlet. */
     OwnedGreenlet current_greenlet;
-    /*  Weak reference to the switching-to greenlet during the slp
-        switch */
-    BorrowedGreenlet target_greenlet;
-    /* NULL if error, otherwise weak refernce to args tuple to pass around during slp switch */
-    PyObject* switch_args_w;
-    PyObject* switch_kwargs_w;
+    // /*  Weak reference to the switching-to greenlet during the slp
+    //     switch */
+    // BorrowedGreenlet target_greenlet;
+    // /* NULL if error, otherwise weak refernce to args tuple to pass around during slp switch */
+    // PyObject* switch_args_w;
+    // PyObject* switch_kwargs_w;
 
-    /* Strong reference to the switching from greenlet after the switch */
-    OwnedGreenlet origin_greenlet;
+    // /* Strong reference to the switching from greenlet after the switch */
+    // OwnedGreenlet origin_greenlet;
+    //SwitchingState switching_state;
 
     /* Strong reference to the trace function, if any. */
     OwnedObject tracefunc;
@@ -114,24 +119,16 @@ private:
        them. */
     greenlet::g_deleteme_t deleteme;
 
-    /* Used internally in ``g_switchstack()`` when
-       GREENLET_USE_CFRAME is true. */
-    int _switchstack_use_tracing;
 
     G_NO_COPIES_OF_CLS(ThreadState);
 
 public:
 
-    ThreadState() :
-        main_greenlet(green_create_main()),
-        current_greenlet(main_greenlet),
-        target_greenlet(0),
-        switch_args_w(0),
-        switch_kwargs_w(0),
-        origin_greenlet(),
-        tracefunc(0),
-        _switchstack_use_tracing(0)
+    ThreadState()
     {
+        this->main_greenlet = OwnedMainGreenlet::consuming(green_create_main());
+        this->current_greenlet = main_greenlet;
+        fprintf(stderr, "ThreadState %p has main greenlet %p\n", this, &this->main_greenlet);
         if(!this->main_greenlet) {
             // We failed to create the main greenlet. That's bad.
             Py_FatalError("Failed to create main greenlet");
@@ -144,15 +141,15 @@ public:
         this->main_greenlet->thread_state = this;
     }
 
-    inline int switchstack_use_tracing()
-    {
-        return this->_switchstack_use_tracing;
-    }
+    // inline int switchstack_use_tracing()
+    // {
+    //     return this->_switchstack_use_tracing;
+    // }
 
-    inline void switchstack_use_tracing(int new_value)
-    {
-        this->_switchstack_use_tracing = new_value;
-    }
+    // inline void switchstack_use_tracing(int new_value)
+    // {
+    //     this->_switchstack_use_tracing = new_value;
+    // }
 
     inline bool has_main_greenlet()
     {
@@ -197,47 +194,54 @@ public:
 
     /**
      * The target greenlet becomes the new current greenlet, and the
-     * current greenlet becomes the origin greenlet. There cannot
-     * currently be an origin greenlet set.
+     * current greenlet becomes the origin greenlet (which it should
+     * already be)
      */
-    inline void make_target_current()
+    /*    inline void make_target_current()
     {
         // XXX: All this extra noise is for debugging and can go away.
-        assert(!this->origin_greenlet);
-        Py_ssize_t old_target_refs = this->target_greenlet.REFCNT();
-        Py_ssize_t old_current_refs = this->current_greenlet.REFCNT();
-        Py_ssize_t old_current_expected_refs;
-        Py_ssize_t old_current_refs_at_end;
+        assert(get_switching_state().origin == borrow_current());
+        // assert(!this->switching_state.origin);
+        // Py_ssize_t old_target_refs = this->switching_state.target.REFCNT();
+        // Py_ssize_t old_current_refs = this->current_greenlet.REFCNT();
+        // Py_ssize_t old_current_expected_refs;
+        // Py_ssize_t old_current_refs_at_end;
 
-        // The target is weak refd.
-        {
-        BorrowedGreenlet old_target = this->target_greenlet;
+        // // The target is weak refd.
+        // {
+        // BorrowedGreenlet old_target = this->switching_state.target;
         //PyGreenlet* old_target = this->target_greenlet;
         //PyGreenlet* old_current = this->current_greenlet.borrow();
         // because the next line decrefs current and increfs target
         //Py_INCREF(old_current);
         OwnedGreenlet old_current = this->current_greenlet;
-        Py_ssize_t new_current_expected_refs = old_target_refs + 1;
-        old_current_expected_refs = (old_current == old_target)
-            ? new_current_expected_refs
-            : old_current_refs;
+        // Py_ssize_t new_current_expected_refs = old_target_refs + 1;
+        // old_current_expected_refs = (old_current == old_target)
+        //     ? new_current_expected_refs
+        //     : old_current_refs;
 
 
-        assert(old_current.REFCNT() == old_current_refs + 1);
+        // assert(old_current.REFCNT() == old_current_refs + 1);
 
-        this->current_greenlet = this->target_greenlet;
+        this->current_greenlet = this->switching_state.target;
 
-        assert(this->current_greenlet.borrow() == old_target.borrow());
-        assert(this->current_greenlet.REFCNT() == (old_target_refs + 1));
-        assert(old_current.REFCNT() == old_current_expected_refs);
+        // assert(this->current_greenlet.borrow() == old_target.borrow());
+        // assert(this->current_greenlet.REFCNT() == (old_target_refs + 1));
+        // assert(old_current.REFCNT() == old_current_expected_refs);
 
-        this->origin_greenlet = old_current;
-        assert(this->origin_greenlet == old_current);
-        old_current_refs_at_end = old_current.REFCNT() - 1; // about
-                                                            // to release
-        }
-        assert(this->origin_greenlet.REFCNT() == old_current_expected_refs);
-        assert(old_current_refs_at_end == old_current_expected_refs);
+        this->switching_state.origin = old_current;
+        // assert(this->switching_state.origin == old_current);
+        // old_current_refs_at_end = old_current.REFCNT() - 1; // about
+        //                                                     // to release
+        // }
+        // assert(this->switching_state.origin.REFCNT() == old_current_expected_refs);
+        // assert(old_current_refs_at_end == old_current_expected_refs);
+    }
+    */
+
+    inline void set_current(const OwnedGreenlet& target)
+    {
+        this->current_greenlet = target;
     }
 
 private:
@@ -304,41 +308,46 @@ private:
 
 public:
 
-    inline BorrowedGreenlet borrow_target() const
-    {
-        return this->target_greenlet;
-    };
+    // inline BorrowedGreenlet borrow_target() const
+    // {
+    //     return this->target_greenlet;
+    // };
 
-    inline void wref_target(PyGreenlet* target)
-    {
-        this->target_greenlet = target;
-    };
+    // inline void wref_target(PyGreenlet* target)
+    // {
+    //     this->target_greenlet = target;
+    // };
 
-    inline void wref_switch_args_kwargs(PyObject* args, PyObject* kwargs)
-    {
-        this->switch_args_w = args;
-        this->switch_kwargs_w = kwargs;
-    };
+    // inline void wref_switch_args_kwargs(PyObject* args, PyObject* kwargs)
+    // {
+    //     this->switch_args_w = args;
+    //     this->switch_kwargs_w = kwargs;
+    // };
 
-    inline PyObject* borrow_switch_args()
-    {
-        return this->switch_args_w;
-    };
+    // inline PyObject* borrow_switch_args()
+    // {
+    //     return this->switch_args_w;
+    // };
 
-    inline PyObject* borrow_switch_kwargs()
-    {
-        return this->switch_kwargs_w;
-    };
+    // inline PyObject* borrow_switch_kwargs()
+    // {
+    //     return this->switch_kwargs_w;
+    // };
 
-    inline BorrowedGreenlet borrow_origin() const
-    {
-        return this->origin_greenlet;
-    };
+    // inline BorrowedGreenlet borrow_origin() const
+    // {
+    //     return this->origin_greenlet;
+    // };
 
-    inline PyGreenlet* release_ownership_of_origin()
-    {
-        return this->origin_greenlet.relinquish_ownership();
-    }
+    // inline PyGreenlet* release_ownership_of_origin()
+    // {
+    //     return this->origin_greenlet.relinquish_ownership();
+    // }
+
+    // inline SwitchingState& get_switching_state()
+    // {
+    //     return this->switching_state;
+    // }
 
     /**
      * Returns a new reference, or a false object.
@@ -384,7 +393,7 @@ public:
         // We should not have an "origin" greenlet; that only exists
         // for the temporary time during a switch, which should not
         // be in progress as the thread dies.
-        assert(this->origin_greenlet == nullptr);
+        //assert(!this->switching_state.origin);
 
         this->tracefunc.CLEAR();
 
@@ -420,11 +429,11 @@ public:
                 // XXX: This is O(n) in the total number of objects.
                 // TODO: Add a way to disable this at runtime, and
                 // another way to report on it.
-                OwnedObject gc(PyImport_ImportModule("gc"));
+                NewReference gc(PyImport_ImportModule("gc"));
                 if (gc) {
                     OwnedObject get_referrers = gc.PyGetAttrString("get_referrers");
                     assert(get_referrers);
-                    OwnedList refs = get_referrers.PyCall(old_main_greenlet);
+                    OwnedList refs(get_referrers.PyCall(old_main_greenlet));
                     if (refs && refs.empty()) {
                         assert(refs.REFCNT() == 1);
                         // We found nothing! So we left a dangling
@@ -553,18 +562,18 @@ public:
     }
 
     // shadow API to make this easier to use.
-    inline PyGreenlet* borrow_target()
-    {
-        return this->state().borrow_target();
-    };
+    // inline PyGreenlet* borrow_target()
+    // {
+    //     return this->state().borrow_target();
+    // };
     inline PyGreenlet* borrow_current()
     {
         return this->state().borrow_current().borrow();
     };
-    inline PyGreenlet* borrow_origin()
-    {
-        return this->state().borrow_origin().borrow();
-    };
+    // inline PyGreenlet* borrow_origin()
+    // {
+    //     return this->state().borrow_origin().borrow();
+    // };
     inline PyMainGreenlet* borrow_main_greenlet()
     {
         return this->state().borrow_main_greenlet().borrow();

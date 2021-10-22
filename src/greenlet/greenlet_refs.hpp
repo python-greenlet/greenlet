@@ -7,11 +7,28 @@ namespace greenlet { namespace refs {
     // A set of classes to make reference counting rules in python
     // code explicit.
     //
+    // Rules of use:
+    // (1) Functions returning a new reference that the caller of the
+    // function is expected to dispose of should return a
+    // ``OwnedObject`` object. This object automatically releases its
+    // reference when it goes out of scope. It works like a ``std::shared_ptr``
+    // and can be copied or used as a function parameter (but don't do
+    // that). Note that constructing a ``OwnedObject`` from a
+    // PyObject* steals the reference.
+    // (2) Parameters to functions should be either a
+    // ``OwnedObject&``, or, more generally, a ``PyObjectPointer&``.
+    // If the function needs to create its own new reference, it can
+    // do so by copying to a local ``OwnedObject``.
+    // (3) Functions returning an existing pointer that is NOT
+    // incref'd, and which the caller MUST NOT decref,
+    // should return a ``BorrowedObject``.
+
+    //
     // For a class with a single pointer member, whose constructor
     // does nothing but copy a pointer parameter into the member, and
     // which can then be converted back to the pointer type, compilers
     // generate code that's the same as just passing the pointer.
-    // That is, func(BorrowedReference x) called like ``PyObject* p =
+    // That is, func(BorrowedObject x) called like ``PyObject* p =
     // ...; f(p)`` has 0 overhead. Similarly, they "unpack" to the
     // pointer type with 0 overhead.
     //
@@ -41,7 +58,8 @@ namespace greenlet { namespace refs {
         T* p;
     public:
         explicit PyObjectPointer(T* it=nullptr) : p(it)
-        {}
+        {
+        }
 
         // We don't allow automatic casting to PyObject* at this
         // level, because then we could be passed to Py_DECREF/INCREF,
@@ -83,6 +101,24 @@ namespace greenlet { namespace refs {
             return p ? Py_REFCNT(p) : -42;
         }
 
+        inline PyTypeObject* TYPE() const G_NOEXCEPT
+        {
+            return p ? Py_TYPE(p) : nullptr;
+        }
+
+        // TODO: These two methods only make sense for greenlet
+        // objects, but there's not a good spot in the inheritance
+        // tree to put them without introducing VTable pointers
+        inline bool active()
+        {
+            return PyGreenlet_ACTIVE(this->p);
+        }
+
+        inline bool started()
+        {
+            return PyGreenlet_STARTED(this->p);
+        }
+
         inline OwnedObject PyGetAttrString(const char* const name) const G_NOEXCEPT;
         inline OwnedObject PyRequireAttrString(const char* const name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
@@ -103,17 +139,12 @@ namespace greenlet { namespace refs {
         }
     };
 
+
     template<typename T>
     inline bool operator==(const PyObjectPointer<T>& lhs, const void* const rhs) G_NOEXCEPT
     {
         return lhs.borrow_o() == rhs;
     }
-
-    // template<typename T>
-    // inline bool operator==(const PyObjectPointer<T>& lhs, const PyObjectPointer<T>& rhs) G_NOEXCEPT
-    // {
-    //     return lhs.borrow_o() == rhs.borrow_o();
-    // }
 
     template<typename T, typename X>
     inline bool operator==(const PyObjectPointer<T>& lhs, const PyObjectPointer<X>& rhs) G_NOEXCEPT
@@ -132,12 +163,37 @@ namespace greenlet { namespace refs {
     {
     private:
         friend class OwnedList;
-    public:
-        // CAUTION: Constructing from a PyObject*
-        // steals the reference.
+
+    protected:
         explicit OwnedReference(T* it) : PyObjectPointer<T>(it)
         {
         }
+
+    public:
+
+        // Constructors
+
+        static OwnedReference<T> consuming(PyObject* p)
+        {
+            return OwnedReference<T>(p);
+        }
+
+        static OwnedReference<T> owning(PyObject* p)
+        {
+            OwnedReference<T> result(p);
+            Py_XINCREF(result.p);
+            return result;
+        }
+
+        OwnedReference() : OwnedReference<T>(nullptr)
+        {}
+
+        OwnedReference(const PyObjectPointer<>& other) : OwnedReference(nullptr)
+        {
+            this->p = other.borrow();
+            Py_XINCREF(this->p);
+        }
+
         // It would be good to make use of the C++11 distinction
         // between move and copy operations, e.g., constructing from a
         // pointer should be a move operation.
@@ -203,7 +259,9 @@ namespace greenlet { namespace refs {
             return this->p;
         }
 
-        virtual ~OwnedReference()
+        // Nothing else declares a destructor, we're the leaf, so we
+        // should be able to get away without virtual.
+        ~OwnedReference()
         {
             Py_CLEAR(this->p);
         }
@@ -211,6 +269,18 @@ namespace greenlet { namespace refs {
         void CLEAR()
         {
             Py_CLEAR(this->p);
+        }
+    };
+
+    class NewReference : public OwnedObject
+    {
+    private:
+        G_NO_COPIES_OF_CLS(NewReference);
+    public:
+        // Consumes the reference. Only use this
+        // for API return values.
+        NewReference(PyObject* it) : OwnedObject(it)
+        {
         }
     };
 
@@ -224,13 +294,16 @@ namespace greenlet { namespace refs {
     class _BorrowedGreenlet;
     typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
 
+
     template<typename T=PyGreenlet>
     class _OwnedGreenlet: public OwnedReference<T>
     {
     private:
-
+    protected:
+        _OwnedGreenlet<T>(T* it) : OwnedReference<T>(it)
+        {}
     public:
-        _OwnedGreenlet() : OwnedReference<T>(nullptr)
+        _OwnedGreenlet() : OwnedReference<T>()
         {}
 
         _OwnedGreenlet(const _OwnedGreenlet<T>& other) : OwnedReference<T>(other)
@@ -240,15 +313,16 @@ namespace greenlet { namespace refs {
             OwnedReference<T>(reinterpret_cast<T*>(other.acquire()))
         {
         }
+        _OwnedGreenlet(const BorrowedGreenlet& other);
         // Steals a reference.
-        explicit _OwnedGreenlet(PyGreenlet* it) : OwnedReference<T>(it)
-        {}
-        explicit _OwnedGreenlet(PyMainGreenlet* it) :
-            OwnedReference<T>(reinterpret_cast<T*>(it))
-        {}
-        // explicit _OwnedGreenlet(PyMainGreenlet* it) :
-        //     OwnedReference(reinterpret_cast<PyGreenlet*>(it))
-        // {}
+        static _OwnedGreenlet<T> consuming(PyGreenlet* it)
+        {
+            return _OwnedGreenlet<T>(reinterpret_cast<T*>(it));
+        }
+        static _OwnedGreenlet<T> consuming(PyMainGreenlet* it)
+        {
+            return _OwnedGreenlet<T>(reinterpret_cast<T*>(it));
+        }
 
         inline _OwnedGreenlet<T>& operator=(const OwnedGreenlet& other)
         {
@@ -264,11 +338,6 @@ namespace greenlet { namespace refs {
             this->p = reinterpret_cast<T*>(owned);
             return *this;
         }
-
-        // _OwnedGreenlet& operator=(PyMainGreenlet* const other)
-        // {
-        //     return this->operator=(reinterpret_cast<T*>(other));
-        // }
 
         _OwnedGreenlet<T>& operator=(T* const other)
         {
@@ -288,6 +357,8 @@ namespace greenlet { namespace refs {
             return reinterpret_cast<PyObject*>(relinquish_ownership());
         }
 
+
+
     };
 
 
@@ -300,6 +371,9 @@ namespace greenlet { namespace refs {
         // conversion to PyObject* for passing to C API calls and even
         // for Py_INCREF/DECREF, because we ourselves do no memory management.
         BorrowedReference(T* it) : PyObjectPointer<T>(it)
+        {}
+
+        BorrowedReference() : PyObjectPointer<T>(nullptr)
         {}
 
         operator T*() const
@@ -315,13 +389,16 @@ namespace greenlet { namespace refs {
     class _BorrowedGreenlet : public BorrowedReference<T>
     {
     public:
-        _BorrowedGreenlet() : BorrowedReference<T>(nullptr)
+        _BorrowedGreenlet() :
+            BorrowedReference<T>(nullptr)
         {}
 
-        _BorrowedGreenlet(T* it) : BorrowedReference<T>(it)
+        _BorrowedGreenlet(T* it) :
+            BorrowedReference<T>(it)
         {}
 
-        _BorrowedGreenlet(const BorrowedObject& it) : BorrowedReference<T>(nullptr)
+        _BorrowedGreenlet(const BorrowedObject& it) :
+            BorrowedReference<T>(nullptr)
         {
             if (!PyGreenlet_Check(it)) {
                 throw TypeError("Expected a greenlet");
@@ -329,17 +406,37 @@ namespace greenlet { namespace refs {
             this->_set_raw_pointer(static_cast<PyObject*>(it));
         }
 
-        _BorrowedGreenlet(const OwnedGreenlet& it) : BorrowedReference<T>(it.borrow())
+        _BorrowedGreenlet(const OwnedGreenlet& it) :
+            BorrowedReference<T>(it.borrow())
         {}
 
+        // We get one of these for PyGreenlet, but one for PyObject
+        // is handy as well
+        operator PyObject*() const
+        {
+            return reinterpret_cast<PyObject*>(this->p);
+        }
     };
 
     typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
 
+    template<typename T>
+    _OwnedGreenlet<T>::_OwnedGreenlet(const BorrowedGreenlet& other)
+        : OwnedReference<T>(reinterpret_cast<T*>(other.borrow()))
+    {
+        Py_XINCREF(this->p);
+    }
+
+    // template<typename T>
+    // OwnedGreenlet::OwnedGreenlet<T>(const BorrowedGreenlet& other) :
+    //     OwnedReference<T>(other.acquire())
+    // {}
+
     class BorrowedMainGreenlet : public _BorrowedGreenlet<PyMainGreenlet>
     {
     public:
-        BorrowedMainGreenlet(OwnedMainGreenlet& it) : _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
+        BorrowedMainGreenlet(const OwnedMainGreenlet& it) :
+            _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
         {}
         BorrowedMainGreenlet(PyMainGreenlet* it) : _BorrowedGreenlet<PyMainGreenlet>(it)
         {}
@@ -355,12 +452,16 @@ namespace greenlet { namespace refs {
     class ImmortalObject : public PyObjectPointer<>
     {
     private:
-        G_NO_COPIES_OF_CLS(ImmortalObject);
-    public:
-        // CAUTION: Constructing from a PyObject*
-        // steals the reference.
+        G_NO_ASSIGNMENT_OF_CLS(ImmortalObject);
+
         explicit ImmortalObject(PyObject* it) : PyObjectPointer<>(it)
         {
+        }
+
+    public:
+        static ImmortalObject consuming(PyObject* it)
+        {
+            return ImmortalObject(it);
         }
 
         operator PyObject*() const
@@ -374,14 +475,14 @@ namespace greenlet { namespace refs {
     inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const G_NOEXCEPT
     {
         assert(this->p);
-        return OwnedObject(PyObject_GetAttrString(reinterpret_cast<PyObject*>(this->p), name));
+        return OwnedObject::consuming(PyObject_GetAttrString(reinterpret_cast<PyObject*>(this->p), name));
     }
 
     template<typename T>
     inline OwnedObject PyObjectPointer<T>::PyRequireAttrString(const char* const name) const
     {
         assert(this->p);
-        return OwnedObject(Require(PyObject_GetAttrString(this->p, name)));
+        return OwnedObject::consuming(Require(PyObject_GetAttrString(this->p, name)));
     }
 
     template<typename T>
@@ -400,7 +501,7 @@ namespace greenlet { namespace refs {
     inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const G_NOEXCEPT
     {
         assert(this->p);
-        return OwnedObject(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
+        return OwnedObject::consuming(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
     }
 
     template<typename T>
@@ -408,7 +509,7 @@ namespace greenlet { namespace refs {
                                                   const BorrowedObject kwargs) const G_NOEXCEPT
     {
         assert(this->p);
-        return OwnedObject(PyObject_Call(this->p, args, kwargs));
+        return OwnedObject::consuming(PyObject_Call(this->p, args, kwargs));
     }
 
     class OwnedList : public OwnedObject
@@ -417,7 +518,7 @@ namespace greenlet { namespace refs {
         G_NO_ASSIGNMENT_OF_CLS(OwnedList);
     public:
         // TODO: Would like to use move.
-        OwnedList(const OwnedObject& other) : OwnedObject(other)
+        explicit OwnedList(const OwnedObject& other) : OwnedObject(other)
         {
             // At this point, we own a reference to the object,
             // or its null.
@@ -495,23 +596,32 @@ namespace greenlet { namespace refs {
         // or allocated, we're responsible for the decref.
         void PyAddObject(const char* name, const long new_bool)
         {
-            PyObject* p = Require(PyBool_FromLong(new_bool));
-            try {
-                this->PyAddObject(name, p);
+            // TODO: Debugging cruft that can go away
+            Py_ssize_t cnt;
+            PyObject* raw;
+            {
+            OwnedObject p = OwnedObject::consuming(Require(PyBool_FromLong(new_bool)));
+            cnt = p.REFCNT();
+            raw = p.borrow();
+            this->PyAddObject(name, p);
             }
-            catch (const PyErrOccurred&) {
-                Py_DECREF(p);
-                throw;
-            }
+            // No way that raw is now invalid, even though we decref'd
+            // once,
+            // the module is keeping it alive
+            assert(Py_REFCNT(raw) == cnt);
         }
 
         void PyAddObject(const char* name, const OwnedObject& new_object)
         {
-            // The caller already owns a reference they will deref
+            // The caller already owns a reference they will decref
             // when their variable goes out of scope, we still need to
             // incref/decref.
             this->PyAddObject(name, new_object.borrow());
+        }
 
+        void PyAddObject(const char* name, const ImmortalObject& new_object)
+        {
+            this->PyAddObject(name, new_object.borrow());
         }
 
         void PyAddObject(const char* name, const PyTypeObject& type)
@@ -519,11 +629,11 @@ namespace greenlet { namespace refs {
             this->PyAddObject(name, reinterpret_cast<const PyObject*>(&type));
         }
 
-        void PyAddObject(const char* name, const PyObject* p)
+        void PyAddObject(const char* name, const PyObject* new_object)
         {
-            Py_INCREF(p);
+            Py_INCREF(new_object);
             try {
-                Require(PyModule_AddObject(this->p, name, const_cast<PyObject*>(p)));
+                Require(PyModule_AddObject(this->p, name, const_cast<PyObject*>(new_object)));
             }
             catch (const PyErrOccurred&) {
                 Py_DECREF(p);
