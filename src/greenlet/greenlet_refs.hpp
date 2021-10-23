@@ -109,12 +109,12 @@ namespace greenlet { namespace refs {
         // TODO: These two methods only make sense for greenlet
         // objects, but there's not a good spot in the inheritance
         // tree to put them without introducing VTable pointers
-        inline bool active()
+        inline bool active() const
         {
             return PyGreenlet_ACTIVE(this->p);
         }
 
-        inline bool started()
+        inline bool started() const
         {
             return PyGreenlet_STARTED(this->p);
         }
@@ -753,6 +753,7 @@ namespace greenlet { namespace refs {
                 this->type.relinquish_ownership(),
                 this->instance.relinquish_ownership(),
                 this->traceback.relinquish_ownership());
+            assert(!this->type && !this->instance && !this->traceback);
         }
 
     private:

@@ -483,22 +483,36 @@ class TestGreenlet(TestCase):
         seen = []
         def worker():
             # wait for the value
+            print("WORKER: Return to main", file=sys.stderr)
+            # 	Called switch on 0x106309ef0 from 0x106308f30
             value = greenlet.getcurrent().parent.switch()
             # delete all references to ourself
+            print("WORKER: Return from main via my child", value, file=sys.stderr)
             del worker[0]
             initiator.parent = greenlet.getcurrent().parent
             # switch to main with the value, but because
             # ts_current is the last reference to us we
-            # return immediately
+            # return here immediately, where we resurrect ourself.
             try:
+                print("WORKER: Switching to main with", value, file=sys.stderr)
                 greenlet.getcurrent().parent.switch(value)
+            # except BaseException as e:
+            #     print("GOT EXCEPTION IN INIT", e, file=sys.stderr)
+            #     raise
             finally:
                 seen.append(greenlet.getcurrent())
         def initiator():
             return 42 # implicitly falls thru to parent
+        # ThreadState 0x10290cda0 has main greenlet 0x106309ef0 ot 0x10290cda0
         worker = [greenlet(worker)]
+
+        print("Created worker greenlet", worker, file=sys.stderr)
+        # Created worker greenlet [<greenlet.greenlet object at 0x106308f30 (otid=0x0) pending>]
+        # Called switch on 0x106308f30 from 0x106309ef0
+        # g_switchstack: into 0x106308f30 args 0x100b04250 kwargs 0x0 err? 0x0
         worker[0].switch() # prime worker
         initiator = greenlet(initiator, worker[0])
+        print("Created iniator greenlet", initiator, file=sys.stderr)
         value = initiator.switch()
         self.assertTrue(seen)
         self.assertEqual(value, 42)

@@ -308,6 +308,17 @@ The running greenlet's stack_start is undefined but not NULL.
 */
 
 
+static inline OwnedObject
+single_result(const OwnedObject& results)
+{
+    if (results
+        && PyTuple_Check(results.borrow())
+        && PyTuple_GET_SIZE(results.borrow()) == 1) {
+        PyObject* result = PyTuple_GET_ITEM(results.borrow(), 0);
+        return OwnedObject::owning(result);
+    }
+    return results;
+}
 
 class ImmortalEventName : public ImmortalObject
 {
@@ -686,7 +697,7 @@ g_calltrace(const OwnedObject& tracefunc,
             const BorrowedGreenlet& target);
 
 static OwnedObject
-g_handle_exit(const OwnedObject& greenlet_result);
+g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead);
 
 /*
  * the following macros are spliced into the OS/compiler
@@ -728,7 +739,7 @@ private:
     // we live as long as it does and so don't need to own it.
     // TODO: When we make the greenlet object opaque, we should find a
     // way to get rid of this.
-    BorrowedGreenlet target;
+    const BorrowedGreenlet target;
     //
     // If args and kwargs are both false (NULL), this is a *throw*, not a
     // switch. PyErr_... must have been called already.
@@ -781,7 +792,9 @@ public:
         kwargs(kwargs),
         switchstack_use_tracing(0),
         thread_state(GET_THREAD_STATE().state())
-    {}
+    {
+
+    }
 
     // SwitchingState(const OwnedGreenlet& target) :
     //     target(target), switchstack_use_tracing(0),
@@ -806,19 +819,34 @@ public:
 
     OwnedObject kill()
     {
+        // If we're killed because we lost all references in the
+        // middle of a switch, that's ok. Don't reset the args/kwargs,
+        // we still want to pass them to the parent.
+
         // we shouldn't get here in the middle of a switch
+        // XXX: And yet we do. How?
         if(this->args) {
+            fprintf(stderr, "Killing while switching! %p: ", this->target.borrow());
             PyObject_Print(this->args.borrow(), stderr, 0);
+            fprintf(stderr, "\n");
         }
-        assert(!this->args);
-        assert(!this->kwargs);
+        //assert(!this->args);
+        //assert(!this->kwargs);
+        //const OwnedObject old_args(this->args);
+        //const OwnedObject old_kwargs(this->kwargs);
+        //this->args = nullptr;
+        //this->kwargs = nullptr;
         PyErr_SetString(mod_globs.PyExc_GreenletExit,
                         "Killing the greenlet because all references have vanished.");
         // To get here it had to have run before
         return this->g_switch();
+        // OwnedObject result(this->g_switch());
+        // this->args = old_args;
+        // this->kwargs = old_args;
+        // return result;
     }
 
-    inline BorrowedGreenlet& get_target()
+    inline const BorrowedGreenlet& get_target() const
     {
         return this->target;
     }
@@ -928,12 +956,13 @@ public:
         /* find the real target by ignoring dead greenlets,
            and if necessary starting a greenlet. */
         switchstack_result_t err;
+        PyGreenlet* target(this->target);
         while (target) {
-            if (target.active()) {
+            if (PyGreenlet_ACTIVE(target)) {
                 err = g_switchstack();
                 break;
             }
-            if (!target.started()) {
+            if (!PyGreenlet_STARTED(target)) {
                 void* dummymarker;
                 err = g_initialstub(&dummymarker);
                 if (err.first == 1) {
@@ -986,7 +1015,7 @@ protected:
         tstate->exc_value = this->target->exc_value;
         tstate->exc_traceback = this->target->exc_traceback;
 #endif
-        green_clear_exc(target);
+        green_clear_exc(const_cast<BorrowedGreenlet&>(this->target));
 #if GREENLET_USE_CFRAME
         tstate->cframe = this->target->cframe;
         /*
@@ -1008,7 +1037,7 @@ protected:
     {
         OwnedObject run;
         ThreadState& state = thread_state;
-        BorrowedGreenlet& self(this->target);
+        const BorrowedGreenlet& self(this->target);
 #if GREENLET_USE_CFRAME
         /*
           See green_new(). This is a stack-allocated variable used
@@ -1103,7 +1132,7 @@ protected:
             self->stack_prev = state.borrow_current().borrow();
         }
         self->top_frame = NULL;
-        green_clear_exc(self);
+        green_clear_exc(const_cast<BorrowedGreenlet&>(self));
         self->recursion_depth = PyThreadState_GET()->recursion_depth;
 
         /* restore arguments in case they are clobbered
@@ -1120,7 +1149,7 @@ protected:
         /* perform the initial switch */
 
 
-        switchstack_result_t err = g_switchstack();
+        switchstack_result_t err = this->g_switchstack();
         /* returns twice!
            The 1st time with ``err == 1``: we are in the new greenlet.
            This one owns a greenlet that used to be current.
@@ -1145,9 +1174,10 @@ protected:
             // arguments locally.
             OwnedObject args(OwnedObject::consuming(this->args.relinquish_ownership()));
             OwnedObject kwargs(OwnedObject::consuming(this->kwargs.relinquish_ownership()));
+            assert(!this->args);
+            assert(!this->kwargs);
             {
-                OwnedGreenlet origin = err.second.second;
-                err.second.second.relinquish_ownership();
+                OwnedGreenlet origin(OwnedGreenlet::consuming(err.second.second.relinquish_ownership()));
                 OwnedObject tracefunc(state.get_tracefunc());
                 if (tracefunc) {
                     if (g_calltrace(tracefunc,
@@ -1177,15 +1207,44 @@ protected:
                 result = PyObject_Call(run.borrow(),
                                        args.borrow(),
                                        kwargs.borrow());
-                args.CLEAR();
-                kwargs.CLEAR();
-                run.CLEAR();
             }
+            args.CLEAR();
+            kwargs.CLEAR();
+            run.CLEAR();
+
+            {
+                PyErrPieces saved;
+            fprintf(stderr, "Raw result of greenlet %p: ", this->target.borrow());
+            if (result) {
+                PyObject_Print(result, stderr, 0);
+            }
+            else {
+                fprintf(stderr, "NULL");
+            }
+            fprintf(stderr, " args=%p kwargs=%p err? %p\n", this->args.borrow(), this->kwargs.borrow(), PyErr_Occurred());
+            saved.PyErrRestore();
+            }
+            if (!result
+                && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)
+                && (this->args || this->kwargs)) {
+                // This can happen, for example, if our only reference
+                // goes away after we switch back to the parent.
+                // See test_dealloc_switch_args_not_lost
+                fprintf(stderr, "In greenlet %p execution finished with a greenletexit raised in the middle of a switch: ", this->target.borrow());
+                PyErrPieces clear_error;
+                PyObject_Print(this->args.borrow(), stderr, 0);
+                result = single_result(this->result_from_switch_args()).relinquish_ownership();
+            }
+
             //Py_DECREF(run);
             // XXX: Watch the scope of this result. It gets passed
             // up the chain.
             // This steals and then releases the reference to result
-            result = g_handle_exit(OwnedObject::consuming(result)).relinquish_ownership();
+
+            result = g_handle_exit(OwnedObject::consuming(result), this->target.borrow()).relinquish_ownership();
+            fprintf(stderr, "Result of greenlet %p: ", this->target.borrow());
+            PyObject_Print(result, stderr, 0);
+            fprintf(stderr, "\n");
             // fprintf(stderr, "Child: fell off the end with state %p current %p target %p origin %p parent %p\n",
             //         this, this->thread_state.borrow_current().borrow(), this->target.borrow(), this->origin.borrow(), self->parent);
             assert(this->thread_state.borrow_current() == this->target);
@@ -1195,7 +1254,21 @@ protected:
                 // XXX: Allocating this object on the heap means it
                 // will get replaced just as soon as we try to use it!
                 //SwitchingState to_parent(parent, result);
+                fprintf(stderr, "Sending to parent %p: ", parent);
+                PyObject_Print(result, stderr, 0);
+                fprintf(stderr, "\n");
+
+                // Can probably just do this
                 result = green_switch(parent, result, NULL);
+                // XXX: assuming the parent has been started, which is
+                // not necessarily the case. If this doesn't crash a
+                // test, we need to write one.
+                //parent->switching_state->set_arguments(OwnedObject::consuming(result), OwnedObject());
+                //result = parent->switching_state->g_switch().relinquish_ownership();
+
+                fprintf(stderr, "Result from parent %p: ", parent);
+                PyObject_Print(result, stderr, 0);
+                fprintf(stderr, "\n");
                 /* Return here means switch to parent failed,
                  * in which case we throw *current* exception
                  * to the next parent in chain.
@@ -1263,6 +1336,9 @@ XXX: The above is outdated; rewrite.
     */
     switchstack_result_t g_switchstack(void)
     {
+        fprintf(stderr, "g_switchstack: into %p args %p kwargs %p err? %p\n",
+                this->target.borrow(), this->args.borrow(), this->kwargs.borrow(), PyErr_Occurred()
+                );
         { /* save state */
             PyGreenlet* current(thread_state.borrow_current());
             PyThreadState* tstate = PyThreadState_GET();
@@ -1349,16 +1425,18 @@ XXX: The above is outdated; rewrite.
         }
 
         assert(state.borrow_current() == target);
+        {
         OwnedObject tracefunc = state.get_tracefunc();
 
         if (tracefunc) {
             if (g_calltrace(tracefunc,
-                            args ? mod_globs.event_switch : mod_globs.event_throw,
+                            this->args ? mod_globs.event_switch : mod_globs.event_throw,
                             err.second.second,
                             this->target) < 0) {
                 /* Turn trace errors into switch throws */
                 return OwnedObject();
             }
+        }
         }
 
         //    Py_DECREF(origin);
@@ -1369,16 +1447,25 @@ XXX: The above is outdated; rewrite.
            If only keyword arguments were passed, then we'll pass the keyword
            argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
            return both. */
-        if (!kwargs) {
-            return args;
+        if(PyErr_Occurred()) {
+            return OwnedObject();
+        }
+        return this->result_from_switch_args();
+    }
+
+    OwnedObject result_from_switch_args()
+    {
+        fprintf(stderr, "Finish switch into %p with args %p kwargs %p\n", this->target.borrow(), this->args.borrow(), this->kwargs.borrow());
+        if (!this->kwargs) {
+            return this->args;
         }
 
         if (!len_kwargs()) {
-            return args;
+            return this->args;
         }
 
         if (!len_args()) {
-            return kwargs;
+            return this->kwargs;
         }
 
         return OwnedObject::consuming(PyTuple_Pack(2, args.borrow(), kwargs.borrow()));
@@ -1531,8 +1618,9 @@ g_calltrace(const OwnedObject& tracefunc,
 
 
 static OwnedObject
-g_handle_exit(const OwnedObject& greenlet_result)
+g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead)
 {
+    fprintf(stderr, "Handle exit for %p with %p\n", dead, greenlet_result.borrow());
     if (!greenlet_result && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)) {
         /* catch and ignore GreenletExit */
         PyErrFetchParam val;
@@ -1667,7 +1755,7 @@ kill_greenlet(BorrowedGreenlet& self)
         // To get here it had to have run before
         /* Send the greenlet a GreenletExit exception. */
         const OwnedObject result = self->switching_state->kill();
-
+        fprintf(stderr, "Return from kill of %p with %p\n", self.borrow(), result.borrow());
         tmp = self->parent;
         self->parent = oldparent;
         Py_XDECREF(tmp);
@@ -1819,7 +1907,7 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     Py_SET_REFCNT(self.borrow(), 1);
     /* Save the current exception, if any. */
     PyErrPieces saved_err;
-
+    fprintf(stderr, "kill started on dealloc: %p saved error at %p\n", self.borrow(), &saved_err);
     if (kill_greenlet(self) < 0) {
         PyErr_WriteUnraisable(self.borrow_o());
         /* XXX what else should we do? */
@@ -1941,17 +2029,6 @@ maingreen_dealloc(PyMainGreenlet* self)
     green_dealloc(reinterpret_cast<PyGreenlet*>(self));
 }
 
-static inline OwnedObject
-single_result(const OwnedObject& results)
-{
-    if (results
-        && PyTuple_Check(results.borrow())
-        && PyTuple_GET_SIZE(results.borrow()) == 1) {
-        PyObject* result = PyTuple_GET_ITEM(results.borrow(), 0);
-        return OwnedObject::owning(result);
-    }
-    return results;
-}
 
 static OwnedObject
 throw_greenlet(PyGreenlet* self, PyErrPieces& err_pieces)
@@ -1961,7 +2038,7 @@ throw_greenlet(PyGreenlet* self, PyErrPieces& err_pieces)
     assert(PyErr_Occurred());
     if (PyGreenlet_STARTED(self) && !PyGreenlet_ACTIVE(self)) {
         /* dead greenlet: turn GreenletExit into a regular return */
-        result = g_handle_exit(OwnedObject()).relinquish_ownership();
+        result = g_handle_exit(OwnedObject(), self).relinquish_ownership();
     }
     if (!self->switching_state) {
         self->switching_state = new SwitchingState(self, OwnedObject::consuming(result), OwnedObject());
@@ -1992,10 +2069,18 @@ PyDoc_STRVAR(
     "If the greenlet is dead, or is the current greenlet then this\n"
     "function will simply return the arguments using the same rules as\n"
     "above.\n");
-
+static int switch_depth = 0;
 static PyObject*
 green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
+    switch_depth ++;
+    for(int i = 0; i < switch_depth - 1; i++) {
+        fprintf(stderr, "\t");
+    }
+    fprintf(stderr, "Called switch on %p from %p with args(%p)=",
+            self, GET_THREAD_STATE().borrow_current(), args);
+    PyObject_Print(args, stderr, 0);
+    fprintf(stderr, "\n");
     // XXX This extra allocation will go away when we make the
     // greenlet internal opaque.
     //
@@ -2007,7 +2092,22 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
         self->switching_state->set_arguments(OwnedObject::owning(args), OwnedObject::owning(kwargs));
     }
 
-    return single_result(self->switching_state->g_switch()).relinquish_ownership();
+    PyObject* p = single_result(self->switching_state->g_switch()).relinquish_ownership();
+    for(int i = 0; i < switch_depth - 1; i++) {
+        fprintf(stderr, "\t");
+    }
+    fprintf(stderr, "Return from switch to %p is %p ", self, p);
+    if(p) {
+        PyErrPieces saved_err;
+        PyObject_Print(p, stderr, 0);
+        fprintf(stderr, "\n\t");
+        saved_err.PyErrRestore();
+    }
+    else {
+        fprintf(stderr, "\n");
+    }
+    switch_depth --;
+    return p;
 }
 
 PyDoc_STRVAR(

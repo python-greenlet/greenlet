@@ -128,7 +128,10 @@ public:
     {
         this->main_greenlet = OwnedMainGreenlet::consuming(green_create_main());
         this->current_greenlet = main_greenlet;
-        fprintf(stderr, "ThreadState %p has main greenlet %p\n", this, &this->main_greenlet);
+        fprintf(stderr, "ThreadState %p has main greenlet %p ot %p\n",
+                this,
+                this->main_greenlet.borrow(),
+                &this->main_greenlet);
         if(!this->main_greenlet) {
             // We failed to create the main greenlet. That's bad.
             Py_FatalError("Failed to create main greenlet");
