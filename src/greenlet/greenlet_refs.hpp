@@ -178,7 +178,7 @@ namespace greenlet { namespace refs {
             return OwnedReference<T>(p);
         }
 
-        static OwnedReference<T> owning(PyObject* p)
+        static OwnedReference<T> owning(T* p)
         {
             OwnedReference<T> result(p);
             Py_XINCREF(result.p);

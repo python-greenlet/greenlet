@@ -139,7 +139,9 @@ class TestGreenlet(TestCase):
         seen = []
         g1 = greenlet(fmain)
         g2 = greenlet(fmain)
-        p("***Created", g1, g2)
+        p()
+        p("***Main greenlet", greenlet.getcurrent())
+        p(f"***Created {g1=} {g2=}")
         g1.switch(seen)
         p("***SWITCH 1")
         g2.switch(seen)
@@ -156,9 +158,15 @@ class TestGreenlet(TestCase):
         # form!
         self.assertRaises(SomeError, g2.switch)
         self.assertEqual(seen, [SomeError])
-        p("***SWITCH TO DEAD")
-        g2.switch()
+        p("***SWITCH TO DEAD", g2)
+        value = g2.switch()
+        self.assertEqual(value, ())
         self.assertEqual(seen, [SomeError])
+
+        value = g2.switch(25)
+        self.assertEqual(value, 25)
+        self.assertEqual(seen, [SomeError])
+
 
     def test_send_exception(self):
         seen = []
@@ -392,8 +400,13 @@ class TestGreenlet(TestCase):
         t = threading.Thread(target=creator)
         t.start()
         t.join(10)
-        with self.assertRaises(greenlet.error):
+        with self.assertRaises(greenlet.error) as exc:
             result[0].throw(SomeError)
+
+        self.assertEqual(
+            str(exc.exception),
+            "cannot switch to a different thread (which happens to have exited)"
+        )
 
         if hasattr(result[0].gr_frame, 'clear'):
             # The frame is actually executing (it thinks), we can't clear it.
