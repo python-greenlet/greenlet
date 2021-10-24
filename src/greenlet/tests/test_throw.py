@@ -3,7 +3,6 @@ import sys
 
 from greenlet import greenlet
 from . import TestCase
-from .leakcheck import fails_leakcheck
 
 def switch(*args):
     return greenlet.getcurrent().parent.switch(*args)
@@ -60,7 +59,6 @@ class ThrowTests(TestCase):
         res = g.throw()    # immediately eaten by the already-dead greenlet
         self.assertTrue(isinstance(res, greenlet.GreenletExit))
 
-    @fails_leakcheck
     def test_throw_goes_to_original_parent(self):
         main = greenlet.getcurrent()
 

@@ -119,6 +119,8 @@ namespace greenlet { namespace refs {
             return PyGreenlet_STARTED(this->p);
         }
 
+        inline OwnedObject PyStr() const G_NOEXCEPT;
+        inline const char* as_str() const G_NOEXCEPT;
         inline OwnedObject PyGetAttrString(const char* const name) const G_NOEXCEPT;
         inline OwnedObject PyRequireAttrString(const char* const name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
@@ -127,6 +129,8 @@ namespace greenlet { namespace refs {
         // PyObject_Call(this, args, kwargs);
         inline OwnedObject PyCall(const BorrowedObject args,
                                   const BorrowedObject kwargs) const G_NOEXCEPT;
+        inline OwnedObject PyCall(const OwnedObject& args,
+                                  const OwnedObject& kwargs) const G_NOEXCEPT;
 
     protected:
         void _set_raw_pointer(void* t)
@@ -470,6 +474,27 @@ namespace greenlet { namespace refs {
         }
     };
 
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyStr() const G_NOEXCEPT
+    {
+        assert(this->p);
+        return OwnedObject::consuming(PyObject_Str(this->p));
+    }
+
+    template<typename T>
+    inline const char* PyObjectPointer<T>::as_str() const G_NOEXCEPT
+    {
+        // NOTE: This is not Python exception safe.
+        if (this->p) {
+            OwnedObject py_str = this->PyStr();
+#if PY_MAJOR_VERSION >= 3
+            return PyUnicode_AsUTF8(py_str.borrow());
+#else
+            return PyString_AsString(py_str.borrow());
+#endif
+        }
+        return "(nil)";
+    }
 
     template<typename T>
     inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const G_NOEXCEPT
@@ -510,6 +535,14 @@ namespace greenlet { namespace refs {
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_Call(this->p, args, kwargs));
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyCall(const OwnedObject& args,
+                                                  const OwnedObject& kwargs) const G_NOEXCEPT
+    {
+        assert(this->p);
+        return OwnedObject::consuming(PyObject_Call(this->p, args.borrow(), kwargs.borrow()));
     }
 
     class OwnedList : public OwnedObject

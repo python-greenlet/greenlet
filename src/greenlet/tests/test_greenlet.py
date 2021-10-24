@@ -134,20 +134,13 @@ class TestGreenlet(TestCase):
         self.assertEqual(len(success), len(ths))
 
     def test_exception(self):
-        import functools
-        p = functools.partial(print, file=sys.stderr)
         seen = []
         g1 = greenlet(fmain)
         g2 = greenlet(fmain)
-        p()
-        p("***Main greenlet", greenlet.getcurrent())
-        p(f"***Created {g1=} {g2=}")
         g1.switch(seen)
-        p("***SWITCH 1")
         g2.switch(seen)
-        p("***SWITCH 2")
         g2.parent = g1
-        p("***Reparent")
+
         self.assertEqual(seen, [])
         #with self.assertRaises(SomeError):
         #    p("***Switching back")
@@ -158,7 +151,7 @@ class TestGreenlet(TestCase):
         # form!
         self.assertRaises(SomeError, g2.switch)
         self.assertEqual(seen, [SomeError])
-        p("***SWITCH TO DEAD", g2)
+
         value = g2.switch()
         self.assertEqual(value, ())
         self.assertEqual(seen, [SomeError])
@@ -496,41 +489,30 @@ class TestGreenlet(TestCase):
         seen = []
         def worker():
             # wait for the value
-            print("WORKER: Return to main", file=sys.stderr)
-            # 	Called switch on 0x106309ef0 from 0x106308f30
             value = greenlet.getcurrent().parent.switch()
             # delete all references to ourself
-            print("WORKER: Return from main via my child", value, file=sys.stderr)
             del worker[0]
             initiator.parent = greenlet.getcurrent().parent
             # switch to main with the value, but because
             # ts_current is the last reference to us we
             # return here immediately, where we resurrect ourself.
             try:
-                print("WORKER: Switching to main with", value, file=sys.stderr)
                 greenlet.getcurrent().parent.switch(value)
-            # except BaseException as e:
-            #     print("GOT EXCEPTION IN INIT", e, file=sys.stderr)
-            #     raise
             finally:
                 seen.append(greenlet.getcurrent())
         def initiator():
             return 42 # implicitly falls thru to parent
-        # ThreadState 0x10290cda0 has main greenlet 0x106309ef0 ot 0x10290cda0
+
         worker = [greenlet(worker)]
 
-        print("Created worker greenlet", worker, file=sys.stderr)
-        # Created worker greenlet [<greenlet.greenlet object at 0x106308f30 (otid=0x0) pending>]
-        # Called switch on 0x106308f30 from 0x106309ef0
-        # g_switchstack: into 0x106308f30 args 0x100b04250 kwargs 0x0 err? 0x0
         worker[0].switch() # prime worker
         initiator = greenlet(initiator, worker[0])
-        print("Created iniator greenlet", initiator, file=sys.stderr)
         value = initiator.switch()
         self.assertTrue(seen)
         self.assertEqual(value, 42)
 
     def test_tuple_subclass(self):
+        # XXX: This is failing on Python 2 with a SystemError: error return without exception set
         if sys.version_info[0] > 2:
             # There's no apply in Python 3.x
             def _apply(func, a, k):
@@ -717,6 +699,35 @@ class TestGreenlet(TestCase):
         # later).
         time.sleep(1)
         self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
+
+    def test_falling_off_end_switches_to_unstarted_parent_raises_error(self):
+        def no_args():
+            return 13
+
+        parent_never_started = greenlet(no_args)
+
+        def leaf():
+            return 42
+
+        child = greenlet(leaf, parent_never_started)
+
+        # Because the run function takes to arguments
+        with self.assertRaises(TypeError):
+            child.switch()
+
+    def test_falling_off_end_switches_to_unstarted_parent_works(self):
+        def one_arg(x):
+            return (x, 24)
+
+        parent_never_started = greenlet(one_arg)
+
+        def leaf():
+            return 42
+
+        child = greenlet(leaf, parent_never_started)
+
+        result = child.switch()
+        self.assertEqual(result, (42, 24))
 
 
 class TestGreenletSetParentErrors(TestCase):
