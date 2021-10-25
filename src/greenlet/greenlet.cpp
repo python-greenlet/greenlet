@@ -659,8 +659,12 @@ find_and_borrow_main_greenlet_in_lineage(const PyObjectPointer<PyGreenlet>& star
    * g_initialstub, when inlined would receive a pointer into its
      own stack frame, leading to incomplete stack save/restore
 
-Those functions that are members we declare as virtual so that the
-compiler calls them through a function pointer.
+g_initialstub is a member function and declared virtual so that the
+compiler always calls it through a vtable.
+
+slp_save_state and slp_restore_state are also member functions. They
+are called from trampoline functions that themselves are declared as
+not eligible for inlining.
 */
 
 
@@ -831,13 +835,11 @@ public:
         return this->target;
     }
 
-    inline bool has_arguments()
+    inline bool has_arguments() const
     {
         return this->args || this->kwargs;
     }
 
-    // Defining these functions as virtual ensures they're called
-    // through a function pointer and not inlined.
     inline void slp_restore_state()
     {
         const OwnedGreenlet& g(target);
@@ -975,7 +977,7 @@ public:
                 void* dummymarker;
                 // cerr << "\tSwitch to unstarted greenlet " << target << "(me: " << this->target.borrow() << ")" << endl;
                 if (!target_was_me) {
-                    // XXX This should be a crasher, right?
+                    // XXX This should be a crasher, right? Is this // code path even exercised?
                     assert(target->switching_state);
                     target->switching_state->set_arguments(this->args, this->kwargs);
                     this->args.CLEAR();
@@ -1016,6 +1018,13 @@ public:
     }
 
 protected:
+    // The functions that must not be inlined are declared virtual.
+    // We also mark them as protected, not private, so that the
+    // compiler is forced to call them through a function pointer.
+    // (A sufficiently smart compiler could directly call a private
+    // virtual function since it can never be overridden in a
+    // subclass).
+
     // Returns the previous greenlet we just switched away from.
     virtual OwnedGreenlet g_switchstack_success()
     {
@@ -2101,13 +2110,17 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
     // cerr << "Return from switching to greenlet " << self << " is " << result.borrow()
          // << " with refcount " << result.REFCNT()
          // << endl;
+    // Note that the current greenlet isn't necessarily self. If self
+    // finished, we went to one of its parents.
     assert(!self->switching_state->has_arguments());
-    // BorrowedGreenlet current = GET_THREAD_STATE().state().borrow_current();
-    // SwitchingState* current_state = current->switching_state;
-    // if (current_state->has_arguments()) {
-        // cerr << "ERROR: Current state has arguments " << *current_state << endl;
-    // }
-    assert(!GET_THREAD_STATE().state().borrow_current()->switching_state->has_arguments());
+#ifndef NDEBUG
+    const BorrowedGreenlet& current = GET_THREAD_STATE().state().borrow_current();
+    const SwitchingState* const current_state = current->switching_state;
+    if (current_state) {
+        // It's possible it's never been switched to.
+        assert(!current_state->has_arguments());
+    }
+#endif
     return result.relinquish_ownership();
 }
 
