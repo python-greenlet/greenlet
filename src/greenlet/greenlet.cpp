@@ -14,6 +14,7 @@
 #include "greenlet_refs.hpp"
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
+#include "greenlet_slp_switch.hpp"
 using std::swap;
 using std::cerr;
 using std::endl;
@@ -434,7 +435,7 @@ struct ThreadState_DestroyWithGIL
         // A NULL value means the thread died some time ago.
         // We do this here, rather than in a Python dealloc function
         // for the greenlet, in case there's still a reference out there.
-        main->thread_state = NULL;
+        main->thread_state = nullptr;
         delete state; // Deleting this runs the destructor, DECREFs the main greenlet.
         return 0;
     }
@@ -451,6 +452,15 @@ struct ThreadState_DestroyNoGIL
         // been torn down. There is a limited number of calls that can
         // be queued: 32 (NPENDINGCALLS) in CPython 3.10, so we
         // coalesce these calls using our own queue.
+
+        if (state && state->has_main_greenlet()) {
+            // mark the thread as dead ASAP.
+            // this is racy! If we try to throw or switch to a
+            // greenlet from this thread from some other thread before
+            // we clear the state pointer, it won't realize the state
+            // is dead which can crash the process.
+            state->borrow_main_greenlet()->thread_state = nullptr;
+        }
 
         // NOTE: Because we're not holding the GIL here, some other
         // Python thread could run and call ``os.fork()``, which would
@@ -648,50 +658,15 @@ find_and_borrow_main_greenlet_in_lineage(const PyObjectPointer<PyGreenlet>& star
    * slp_switch, cannot be inlined for obvious reasons
    * g_initialstub, when inlined would receive a pointer into its
      own stack frame, leading to incomplete stack save/restore
+
+Those functions that are members we declare as virtual so that the
+compiler calls them through a function pointer.
 */
 
 
-#ifdef GREENLET_NOINLINE_SUPPORTED
+
 /* add forward declarations */
-static GREENLET_NOINLINE_P(OwnedObject, g_switch_finish)(int);
-static int GREENLET_NOINLINE(g_initialstub)(void*);
-static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState*);
 
-extern "C" {
-    static void GREENLET_NOINLINE(slp_restore_state)(ThreadState*);
-    static int GREENLET_NOINLINE(slp_save_state)(char*, ThreadState*);
-#    if !(defined(MS_WIN64) && defined(_M_X64))
-    static int GREENLET_NOINLINE(slp_switch)(void);
-#    endif
-};
-#    define GREENLET_NOINLINE_INIT() \
-        do {                         \
-        } while (0)
-#else
-/* force compiler to call functions via pointers */
-/* XXX: Do we even want/need to support such compilers? This code path
-   is untested on CI. */
-static int (*g_initialstub)(void*);
-static OwnedObject (*g_switch_finish)(int err);
-static void (*g_switchstack_success)(void);
-
-extern "C" {
-    static void (*slp_restore_state)(ThreadState*);
-    static int (*slp_save_state)(char*, ThreadState*);
-    static int (*slp_switch)(void);
-};
-#    define GREENLET_NOINLINE(name) cannot_inline_##name
-#    define GREENLET_NOINLINE_P(rtype, name) rtype cannot_inline_##name
-#    define GREENLET_NOINLINE_INIT()                                  \
-        do {                                                          \
-            slp_restore_state = GREENLET_NOINLINE(slp_restore_state); \
-            slp_save_state = GREENLET_NOINLINE(slp_save_state);       \
-            slp_switch = GREENLET_NOINLINE(slp_switch);               \
-            g_initialstub = GREENLET_NOINLINE(g_initialstub);         \
-            g_switch_finish = GREENLET_NOINLINE(g_switch_finish);           \
-            g_switchstack_success = GREENLET_NOINLINE(g_switchstack_success);           \
-        } while (0)
-#endif
 
 static int
 g_calltrace(const OwnedObject& tracefunc,
@@ -702,38 +677,7 @@ g_calltrace(const OwnedObject& tracefunc,
 static OwnedObject
 g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead);
 
-/*
- * the following macros are spliced into the OS/compiler
- * specific code, in order to simplify maintenance.
- */
-// We can save about 10% of the time it takes to switch greenlets if
-// we thread the thread state through the slp_save_state() and the
-// following slp_restore_state() calls from
-// slp_switch()->g_switchstack() (which already needs to access it).
-//
-// However:
-//
-// that requires changing the prototypes and implementations of the
-// switching functions. If we just change the prototype of
-// slp_switch() to accept the argument and update the macros, without
-// changing the implementation of slp_switch(), we get crashes on
-// 64-bit Linux and 32-bit x86 (for reasons that aren't 100% clear);
-// on the other hand, 64-bit macOS seems to be fine. Also, 64-bit
-// windows is an issue because slp_switch is written fully in assembly
-// and currently ignores its argument so some code would have to be
-// adjusted there to pass the argument on to the
-// ``slp_save_state_asm()`` function (but interestingly, because of
-// the calling convention, the extra argument is just ignored and
-// things function fine, albeit slower, if we just modify
-// ``slp_save_state_asm`()` to fetch the pointer to pass to the
-// macro.)
-//
-// Our compromise is to use a *glabal*, untracked, weak, pointer
-// to the necessary thread state during the process of switching only.
-// This is safe beacuse we're protected by the GIL, and if we're
-// running this code, the thread isn't exiting. This also nets us a
-// 10-12% speed improvement.
-class SwitchingState;
+
 
 template<typename T>
 std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
@@ -742,7 +686,7 @@ std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
     return os;
 }
 
-static SwitchingState* volatile switching_thread_state = NULL;
+
 class SwitchingState {
 private:
     // We are owned by a greenlet that serves as the target;
@@ -904,7 +848,7 @@ public:
 
     // Defining these functions as virtual ensures they're called
     // through a function pointer and not inlined.
-    virtual void slp_restore_state()
+    inline void slp_restore_state()
     {
         const OwnedGreenlet& g(target);
         PyGreenlet* owner(this->thread_state.borrow_current());
@@ -931,7 +875,7 @@ public:
         g->stack_prev = owner;
     }
 
-    virtual int slp_save_state(char* stackref)
+    inline int slp_save_state(char* stackref)
     {
         /* must free all the C stack up to target_stop */
         char* target_stop = target->stack_stop;
@@ -1472,7 +1416,7 @@ XXX: The above is outdated; rewrite.
             current->cframe = tstate->cframe;
             switchstack_use_tracing = tstate->cframe->use_tracing;
 #endif
-            switching_thread_state = this;
+            switching_thread_state = this->target;
         }
         int err = slp_switch();
 
@@ -1487,14 +1431,15 @@ XXX: The above is outdated; rewrite.
             // It's important to make sure not to actually return an
             // owned greenlet here, no telling how long before it
             // could be cleaned up.
-            return std::make_pair(err, std::make_pair(switching_thread_state, OwnedGreenlet()));
+            return std::make_pair(err, std::make_pair(switching_thread_state->switching_state,
+                                                      OwnedGreenlet()));
         }
 
         // No stack-based variables are valid anymore.
 
         // But the global is volatile so we can reload it without the
         // compiler caching it from earlier.
-        SwitchingState* after_switch = switching_thread_state;
+        SwitchingState* after_switch = switching_thread_state->switching_state;
         OwnedGreenlet origin = after_switch->g_switchstack_success();
         // if(err == 0) {
         //     // in the parent, the second return.
@@ -1614,72 +1559,18 @@ XXX: The above is outdated; rewrite.
 
 
 
-extern "C" {
-    static int slp_save_state_trampoline(char* stackref)
-    {
-        return switching_thread_state->slp_save_state(stackref);
-    }
-    static void slp_restore_state_trampoline()
-    {
-        switching_thread_state->slp_restore_state();
-    }
-}
-
-#define SLP_SAVE_STATE(stackref, stsizediff) \
-    do {                                                    \
-    assert(switching_thread_state);  \
-    stackref += STACK_MAGIC;                 \
-    if (slp_save_state_trampoline((char*)stackref)) \
-        return -1;                           \
-    if (!switching_thread_state->get_target().active())    \
-        return 1;                            \
-    stsizediff = switching_thread_state->get_target()->stack_start - (char*)stackref; \
-    } while (0)
-
-#define SLP_RESTORE_STATE() slp_restore_state_trampoline()
-
-#define SLP_EVAL
-extern "C" {
-#define slp_switch GREENLET_NOINLINE(slp_switch)
-#include "slp_platformselect.h"
-}
-#undef slp_switch
-
-#ifndef STACK_MAGIC
-#    error \
-        "greenlet needs to be ported to this platform, or taught how to detect your compiler properly."
-#endif /* !STACK_MAGIC */
-
-#ifdef EXTERNAL_ASM
-/* CCP addition: Make these functions, to be called from assembler.
- * The token include file for the given platform should enable the
- * EXTERNAL_ASM define so that this is included.
- */
-extern "C" {
-intptr_t
-slp_save_state_asm(intptr_t* ref)
+static int GREENLET_NOINLINE(slp_save_state_trampoline)(char* stackref)
 {
-    intptr_t diff;
-    SLP_SAVE_STATE(ref, diff);
-    return diff;
+    return switching_thread_state->switching_state->slp_save_state(stackref);
 }
-
-void
-slp_restore_state_asm(void)
+static void GREENLET_NOINLINE(slp_restore_state_trampoline)()
 {
-    SLP_RESTORE_STATE();
+    switching_thread_state->switching_state->slp_restore_state();
 }
 
-extern int
-slp_switch(void);
-};
-#endif
+
 
 /***********************************************************/
-
-
-
-
 
 
 static int
@@ -2913,7 +2804,6 @@ static PyObject*
 greenlet_internal_mod_init()
 {
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
-
     GREENLET_NOINLINE_INIT();
 
     try {

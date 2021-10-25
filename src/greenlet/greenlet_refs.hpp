@@ -71,7 +71,7 @@ namespace greenlet { namespace refs {
         // TODO: This should probably not exist here, but be moved
         // down to relevant sub-types.
 
-        T* borrow() const G_NOEXCEPT
+        inline T* borrow() const G_NOEXCEPT
         {
             return this->p;
         }
@@ -81,7 +81,7 @@ namespace greenlet { namespace refs {
             return reinterpret_cast<PyObject*>(this->p);
         }
 
-        T* operator->() const G_NOEXCEPT
+        inline T* operator->() const G_NOEXCEPT
         {
             return this->p;
         }
@@ -457,18 +457,17 @@ namespace greenlet { namespace refs {
     {
     private:
         G_NO_ASSIGNMENT_OF_CLS(ImmortalObject);
-
+    public:
         explicit ImmortalObject(PyObject* it) : PyObjectPointer<>(it)
         {
         }
 
-    public:
         static ImmortalObject consuming(PyObject* it)
         {
             return ImmortalObject(it);
         }
 
-        operator PyObject*() const
+        inline operator PyObject*() const
         {
             return this->p;
         }
@@ -734,7 +733,7 @@ namespace greenlet { namespace refs {
             return &this->p;
         }
 
-        operator PyObject*() const
+        inline operator PyObject*() const
         {
             return this->p;
         }
@@ -848,7 +847,7 @@ namespace greenlet { namespace refs {
         {
         }
 
-        PyObject** operator&()
+        inline PyObject** operator&()
         {
             return &this->p;
         }
