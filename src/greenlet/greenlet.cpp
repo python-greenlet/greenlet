@@ -692,6 +692,9 @@ std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
 
 
 class SwitchingState {
+public:
+    typedef greenlet::PythonAllocator<SwitchingState> allocator_t;
+    static allocator_t allocator;
 private:
     // We are owned by a greenlet that serves as the target;
     // we live as long as it does and so don't need to own it.
@@ -730,8 +733,7 @@ private:
         kwargs.CLEAR();
     }
     G_NO_COPIES_OF_CLS(SwitchingState);
-    typedef greenlet::PythonAllocator<SwitchingState> allocator_t;
-    static allocator_t allocator;
+
 public:
 
     friend std::ostream& operator<<(std::ostream& os, const SwitchingState& s)
@@ -742,18 +744,8 @@ public:
         return os;
     }
 
-    static void* operator new(size_t count)
-    {
-        UNUSED(count);
-        assert(count == sizeof(SwitchingState));
-        return SwitchingState::allocator.allocate(1);
-    }
-
-    static void operator delete(void* ptr)
-    {
-        return SwitchingState::allocator.deallocate(static_cast<SwitchingState*>(ptr),
-                                                    1);
-    }
+    static void* operator new(size_t count);
+    static void operator delete(void* ptr);
 
     SwitchingState(const BorrowedGreenlet& target,
                    const OwnedObject& args,
@@ -1478,6 +1470,19 @@ XXX: The above is outdated; rewrite.
     }
 
 };
+
+void* SwitchingState::operator new(size_t count)
+{
+    UNUSED(count);
+    assert(count == sizeof(SwitchingState));
+    return SwitchingState::allocator.allocate(1);
+}
+
+void SwitchingState::operator delete(void* ptr)
+{
+    return SwitchingState::allocator.deallocate(static_cast<SwitchingState*>(ptr),
+                                                1);
+}
 
 
 
