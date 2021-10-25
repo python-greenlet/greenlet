@@ -831,16 +831,6 @@ public:
         return this->target;
     }
 
-    Py_ssize_t len_kwargs()
-    {
-        return PyDict_Size(this->kwargs.borrow());
-    }
-
-    Py_ssize_t len_args()
-    {
-        return PySequence_Length(this->args.borrow());
-    }
-
     inline bool has_arguments()
     {
         return this->args || this->kwargs;
@@ -1260,10 +1250,9 @@ protected:
                 // goes away after we switch back to the parent.
                 // See test_dealloc_switch_args_not_lost
                 PyErrPieces clear_error;
-                result = single_result(this->result_from_switch_args());
+                result = single_result(this->convert_switch_args_to_result());
             }
-            this->args.CLEAR();
-            this->kwargs.CLEAR();
+            this->release_args();
             // cerr << "Finished greenlet " << this->target.borrow() << " with result ";
             // PyObject_Print(result.borrow(), stderr, 0);
             // cerr << endl << "Refcount: " << result.REFCNT();
@@ -1483,7 +1472,10 @@ XXX: The above is outdated; rewrite.
                             err.second.second,
                             this->target) < 0) {
                 /* Turn trace errors into switch throws */
-                // TODO: Turn this into a throw
+                // TODO: Turn this into a throw?
+                // Though that invoked arbitrary Python code, it
+                // couldn't switch back to this object and *also*
+                // throw an exception, so the args won't have changed.
                 this->release_args();
                 return OwnedObject();
             }
@@ -1492,32 +1484,48 @@ XXX: The above is outdated; rewrite.
 
         //    Py_DECREF(origin);
 
-        /* We need to figure out what values to pass to the target greenlet
-           based on the arguments that have been passed to greenlet.switch(). If
-           switch() was just passed an arg tuple, then we'll just return that.
-           If only keyword arguments were passed, then we'll pass the keyword
-           argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
-           return both. */
-        if(PyErr_Occurred()) {
+
+        if (PyErr_Occurred()) {
+            // TODO: Turn this into a throw?
             return OwnedObject();
         }
-        OwnedObject result(this->result_from_switch_args());
-        this->release_args();
-        return result;
+
+        return this->convert_switch_args_to_result();
     }
 
-    OwnedObject result_from_switch_args()
+    /**
+     * CAUTION: May invoke arbitrary Python code.
+     *
+     * Figure out what the result of ``greenlet.switch(arg, kwargs)``
+     * should be and returns it. This also releases the arguments.
+     *
+     * If switch() was just passed an arg tuple, then we'll just return that.
+     * If only keyword arguments were passed, then we'll pass the keyword
+     * argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
+     * return both.
+     */
+    OwnedObject convert_switch_args_to_result()
     {
-        if (!this->kwargs) {
-            return this->args;
+        // Because this may invoke arbitrary Python code, which could
+        // result in switching back to us, we need to get the
+        // arguments locally.
+
+        OwnedObject args = this->args;
+        OwnedObject kwargs = this->kwargs;
+        this->release_args();
+        // We shouldn't be called twice for the same switch.
+        assert(args || kwargs);
+
+        if (!kwargs) {
+            return args;
         }
 
-        if (!len_kwargs()) {
-            return this->args;
+        if (!PyDict_Size(kwargs.borrow())) {
+            return args;
         }
 
-        if (!len_args()) {
-            return this->kwargs;
+        if (!PySequence_Length(args.borrow())) {
+            return kwargs;
         }
 
         return OwnedObject::consuming(PyTuple_Pack(2, args.borrow(), kwargs.borrow()));

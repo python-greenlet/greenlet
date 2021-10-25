@@ -513,6 +513,19 @@ class TestGreenlet(TestCase):
 
     def test_tuple_subclass(self):
         # XXX: This is failing on Python 2 with a SystemError: error return without exception set
+
+        # The point of this test is to see what happens when a custom
+        # tuple subclass is used as an object passed directly to the C
+        # function ``green_switch``; part of ``green_switch`` checks
+        # the ``len()`` of the ``args`` tuple, and that can call back
+        # into Python. Here, when it calls back into Python, we
+        # recursively enter ``green_switch`` again.
+
+        # This test is really only relevant on Python 2. The builtin
+        # `apply` function directly passes the given args tuple object
+        # to the underlying function, whereas the Python 3 version
+        # unpacks and repacks into an actual tuple. This could still
+        # happen using the C API on Python 3 though.
         if sys.version_info[0] > 2:
             # There's no apply in Python 3.x
             def _apply(func, a, k):

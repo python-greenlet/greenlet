@@ -189,10 +189,10 @@ namespace greenlet { namespace refs {
             return result;
         }
 
-        OwnedReference() : OwnedReference<T>(nullptr)
+        OwnedReference() : PyObjectPointer<T>(nullptr)
         {}
 
-        OwnedReference(const PyObjectPointer<>& other) : OwnedReference(nullptr)
+        OwnedReference(const PyObjectPointer<>& other) : PyObjectPointer<T>(nullptr)
         {
             this->p = other.borrow();
             Py_XINCREF(this->p);
