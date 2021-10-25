@@ -742,6 +742,41 @@ class TestGreenlet(TestCase):
         result = child.switch()
         self.assertEqual(result, (42, 24))
 
+    def test_switch_to_dead_greenlet_with_unstarted_perverse_parent(self):
+        class Parent(greenlet):
+            def __getattribute__(self, name):
+                if name == 'run':
+                    raise SomeError
+
+
+        parent_never_started = Parent()
+        seen = []
+        child = greenlet(lambda: seen.append(42), parent_never_started)
+        # Because we automatically start the parent when the child is
+        # finished
+        with self.assertRaises(SomeError):
+            child.switch()
+
+        self.assertEqual(seen, [42])
+
+        with self.assertRaises(SomeError):
+            child.switch()
+        self.assertEqual(seen, [42])
+
+    def test_switch_to_dead_greenlet_reparent(self):
+        seen = []
+        parent_never_started = greenlet(lambda: seen.append(24))
+        child = greenlet(lambda: seen.append(42))
+
+        child.switch()
+        self.assertEqual(seen, [42])
+
+        child.parent = parent_never_started
+        # This actually is the same as switching to the parent.
+        result = child.switch()
+        self.assertIsNone(result)
+        self.assertEqual(seen, [42, 24])
+
 
 class TestGreenletSetParentErrors(TestCase):
     def test_threaded_reparent(self):

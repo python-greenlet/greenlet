@@ -44,7 +44,7 @@ extern PyTypeObject PyGreenlet_Type;
 typedef struct _PyMainGreenlet
 {
     PyGreenlet super;
-    greenlet::ThreadState* thread_state;
+    greenlet::ThreadState* volatile thread_state;
 } PyMainGreenlet;
 
 // GCC and clang support mixing designated and non-designated

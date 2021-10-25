@@ -845,8 +845,6 @@ public:
         const OwnedGreenlet& g(target);
         PyGreenlet* owner(this->thread_state.borrow_current());
 
-        // XXX: This is only defined in slp_platformselect.h, so
-        // defining this function first breaks it.
 #ifdef SLP_BEFORE_RESTORE_STATE
         SLP_BEFORE_RESTORE_STATE();
 #endif
@@ -907,11 +905,8 @@ public:
         // TODO: Give the objects an API to determine if they belong
         // to a dead thread.
         BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(target);
-        // cerr << "Greenlet " << this->target.borrow()
-        //      << " bound to main greenlet " << main_greenlet.borrow()
-        //      << " with state " << main_greenlet->thread_state
-        //      << endl;
         if (main_greenlet && !main_greenlet->thread_state) {
+            this->release_args();
             PyErr_SetString(
                 mod_globs.PyExc_GreenletError,
                 "cannot switch to a different thread (which happens to have exited)");
@@ -933,8 +928,6 @@ public:
 
 
         if (!main_greenlet || main_greenlet != state.borrow_main_greenlet()) {
-            //Py_XDECREF(args);
-            //Py_XDECREF(kwargs);
             this->release_args();
             PyErr_SetString(mod_globs.PyExc_GreenletError,
                             main_greenlet ?
@@ -942,9 +935,9 @@ public:
                             "cannot switch to a garbage collected greenlet");
             return OwnedObject();
         }
-
+#ifndef NDEBUG
         const BorrowedGreenlet origin(state.borrow_current());
-
+#endif
 
         /* find the real target by ignoring dead greenlets,
            and if necessary starting a greenlet. */
@@ -957,13 +950,9 @@ public:
         // into g_switch() if it's not ourself.
         bool target_was_me = true;
 
-        //cerr << "Begin search for greenlet to switch with me: " << target << endl;
         while (target) {
 
             if (PyGreenlet_ACTIVE(target)) {
-                // cerr << "\tSwitch to active greenlet " << target
-                //      << "(me: " << this->target.borrow() << ")"
-                //      << endl;
                 if (!target_was_me) {
                     // TODO: A more elegant way to move the arguments.
                     target->switching_state->set_arguments(this->args, this->kwargs);
@@ -975,13 +964,15 @@ public:
             }
             if (!PyGreenlet_STARTED(target)) {
                 void* dummymarker;
-                // cerr << "\tSwitch to unstarted greenlet " << target << "(me: " << this->target.borrow() << ")" << endl;
                 if (!target_was_me) {
-                    // XXX This should be a crasher, right? Is this // code path even exercised?
-                    assert(target->switching_state);
-                    target->switching_state->set_arguments(this->args, this->kwargs);
-                    this->args.CLEAR();
-                    this->kwargs.CLEAR();
+                    if (!target->switching_state) {
+                        target->switching_state = new SwitchingState(target, this->args, this->kwargs);
+                    }
+                    else {
+                        assert(target->switching_state);
+                        target->switching_state->set_arguments(this->args, this->kwargs);
+                    }
+                    this->release_args();
                 }
 
                 err = target->switching_state->g_initialstub(&dummymarker);
@@ -997,7 +988,7 @@ public:
                 }
                 break;
             }
-            // cerr << "\tMoving search to parent " << target->parent <<  "(me: " << this->target.borrow() << ")" << endl;
+
             target = target->parent;
             target_was_me = false;
         }

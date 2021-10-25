@@ -822,9 +822,11 @@ namespace greenlet { namespace refs {
                     throw PyErrOccurred();
                 }
                 /* Normalize to raise <class>, <instance> */
-                instance = type;
+                this->instance = this->type;
+#ifndef NDEBUG
                 Py_ssize_t type_count = Py_REFCNT(Py_TYPE(instance.borrow()));
-                type = PyExceptionInstance_Class(instance.borrow());
+#endif
+                this->type = PyExceptionInstance_Class(instance.borrow());
                 assert(type.REFCNT() == type_count + 1);
             }
             else {
