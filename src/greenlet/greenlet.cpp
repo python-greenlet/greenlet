@@ -726,7 +726,51 @@ private:
     // TODO: Use something better, a custom class probably.
     // Also TODO: Switch away from integer error codes and to enums,
     // or throw exceptions when possible.
-    typedef std::pair<int, std::pair<SwitchingState*, OwnedGreenlet> > switchstack_result_t;
+    struct switchstack_result_t
+    {
+        int status;
+        SwitchingState* the_state_that_switched;
+        OwnedGreenlet origin_greenlet;
+
+        switchstack_result_t()
+            : status(0),
+              the_state_that_switched(nullptr)
+        {}
+
+        switchstack_result_t(int err)
+            : status(err),
+              the_state_that_switched(nullptr)
+        {}
+
+        switchstack_result_t(int err, SwitchingState* state, OwnedGreenlet& origin)
+            : status(err),
+              the_state_that_switched(state),
+              origin_greenlet(origin)
+        {
+        }
+
+        switchstack_result_t(int err, SwitchingState* state, const BorrowedGreenlet& origin)
+            : status(err),
+              the_state_that_switched(state),
+              origin_greenlet(origin)
+        {
+        }
+
+        switchstack_result_t& operator=(const switchstack_result_t& other)
+        {
+            this->status = other.status;
+            this->the_state_that_switched = other.the_state_that_switched;
+            this->origin_greenlet = other.origin_greenlet;
+            return *this;
+        }
+    };
+
+    class GreenletStartedWhileInPython : public std::runtime_error
+    {
+    public:
+        GreenletStartedWhileInPython() : std::runtime_error("")
+        {}
+    };
 
     void release_args()
     {
@@ -935,8 +979,14 @@ public:
                     this->release_args();
                 }
 
-                err = target->switching_state->g_initialstub(&dummymarker);
-                if (err.first == 1) {
+                try {
+                    err = target->switching_state->g_initialstub(&dummymarker);
+                }
+                catch (const PyErrOccurred& e) {
+                    this->release_args();
+                    return OwnedObject();
+                }
+                catch (const GreenletStartedWhileInPython& e) {
                     // The greenlet was started sometime before this
                     // greenlet actually switched to it, i.e.,
                     // "concurrent" calls to switch() or throw().
@@ -953,15 +1003,16 @@ public:
             target_was_me = false;
         }
         // The this pointer and all other stack or register based
-        // variables are invalid now, at least in the g_switchstack
-        // case.
-        if (err.first < 0) {
+        // variables are invalid now, at least where things succeed
+        // above.
+        // But this one, probably not so much?
+        if (err.status < 0) {
             assert(PyErr_Occurred());
-            assert(!err.second.first);
-            assert(!err.second.second);
+            assert(!err.the_state_that_switched);
+            assert(!err.origin_greenlet);
             return OwnedObject();
         }
-        return err.second.first->g_switch_finish(err);
+        return err.the_state_that_switched->g_switch_finish(err);
     }
 
     virtual ~SwitchingState()
@@ -1050,9 +1101,7 @@ protected:
         */
         run = self.PyGetAttrString("run");
         if (!run) {
-            // TODO: Turn this into a throw
-            this->release_args();
-            return std::make_pair(-1, std::make_pair((SwitchingState*)nullptr, OwnedGreenlet()));
+            throw PyErrOccurred();
         }
 
         /* restore saved exception */
@@ -1062,13 +1111,11 @@ protected:
         /* recheck run_info in case greenlet reparented anywhere above */
         BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(self);
         if (!main_greenlet || main_greenlet != state.borrow_main_greenlet()) {
-            // TODO: Turn this into a throw
             PyErr_SetString(mod_globs.PyExc_GreenletError,
                             main_greenlet ?
                             "cannot switch to a different thread" :
                             "cannot switch to a garbage collected greenlet");
-            this->release_args();
-            return std::make_pair(-1, std::make_pair((SwitchingState*)nullptr, OwnedGreenlet()));
+            throw PyErrOccurred();
         }
 
         /* by the time we got here another start could happen elsewhere,
@@ -1084,7 +1131,7 @@ protected:
             assert(!this->args);
             assert(!this->kwargs);
             this->set_arguments(args, kwargs);
-            return std::make_pair(1, std::make_pair((SwitchingState*)nullptr, OwnedGreenlet()));
+            throw GreenletStartedWhileInPython();
         }
         }
 
@@ -1125,9 +1172,14 @@ protected:
         /* returns twice!
            The 1st time with ``err == 1``: we are in the new greenlet.
            This one owns a greenlet that used to be current.
-           The 2nd time with ``err <= 0``: back in the caller's greenlet
+           The 2nd time with ``err <= 0``: back in the caller's
+           greenlet; this happens if the child finishes or switches
+           explicitly to us. Either way, the ``err`` variable is
+           created twice at the same memory location, but possibly
+           having different ``origin`` values. Note that it's not
+           constructed for the second time until the switch actually happens.`
         */
-        if (err.first == 1) {
+        if (err.status == 1) {
             /* in the new greenlet */
             assert(this->thread_state.borrow_current() == this->target);
             /* stack variables from above are no good and also will not unwind! */
@@ -1150,12 +1202,13 @@ protected:
             assert(!this->args);
             assert(!this->kwargs);
             {
-                OwnedGreenlet origin(OwnedGreenlet::consuming(err.second.second.relinquish_ownership()));
+                // The first switch we need to manually call the trace
+                // function here instead of in g_switch_finish.
                 OwnedObject tracefunc(state.get_tracefunc());
                 if (tracefunc) {
                     if (g_calltrace(tracefunc,
                                     args ? mod_globs.event_switch : mod_globs.event_throw,
-                                    origin,
+                                    err.origin_greenlet,
                                     self) < 0) {
                         /* Turn trace errors into switch throws */
                         args.CLEAR();
@@ -1163,6 +1216,11 @@ protected:
                     }
                 }
             }
+            // We no longer need the origin, it was only here for
+            // tracing.
+            // We may never actually exit this stack frame so we need
+            // to explicitly clear it.
+            err.origin_greenlet.CLEAR();
 
             OwnedObject result;
             if (!args) {
@@ -1194,7 +1252,7 @@ protected:
             /* jump back to parent */
             self->stack_start = NULL; /* dead */
             for (PyGreenlet* parent = self->parent; parent != NULL; parent = parent->parent) {
-                // XXX: We need to somewhere consume a reference to
+                // We need to somewhere consume a reference to
                 // the result; in most cases we'll never have control
                 // back in this stack frame again. Calling
                 // green_switch actually adds another reference!
@@ -1213,7 +1271,6 @@ protected:
                 //TODO: Move semantics or better way of setting the
                 // argument to express this.
                 result.CLEAR();
-                // cerr << "Refcount after clearing " << parent->switching_state->args.REFCNT() << endl;
                 result = parent->switching_state->g_switch();
 
                 /* Return here means switch to parent failed,
@@ -1225,21 +1282,22 @@ protected:
             /* We ran out of parents, cannot continue */
             PyErr_WriteUnraisable(self.borrow_o());
             Py_FatalError("greenlets cannot continue");
-            return err;
+            // This is actually unreachable
+            throw std::runtime_error("greenlets cannot continue");
         }
         // The child will take care of decrefing this.
         run.relinquish_ownership();
-        // fprintf(stderr, "Switchstack result thinks target is %p\n", err.second->target.borrow());
-        // fprintf(stderr, "Parent greenlet thinks origin is %p\n", this->origin.borrow());
-        // fprintf(stderr, "Switchstack result thinks origin is %p\n",
-        // err.second->origin.borrow());
+        // In contrast, notice that we're keeping the origin greenlet
+        // around as an owned reference; we need it to call the trace
+        // function for the switch back into the parent. It was only
+        // captured at the time the switch actually happened, though,
+        // so we haven't been keeping an extra reference around this
+        // whole time.
 
-        // TODO: We're keeping the origin greenlet around as an owned reference.
-        //assert(!err.second.second);
-        //err.second = this;
         /* back in the parent */
-        if (err.first < 0) {
+        if (err.status < 0) {
             /* start failed badly, restore greenlet state */
+            // XXX: This code path is not tested.
             self->stack_start = NULL;
             self->stack_stop = NULL;
             self->stack_prev = NULL;
@@ -1286,16 +1344,14 @@ XXX: The above is outdated; rewrite.
     */
     switchstack_result_t g_switchstack(void)
     {
-        // cerr << "g_switchstack: making " << this->target.borrow() << " current." << endl;
         { /* save state */
             PyGreenlet* current(thread_state.borrow_current());
-            // cerr << "g_switchstack: current: " << current << endl;
             if (current == target) {
                 // Hmm, nothing to do.
                 // TODO: Does this bypass trace events that are
                 // important?
-                return std::make_pair(0,
-                                      std::make_pair(this, thread_state.borrow_current()));
+                return switchstack_result_t(0,
+                                            this, thread_state.borrow_current());
             }
             PyThreadState* tstate = PyThreadState_GET();
             current->recursion_depth = tstate->recursion_depth;
@@ -1327,9 +1383,13 @@ XXX: The above is outdated; rewrite.
 #endif
             switching_thread_state = this->target;
         }
+        // If this is the first switch into a greenlet, this will
+        // return twice, once with 1 in the new greenlet, once with 0
+        // in the origin.
         int err = slp_switch();
 
         if (err < 0) { /* error */
+            // XXX: This code path is not tested.
             BorrowedGreenlet current(GET_THREAD_STATE().borrow_current());
             current->top_frame = NULL;
             green_clear_exc(current);
@@ -1340,8 +1400,9 @@ XXX: The above is outdated; rewrite.
             // It's important to make sure not to actually return an
             // owned greenlet here, no telling how long before it
             // could be cleaned up.
-            return std::make_pair(err, std::make_pair(switching_thread_state->switching_state,
-                                                      OwnedGreenlet()));
+            // TODO: Can this be a throw? How stable is the stack in
+            // an error case like this?
+            return switchstack_result_t(err);
         }
 
         // No stack-based variables are valid anymore.
@@ -1350,33 +1411,15 @@ XXX: The above is outdated; rewrite.
         // compiler caching it from earlier.
         SwitchingState* after_switch = switching_thread_state->switching_state;
         OwnedGreenlet origin = after_switch->g_switchstack_success();
-        // if(err == 0) {
-        //     // in the parent, the second return.
-        //     // we don't need the origin anymore.
-        //     origin.CLEAR();
-        // }
-        // XXX: The above isn't true, it breaks tracing.
         switching_thread_state = NULL;
-        return std::make_pair(err,
-                              std::make_pair(after_switch,
-                                             origin));
+        return switchstack_result_t(err, after_switch, origin);
     }
 
     OwnedObject g_switch_finish(const switchstack_result_t& err)
     {
-        /* For a very short time, immediately after the 'atomic'
-           g_switchstack() call, global variables are in a known state.
-           We need to save everything we need, before it is destroyed
-           by calls into arbitrary Python code.
-
-           XXX: This is no longer really necessary since we don't use
-           globals.
-           XXX: However, we probably have the same stack issues as
-           g_switchstack itself!
-        */
         ThreadState& state = thread_state;
 
-        if (err.first < 0) {
+        if (err.status < 0) {
             /* Turn switch errors into switch throws */
             assert(PyErr_Occurred());
             return OwnedObject();
@@ -1389,7 +1432,7 @@ XXX: The above is outdated; rewrite.
         if (tracefunc) {
             if (g_calltrace(tracefunc,
                             this->args ? mod_globs.event_switch : mod_globs.event_throw,
-                            err.second.second,
+                            err.origin_greenlet,
                             this->target) < 0) {
                 /* Turn trace errors into switch throws */
                 // TODO: Turn this into a throw?
