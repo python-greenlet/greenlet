@@ -14,6 +14,9 @@
 typedef unsigned long long uint64_t;
 typedef signed long long int64_t;
 typedef unsigned int uint32_t;
+// C++ defines NULL to be 0, which is ambiguous
+// with an integer in certain cases, and won't autoconvert to a
+// pointer in other cases.
 #define nullptr NULL
 #define G_HAS_METHOD_DELETE 0
 // Use G_EXPLICIT_OP as the prefix for operator methods
