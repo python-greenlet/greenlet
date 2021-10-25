@@ -690,11 +690,12 @@ std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
     return os;
 }
 
+// XXX: I wasn't able to get this to be a static member of the class
+// without getting linking errors on some platforms. I don't
+// understand why.
+static greenlet::PythonAllocator<SwitchingState> SwitchingStateAllocator;
 
 class SwitchingState {
-public:
-    typedef greenlet::PythonAllocator<SwitchingState> allocator_t;
-    static allocator_t allocator;
 private:
     // We are owned by a greenlet that serves as the target;
     // we live as long as it does and so don't need to own it.
@@ -744,8 +745,18 @@ public:
         return os;
     }
 
-    static void* operator new(size_t count);
-    static void operator delete(void* ptr);
+    static void* operator new(size_t count)
+    {
+        UNUSED(count);
+        assert(count == sizeof(SwitchingState));
+        return SwitchingStateAllocator.allocate(1);
+    }
+
+    static void operator delete(void* ptr)
+    {
+        return SwitchingStateAllocator.deallocate(static_cast<SwitchingState*>(ptr),
+                                                  1);
+    }
 
     SwitchingState(const BorrowedGreenlet& target,
                    const OwnedObject& args,
@@ -1470,19 +1481,6 @@ XXX: The above is outdated; rewrite.
     }
 
 };
-
-void* SwitchingState::operator new(size_t count)
-{
-    UNUSED(count);
-    assert(count == sizeof(SwitchingState));
-    return SwitchingState::allocator.allocate(1);
-}
-
-void SwitchingState::operator delete(void* ptr)
-{
-    return SwitchingState::allocator.deallocate(static_cast<SwitchingState*>(ptr),
-                                                1);
-}
 
 
 

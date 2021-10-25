@@ -68,10 +68,7 @@ namespace greenlet
     // (Python's allocators require the GIL).
     template <class T>
     struct PythonAllocator : public std::allocator<T> {
-        // As a reminder: the `delete` expression first executes
-        // the destructors, and then it calls the static ``operator delete``
-        // on the type to release the storage. That's what our dispose()
-        // mimics.
+
         PythonAllocator(const PythonAllocator& other)
             : std::allocator<T>()
         {
@@ -111,12 +108,6 @@ namespace greenlet
                 PyMem_Free(p);
         }
 
-        // Destroy and deallocate in one step.
-        void dispose(T* other)
-        {
-            this->destroy(other);
-            this->deallocate(other, 1);
-        }
     };
 
     typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
