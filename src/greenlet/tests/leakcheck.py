@@ -39,6 +39,7 @@ RUNNING_ON_APPVEYOR = os.environ.get('APPVEYOR')
 RUNNING_ON_CI = RUNNING_ON_TRAVIS or RUNNING_ON_APPVEYOR
 RUNNING_ON_MANYLINUX = os.environ.get('GREENLET_MANYLINUX')
 SKIP_LEAKCHECKS = RUNNING_ON_MANYLINUX or os.environ.get('GREENLET_SKIP_LEAKCHECKS')
+SKIP_FAILING_LEAKCHECKS = os.environ.get('GREENLET_SKIP_FAILING_LEAKCHECKS')
 
 def ignores_leakcheck(func):
     """
@@ -60,10 +61,41 @@ def fails_leakcheck(func):
     Mark that the function is known to leak.
     """
     func.fails_leakcheck = True
+    if SKIP_FAILING_LEAKCHECKS:
+        func = unittest.skip("Skipping known failures")(func)
     return func
 
 class LeakCheckError(AssertionError):
     pass
+
+if hasattr(sys, 'getobjects'):
+    # In a Python build with ``--with-trace-refs``, make objgraph
+    # trace *all* the objects, not just those that are tracked by the
+    # GC
+    class _MockGC(object):
+        def get_objects(self):
+            return sys.getobjects(0) # pylint:disable=no-member
+        def __getattr__(self, name):
+            return getattr(gc, name)
+    objgraph.gc = _MockGC()
+    fails_strict_leakcheck = fails_leakcheck
+else:
+    def fails_strict_leakcheck(func):
+        """
+        Decorator for a function that is known to fail when running
+        strict (``sys.getobjects()``) leakchecks.
+
+        This type of leakcheck finds all objects, even those, such as
+        strings, which are not tracked by the garbage collector.
+        """
+        return func
+
+class ignores_types_in_strict_leakcheck(object):
+    def __init__(self, types):
+        self.types = types
+    def __call__(self, func):
+        func.leakcheck_ignore_types = self.types
+        return func
 
 class _RefCountChecker(object):
 
@@ -72,12 +104,12 @@ class _RefCountChecker(object):
     # presumably.
     IGNORED_TYPES = () #(tuple, dict, types.FrameType, types.TracebackType)
 
-
     def __init__(self, testcase, function):
         self.testcase = testcase
         self.function = function
         self.deltas = []
         self.peak_stats = {}
+        self.ignored_types = ()
 
         # The very first time we are called, we have already been
         # self.setUp() by the test runner, so we don't need to do it again.
@@ -91,7 +123,7 @@ class _RefCountChecker(object):
         ):
             return False
         kind = type(obj)
-        if kind in self.IGNORED_TYPES:
+        if kind in self.ignored_types or kind in self.IGNORED_TYPES:
             return False
 
         return True
@@ -194,6 +226,7 @@ class _RefCountChecker(object):
         expect_failure = getattr(self.function, 'fails_leakcheck', False)
         if expect_failure:
             self.testcase.expect_greenlet_leak = True
+        self.ignored_types = getattr(self.function, "leakcheck_ignore_types", ())
 
         # Capture state before; the incremental will be
         # updated by each call to _growth_after

@@ -11,10 +11,20 @@ from greenlet import greenlet
 from greenlet import getcurrent
 from . import TestCase
 
+
 try:
     from contextvars import Context
     from contextvars import ContextVar
     from contextvars import copy_context
+    # From the documentation:
+    #
+    # Important: Context Variables should be created at the top module
+    # level and never in closures. Context objects hold strong
+    # references to context variables which prevents context variables
+    # from being properly garbage collected.
+    ID_VAR = ContextVar("id", default=None)
+    VAR_VAR = ContextVar("var", default=None)
+    ContextVar = None
 except ImportError:
     Context = ContextVar = copy_context = None
 
@@ -24,7 +34,8 @@ class ContextVarsTests(TestCase):
     def _new_ctx_run(self, *args, **kwargs):
         return copy_context().run(*args, **kwargs)
 
-    def _increment(self, greenlet_id, ctx_var, callback, counts, expect):
+    def _increment(self, greenlet_id, callback, counts, expect):
+        ctx_var = ID_VAR
         if expect is None:
             self.assertIsNone(ctx_var.get())
         else:
@@ -35,8 +46,7 @@ class ContextVarsTests(TestCase):
             callback()
 
     def _test_context(self, propagate_by):
-        id_var = ContextVar("id", default=None)
-        id_var.set(0)
+        ID_VAR.set(0)
 
         callback = getcurrent().switch
         counts = dict((i, 0) for i in range(5))
@@ -48,7 +58,6 @@ class ContextVarsTests(TestCase):
                     self._increment
                 ) if propagate_by == "run" else self._increment,
                 greenlet_id=i,
-                ctx_var=id_var,
                 callback=callback,
                 counts=counts,
                 expect=(
@@ -66,7 +75,7 @@ class ContextVarsTests(TestCase):
                 let.gr_context = getcurrent().gr_context
 
         for i in range(2):
-            counts[id_var.get()] += 1
+            counts[ID_VAR.get()] += 1
             for let in lets:
                 let.switch()
 
@@ -85,7 +94,11 @@ class ContextVarsTests(TestCase):
             # and there's no context "underneath". When not using run(),
             # gr_context still reflects the context the greenlet was
             # running in.
-            self.assertEqual(let.gr_context is None, propagate_by == "run")
+            if propagate_by == 'run':
+                self.assertIsNone(let.gr_context)
+            else:
+                self.assertIsNotNone(let.gr_context)
+
 
         if propagate_by == "share":
             self.assertEqual(counts, {0: 1, 1: 1, 2: 1, 3: 1, 4: 6})
@@ -126,47 +139,47 @@ class ContextVarsTests(TestCase):
 
     def test_context_assignment_while_running(self):
         # pylint:disable=too-many-statements
-        id_var = ContextVar("id", default=None)
+        ID_VAR.set(None)
 
         def target():
-            self.assertIsNone(id_var.get())
+            self.assertIsNone(ID_VAR.get())
             self.assertIsNone(gr.gr_context)
 
             # Context is created on first use
-            id_var.set(1)
+            ID_VAR.set(1)
             self.assertIsInstance(gr.gr_context, Context)
-            self.assertEqual(id_var.get(), 1)
-            self.assertEqual(gr.gr_context[id_var], 1)
+            self.assertEqual(ID_VAR.get(), 1)
+            self.assertEqual(gr.gr_context[ID_VAR], 1)
 
             # Clearing the context makes it get re-created as another
             # empty context when next used
             old_context = gr.gr_context
             gr.gr_context = None  # assign None while running
-            self.assertIsNone(id_var.get())
+            self.assertIsNone(ID_VAR.get())
             self.assertIsNone(gr.gr_context)
-            id_var.set(2)
+            ID_VAR.set(2)
             self.assertIsInstance(gr.gr_context, Context)
-            self.assertEqual(id_var.get(), 2)
-            self.assertEqual(gr.gr_context[id_var], 2)
+            self.assertEqual(ID_VAR.get(), 2)
+            self.assertEqual(gr.gr_context[ID_VAR], 2)
 
             new_context = gr.gr_context
             getcurrent().parent.switch((old_context, new_context))
             # parent switches us back to old_context
 
-            self.assertEqual(id_var.get(), 1)
+            self.assertEqual(ID_VAR.get(), 1)
             gr.gr_context = new_context  # assign non-None while running
-            self.assertEqual(id_var.get(), 2)
+            self.assertEqual(ID_VAR.get(), 2)
 
             getcurrent().parent.switch()
             # parent switches us back to no context
-            self.assertIsNone(id_var.get())
+            self.assertIsNone(ID_VAR.get())
             self.assertIsNone(gr.gr_context)
             gr.gr_context = old_context
-            self.assertEqual(id_var.get(), 1)
+            self.assertEqual(ID_VAR.get(), 1)
 
             getcurrent().parent.switch()
             # parent switches us back to no context
-            self.assertIsNone(id_var.get())
+            self.assertIsNone(ID_VAR.get())
             self.assertIsNone(gr.gr_context)
 
         gr = greenlet(target)
@@ -177,9 +190,9 @@ class ContextVarsTests(TestCase):
         self.assertIsNone(gr.gr_context)
         old_context, new_context = gr.switch()
         self.assertIs(new_context, gr.gr_context)
-        self.assertEqual(old_context[id_var], 1)
-        self.assertEqual(new_context[id_var], 2)
-        self.assertEqual(new_context.run(id_var.get), 2)
+        self.assertEqual(old_context[ID_VAR], 1)
+        self.assertEqual(new_context[ID_VAR], 2)
+        self.assertEqual(new_context.run(ID_VAR.get), 2)
         gr.gr_context = old_context  # assign non-None while suspended
         gr.switch()
         self.assertIs(gr.gr_context, new_context)
@@ -198,9 +211,9 @@ class ContextVarsTests(TestCase):
 
     def test_context_assignment_different_thread(self):
         import threading
-
+        VAR_VAR.set(None)
         ctx = Context()
-        var = ContextVar("var", default=None)
+
         is_running = threading.Event()
         should_suspend = threading.Event()
         did_suspend = threading.Event()
@@ -208,12 +221,12 @@ class ContextVarsTests(TestCase):
         holder = []
 
         def greenlet_in_thread_fn():
-            var.set(1)
+            VAR_VAR.set(1)
             is_running.set()
             should_suspend.wait(10)
-            var.set(2)
+            VAR_VAR.set(2)
             getcurrent().parent.switch()
-            holder.append(var.get())
+            holder.append(VAR_VAR.get())
 
         def thread_fn():
             gr = greenlet(greenlet_in_thread_fn)
@@ -243,7 +256,7 @@ class ContextVarsTests(TestCase):
 
         # OK to access and modify context if greenlet is suspended
         self.assertIs(gr.gr_context, ctx)
-        self.assertEqual(gr.gr_context[var], 2)
+        self.assertEqual(gr.gr_context[VAR_VAR], 2)
         gr.gr_context = None
 
         should_exit.set()

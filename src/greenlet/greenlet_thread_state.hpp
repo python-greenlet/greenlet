@@ -328,8 +328,7 @@ public:
                 // another way to report on it.
                 NewReference gc(PyImport_ImportModule("gc"));
                 if (gc) {
-                    OwnedObject get_referrers = gc.PyGetAttrString("get_referrers");
-                    assert(get_referrers);
+                    OwnedObject get_referrers = gc.PyRequireAttr("get_referrers");
                     OwnedList refs(get_referrers.PyCall(old_main_greenlet));
                     if (refs && refs.empty()) {
                         assert(refs.REFCNT() == 1);

@@ -222,6 +222,95 @@ using greenlet::Require;
 //     greenlet.tests.test_leaks.JustDelMe                          1      1
 //     -------------------------------------------------------  -----   ----
 //     total                                                       84    251
+//
+// Current leakage:
+//
+// tuple                 2880       +21
+// function              6422       +17
+// list                  1756       +14
+// cell                   718       +10
+// dict                  3655        +9
+// getset_descriptor      964        +6
+// method                 103        +5
+// weakref               1586        +4
+// type                   951        +4
+// TheGenlet               40        +4
+//   sum detail refcount=56950    sys refcount=384079   change=618
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.cell                                               10     18
+//     builtins.dict                                                9     77
+//     builtins.function                                           17     34
+//     builtins.getset_descriptor                                   6      6
+//     builtins.list                                               14     39
+//     builtins.list_iterator                                       3      3
+//     builtins.method                                              5      5
+//     builtins.method_descriptor                                   0      8
+//     builtins.set                                                 2      2
+//     builtins.tuple                                              21     25
+//     builtins.type                                                4     35
+//     builtins.weakref                                             4      4
+//     greenlet.greenlet                                            1      1
+//     greenlet.main_greenlet                                       1     16
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.TheGenlet               4     29
+//     greenlet.tests.test_greenlet.convoluted                      1      2
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     -------------------------------------------------------  -----   ----
+//     total                                                      105  308
+//
+// NOTE: All the above was actually in a PyDebug build, but without
+// --with-trace-refs, so sys.getobjects() wasn't available and I
+// patched zope.testrunner to use gc.getobjects(). If I actually make
+// the build correct and use sys.getobjects, I see this:
+//
+//   Ran 113 tests with 0 failures, 0 errors and 1 skipped in 7.422 seconds.
+// tuple                 2796       +21
+// function              6354       +17
+// list                  1700       +14
+// cell                   678       +10
+// dict                  3619        +9
+// getset_descriptor      940        +6
+// method                  83        +5
+// weakref               1570        +4
+// type                   935        +4
+// TheGenlet               24        +4
+// Using getobjects
+//   sum detail refcount=343780   sys refcount=381719   change=618
+//     Leak details, changes in instances and refcounts by type/class:
+//     type/class                                               insts   refs
+//     -------------------------------------------------------  -----   ----
+//     builtins.NoneType                                            0      6
+//     builtins.bool                                                0      2
+//     builtins.cell                                               10     18
+//     builtins.code                                                0     34
+//     builtins.dict                                               20     88
+//     builtins.frame                                              17     28
+//     builtins.function                                           17     34
+//     builtins.getset_descriptor                                   6      6
+//     builtins.int                                                 6     56
+//     builtins.list                                               14     39
+//     builtins.list_iterator                                       3      3
+//     builtins.method                                              5      5
+//     builtins.method_descriptor                                   0      8
+//     builtins.set                                                 2      2
+//     builtins.str                                                38    129
+//     builtins.tuple                                              27     46
+//     builtins.type                                                4     50
+//     builtins.weakref                                             4      4
+//     greenlet.greenlet                                            1      1
+//     greenlet.main_greenlet                                       1     16
+//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
+//     greenlet.tests.test_gc.object_with_finalizer                 1      1
+//     greenlet.tests.test_generator_nested.TheGenlet               4     29
+//     greenlet.tests.test_greenlet.convoluted                      1      2
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     -------------------------------------------------------  -----   ----
+//     total                                                      183    610
 
 using greenlet::refs::BorrowedObject;
 using greenlet::refs::BorrowedGreenlet;
@@ -351,6 +440,7 @@ public:
     const ImmortalObject PyExc_GreenletExit;
     const ImmortalObject empty_tuple;
     const ImmortalObject empty_dict;
+    const ImmortalObject str_run;
     Mutex* const thread_states_to_destroy_lock;
     greenlet::cleanup_queue_t thread_states_to_destroy;
 
@@ -361,6 +451,7 @@ public:
         PyExc_GreenletExit(0),
         empty_tuple(0),
         empty_dict(0),
+        str_run(0),
         thread_states_to_destroy_lock(0)
     {}
 
@@ -371,6 +462,7 @@ public:
         PyExc_GreenletExit(Require(PyErr_NewException("greenlet.GreenletExit", PyExc_BaseException, NULL))),
         empty_tuple(Require(PyTuple_New(0))),
         empty_dict(Require(PyDict_New())),
+        str_run(Require(Greenlet_Intern("run"))),
         thread_states_to_destroy_lock(new Mutex())
     {}
 
@@ -1099,7 +1191,7 @@ protected:
           self.run is the object to call in the new greenlet.
           This could run arbitrary python code and switch greenlets!
         */
-        run = self.PyGetAttrString("run");
+        run = self.PyGetAttr(mod_globs.str_run);
         if (!run) {
             throw PyErrOccurred();
         }
@@ -2821,7 +2913,7 @@ greenlet_internal_mod_init()
         // the exception of (possibly) ``getcurrent()``, this
         // shouldn't be encouraged so don't add new items here.
         for (const char* const* p = copy_on_greentype; *p; p++) {
-            OwnedObject o = m.PyRequireAttrString(*p);
+            OwnedObject o = m.PyRequireAttr(*p);
             PyDict_SetItemString(PyGreenlet_Type.tp_dict, *p, o.borrow());
         }
 

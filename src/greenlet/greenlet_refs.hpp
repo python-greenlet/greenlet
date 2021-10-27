@@ -47,6 +47,8 @@ namespace greenlet { namespace refs {
     typedef BorrowedReference<PyObject> BorrowedObject;
     typedef OwnedReference<PyObject> OwnedObject;
 
+    class ImmortalObject;
+
     // This is the base class for thnigs that can be done with a
     // PyObject pointer. It assumes nothing about memory management.
     // NOTE: Nothing is virtual, so subclasses shouldn't add new
@@ -121,8 +123,8 @@ namespace greenlet { namespace refs {
 
         inline OwnedObject PyStr() const G_NOEXCEPT;
         inline const char* as_str() const G_NOEXCEPT;
-        inline OwnedObject PyGetAttrString(const char* const name) const G_NOEXCEPT;
-        inline OwnedObject PyRequireAttrString(const char* const name) const;
+        inline OwnedObject PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT;
+        inline OwnedObject PyRequireAttr(const char* const name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(PyMainGreenlet* arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(const PyObject* arg) const G_NOEXCEPT;
@@ -496,14 +498,14 @@ namespace greenlet { namespace refs {
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyGetAttrString(const char* const name) const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T>::PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT
     {
         assert(this->p);
-        return OwnedObject::consuming(PyObject_GetAttrString(reinterpret_cast<PyObject*>(this->p), name));
+        return OwnedObject::consuming(PyObject_GetAttr(reinterpret_cast<PyObject*>(this->p), name));
     }
 
     template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyRequireAttrString(const char* const name) const
+    inline OwnedObject PyObjectPointer<T>::PyRequireAttr(const char* const name) const
     {
         assert(this->p);
         return OwnedObject::consuming(Require(PyObject_GetAttrString(this->p, name)));
