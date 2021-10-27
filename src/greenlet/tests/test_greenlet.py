@@ -12,7 +12,7 @@ from abc import ABCMeta, abstractmethod
 from greenlet import greenlet
 from . import TestCase
 from .leakcheck import fails_leakcheck
-from .leakcheck import fails_strict_leakcheck
+
 
 # We manually manage locks in many tests
 # pylint:disable=consider-using-with

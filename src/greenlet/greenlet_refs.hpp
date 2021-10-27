@@ -125,6 +125,7 @@ namespace greenlet { namespace refs {
         inline const char* as_str() const G_NOEXCEPT;
         inline OwnedObject PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT;
         inline OwnedObject PyRequireAttr(const char* const name) const;
+        inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(PyMainGreenlet* arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(const PyObject* arg) const G_NOEXCEPT;
@@ -464,6 +465,17 @@ namespace greenlet { namespace refs {
         {
         }
 
+        /**
+         * Become the new owner of the object. Does not change the
+         * reference count.
+         */
+        ImmortalObject& operator=(PyObject* it)
+        {
+            assert(this->p == nullptr);
+            this->p = it;
+            return *this;
+        }
+
         static ImmortalObject consuming(PyObject* it)
         {
             return ImmortalObject(it);
@@ -509,6 +521,13 @@ namespace greenlet { namespace refs {
     {
         assert(this->p);
         return OwnedObject::consuming(Require(PyObject_GetAttrString(this->p, name)));
+    }
+
+    template<typename T>
+    inline OwnedObject PyObjectPointer<T>::PyRequireAttr(const ImmortalObject& name) const
+    {
+        assert(this->p);
+        return OwnedObject::consuming(Require(PyObject_GetAttr(this->p, name)));
     }
 
     template<typename T>

@@ -14,6 +14,30 @@ import greenlet
 from . import TestCase
 from .leakcheck import fails_leakcheck
 
+try:
+    from sys import intern
+except ImportError:
+    # Python 2
+    pass
+
+assert greenlet.GREENLET_USE_GC # Option to disable this was removed in 1.0
+
+class HasFinalizerTracksInstances(object):
+    EXTANT_INSTANCES = set()
+    def __init__(self, msg):
+        self.msg = intern(msg)
+        self.EXTANT_INSTANCES.add(id(self))
+    def __del__(self):
+        self.EXTANT_INSTANCES.remove(id(self))
+    def __repr__(self):
+        return "<HasFinalizerTracksInstances at 0x%x %r>" % (
+            id(self), self.msg
+        )
+    @classmethod
+    def reset(cls):
+        cls.EXTANT_INSTANCES.clear()
+
+
 class TestLeaks(TestCase):
 
     def test_arg_refs(self):
@@ -35,9 +59,9 @@ class TestLeaks(TestCase):
             g.switch(**kwargs)
         self.assertEqual(sys.getrefcount(kwargs), 2)
 
-    assert greenlet.GREENLET_USE_GC # Option to disable this was removed in 1.0
 
-    def recycle_threads(self):
+    @staticmethod
+    def __recycle_threads():
         # By introducing a thread that does sleep we allow other threads,
         # that have triggered their __block condition, but did not have a
         # chance to deallocate their thread state yet, to finally do so.
@@ -62,7 +86,7 @@ class TestLeaks(TestCase):
             t.join(10)
             del t
         greenlet.getcurrent() # update ts_current
-        self.recycle_threads()
+        self.__recycle_threads()
         greenlet.getcurrent() # update ts_current
         gc.collect()
         greenlet.getcurrent() # update ts_current
@@ -85,7 +109,7 @@ class TestLeaks(TestCase):
             t.join(10)
             del t
         greenlet.getcurrent() # update ts_current
-        self.recycle_threads()
+        self.__recycle_threads()
         greenlet.getcurrent() # update ts_current
         gc.collect()
         greenlet.getcurrent() # update ts_current
@@ -103,33 +127,32 @@ class TestLeaks(TestCase):
 
         # For the test to be valid, even empty lists have to be tracked by the
         # GC
-        assert gc.is_tracked([])
 
+        assert gc.is_tracked([])
+        HasFinalizerTracksInstances.reset()
         greenlet.getcurrent()
         greenlets_before = self.count_objects(greenlet.greenlet, exact_kind=False)
 
         background_glet_running = threading.Event()
         background_glet_killed = threading.Event()
         background_greenlets = []
-        # To toggle debugging off and on.
-        class JustDelMe(object):
-            EXTANT_INSTANCES = set()
-            def __init__(self, msg):
-                self.msg = msg
-                self.EXTANT_INSTANCES.add(id(self))
-            def __del__(self):
-                self.EXTANT_INSTANCES.remove(id(self))
-            def __repr__(self):
-                return "<JustDelMe at 0x%x %r>" % (
-                    id(self), self.msg
-                )
 
+        # XXX: Switching this to a greenlet subclass that overrides
+        # run results in all callers failing the leaktest; that
+        # greenlet instance is leaked. There's a bound method for
+        # run() living on the stack of the greenlet in g_initialstub,
+        # and since we don't manually switch back to the background
+        # greenlet to let it "fall off the end" and exit the
+        # g_initialstub function, it never gets cleaned up. Making the
+        # garbage collector aware of this bound method (making it an
+        # attribute of the greenlet structure and traversing into it)
+        # doesn't help, for some reason.
         def background_greenlet():
             # Throw control back to the main greenlet.
-            jd = JustDelMe("DELETING STACK OBJECT")
+            jd = HasFinalizerTracksInstances("DELETING STACK OBJECT")
             greenlet._greenlet.set_thread_local(
                 'test_leaks_key',
-                JustDelMe("DELETING THREAD STATE"))
+                HasFinalizerTracksInstances("DELETING THREAD STATE"))
             # Explicitly keeping 'switch' in a local variable
             # breaks this test in all versions
             if explicit_reference_to_switch:
@@ -199,7 +222,7 @@ class TestLeaks(TestCase):
                 # TODO: Figure out how to make this work!
                 # The one on the stack is still leaking somehow
                 # in the non-manually-collect state.
-                self.assertEqual(JustDelMe.EXTANT_INSTANCES, set())
+                self.assertEqual(HasFinalizerTracksInstances.EXTANT_INSTANCES, set())
         else:
             # The explicit reference prevents us from collecting it
             # and it isn't always found by the GC either for some

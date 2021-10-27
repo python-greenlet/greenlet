@@ -40,6 +40,7 @@ RUNNING_ON_CI = RUNNING_ON_TRAVIS or RUNNING_ON_APPVEYOR
 RUNNING_ON_MANYLINUX = os.environ.get('GREENLET_MANYLINUX')
 SKIP_LEAKCHECKS = RUNNING_ON_MANYLINUX or os.environ.get('GREENLET_SKIP_LEAKCHECKS')
 SKIP_FAILING_LEAKCHECKS = os.environ.get('GREENLET_SKIP_FAILING_LEAKCHECKS')
+ONLY_FAILING_LEAKCHECKS = os.environ.get('GREENLET_ONLY_FAILING_LEAKCHECKS')
 
 def ignores_leakcheck(func):
     """
@@ -254,6 +255,8 @@ def wrap_refcount(method):
     def wrapper(self, *args, **kwargs): # pylint:disable=too-many-branches
         if getattr(self, 'ignore_leakcheck', False):
             raise unittest.SkipTest("This class ignored during leakchecks")
+        if ONLY_FAILING_LEAKCHECKS and not getattr(method, 'fails_leakcheck', False):
+            raise unittest.SkipTest("Only running tests that fail leakchecks.")
         return _RefCountChecker(self, method)(args, kwargs)
 
     return wrapper

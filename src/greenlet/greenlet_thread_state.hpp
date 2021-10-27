@@ -110,6 +110,8 @@ private:
     greenlet::g_deleteme_t deleteme;
 
 
+    static ImmortalObject get_referrers_name;
+
     G_NO_COPIES_OF_CLS(ThreadState);
 
 public:
@@ -132,6 +134,9 @@ public:
         // greenlet.
         assert(this->main_greenlet.REFCNT() == 3);
         this->main_greenlet->thread_state = this;
+        if (!get_referrers_name) {
+            ThreadState::get_referrers_name = Greenlet_Intern("get_referrers");
+        }
     }
 
     inline bool has_main_greenlet()
@@ -328,7 +333,7 @@ public:
                 // another way to report on it.
                 NewReference gc(PyImport_ImportModule("gc"));
                 if (gc) {
-                    OwnedObject get_referrers = gc.PyRequireAttr("get_referrers");
+                    OwnedObject get_referrers = gc.PyRequireAttr(ThreadState::get_referrers_name);
                     OwnedList refs(get_referrers.PyCall(old_main_greenlet));
                     if (refs && refs.empty()) {
                         assert(refs.REFCNT() == 1);
@@ -412,6 +417,8 @@ public:
     }
 
 };
+
+ImmortalObject ThreadState::get_referrers_name(nullptr);
 
 template<typename Destructor>
 class ThreadStateCreator

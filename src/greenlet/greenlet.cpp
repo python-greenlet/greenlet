@@ -1196,6 +1196,7 @@ protected:
             throw PyErrOccurred();
         }
 
+
         /* restore saved exception */
         saved.PyErrRestore();
 
@@ -1258,7 +1259,6 @@ protected:
         green_clear_exc(const_cast<BorrowedGreenlet&>(self));
         self->recursion_depth = PyThreadState_GET()->recursion_depth;
 
-
         /* perform the initial switch */
         switchstack_result_t err = this->g_switchstack();
         /* returns twice!
@@ -1284,6 +1284,7 @@ protected:
             assert(!self->main_greenlet_s);
             self->main_greenlet_s = state.get_main_greenlet().acquire();
             assert(self->main_greenlet_s);
+
 
             // We're about to possibly run Python code again, which
             // could switch back to us, so we need to grab the
@@ -2149,10 +2150,26 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
         self->switching_state->set_arguments(OwnedObject::owning(args), OwnedObject::owning(kwargs));
     }
 
+    // If we're switching out of a greenlet, and that switch is the
+    // last thing the greenlet does, the greenlet ought to be able to
+    // go ahead and die at that point. Currently, someone else must
+    // manually switch back to the greenlet so that we "fall off the
+    // end" and can perform cleanup. You'd think we'd be able to
+    // figure out that this is happening using the frame's ``f_lasti``
+    // member, which is supposed to be an index into
+    // ``frame->f_code->co_code``, the bytecode string. However, in
+    // recent interpreters, ``f_lasti`` tends not to be updated thanks
+    // to things like the PREDICT() macros in ceval.c. So it doesn't
+    // really work to do that in many cases. For example, the Python
+    // code:
+    //     def run():
+    //         greenlet.getcurrent().parent.switch()
+    // produces bytecode of len 16, with the actual call to switch()
+    // being at index 10 (in Python 3.10). However, the reported
+    // ``f_lasti`` we actually see is...5! (Which happens to be the
+    // second byte of the CALL_METHOD op for ``getcurrent()``).
+
     OwnedObject result = single_result(self->switching_state->g_switch());
-    // cerr << "Return from switching to greenlet " << self << " is " << result.borrow()
-         // << " with refcount " << result.REFCNT()
-         // << endl;
     // Note that the current greenlet isn't necessarily self. If self
     // finished, we went to one of its parents.
     assert(!self->switching_state->has_arguments());
