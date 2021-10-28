@@ -544,7 +544,6 @@ struct ThreadState_DestroyNoGIL
         // been torn down. There is a limited number of calls that can
         // be queued: 32 (NPENDINGCALLS) in CPython 3.10, so we
         // coalesce these calls using our own queue.
-        cerr << "ThreadState_DestroyNoGil with state " << state << endl;
         if (state && state->has_main_greenlet()) {
             // mark the thread as dead ASAP.
             // this is racy! If we try to throw or switch to a

@@ -413,29 +413,43 @@ class TestGreenlet(TestCase):
         self.assertRaises(SomeError, g.throw, SomeError())
 
     @fails_leakcheck
-    def test_throw_to_dead_thread_doesnt_crash(self):
-        print(file=sys.stderr)
-        print("Main greenlet", greenlet.getcurrent(), file=sys.stderr)
+    def _do_test_throw_to_dead_thread_doesnt_crash(self, wait_for_cleanup=False):
         result = []
         def worker():
             greenlet.getcurrent().parent.switch()
+
         def creator():
             g = greenlet(worker)
-            print("Background thread created greenlet", g, file=sys.stderr)
             g.switch()
-            print("Background thread returned from greenlet", g, file=sys.stderr)
             result.append(g)
+            if wait_for_cleanup:
+                # Let this greenlet eventually be cleaned up.
+                g.switch()
+                greenlet.getcurrent()
         t = threading.Thread(target=creator)
         t.start()
         t.join(10)
+        del t
+        # But, depending on the operating system, the thread
+        # deallocator may not actually have run yet! So we can't be
+        # sure about the error message unless we wait.
+        if wait_for_cleanup:
+            self.wait_for_pending_cleanups()
         with self.assertRaises(greenlet.error) as exc:
-            print("Throwing to greenlet", file=sys.stderr)
             result[0].throw(SomeError)
 
-        self.assertEqual(
-            str(exc.exception),
-            "cannot switch to a different thread (which happens to have exited)"
-        )
+        if not wait_for_cleanup:
+            self.assertIn(
+                str(exc.exception), [
+                    "cannot switch to a different thread (which happens to have exited)",
+                    "cannot switch to a different thread"
+                ]
+            )
+        else:
+            self.assertEqual(
+                str(exc.exception),
+                "cannot switch to a different thread (which happens to have exited)",
+            )
 
         if hasattr(result[0].gr_frame, 'clear'):
             # The frame is actually executing (it thinks), we can't clear it.
@@ -443,14 +457,24 @@ class TestGreenlet(TestCase):
                 result[0].gr_frame.clear()
         # Unfortunately, this doesn't actually clear the references, they're in the
         # fast local array.
-        result[0].gr_frame.f_locals.clear()
-        del t
+        if not wait_for_cleanup:
+            result[0].gr_frame.f_locals.clear()
+        else:
+            self.assertIsNone(result[0].gr_frame)
+
         del creator
+        worker = None
         del result[:]
         # XXX: we ought to be able to automatically fix this.
         # See issue 252
         self.expect_greenlet_leak = True # direct us not to wait for it to go away
 
+    @fails_leakcheck
+    def test_throw_to_dead_thread_doesnt_crash(self):
+        self._do_test_throw_to_dead_thread_doesnt_crash()
+
+    def test_throw_to_dead_thread_doesnt_crash_wait(self):
+        self._do_test_throw_to_dead_thread_doesnt_crash(True)
 
     @fails_leakcheck
     def test_recursive_startup(self):
