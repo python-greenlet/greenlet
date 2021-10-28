@@ -40,8 +40,10 @@ static PyGreenlet* volatile switching_thread_state = nullptr;
 
 
 #ifdef GREENLET_NOINLINE_SUPPORTED
+extern "C" {
 static int GREENLET_NOINLINE(slp_save_state_trampoline)(char* stackref);
 static void GREENLET_NOINLINE(slp_restore_state_trampoline)();
+}
 #define GREENLET_NOINLINE_INIT() \
     do {                         \
     } while (0)
@@ -49,8 +51,10 @@ static void GREENLET_NOINLINE(slp_restore_state_trampoline)();
 /* force compiler to call functions via pointers */
 /* XXX: Do we even want/need to support such compilers? This code path
    is untested on CI. */
+extern "C" {
 static int (slp_save_state_trampoline)(char* stackref);
 static void (slp_restore_state_trampoline)();
+}
 #define GREENLET_NOINLINE(name) cannot_inline_##name
 #define GREENLET_NOINLINE_INIT()                                  \
     do {                                                              \
