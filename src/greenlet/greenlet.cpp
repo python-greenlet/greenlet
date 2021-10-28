@@ -995,6 +995,7 @@ public:
 
     OwnedObject g_switch()
     {
+        cerr << "g_switch 1" << endl;
         try {
             this->check_switch_allowed();
         }
@@ -1002,7 +1003,7 @@ public:
             this->release_args();
             throw;
         }
-
+        cerr << "g_switch 2" << endl;
 
         // Switching greenlets used to attempt to clean out ones that need
         // deleted *if* we detected a thread switch. Should it still do
@@ -1025,7 +1026,7 @@ public:
         // track of the switching_state we're going for and just call
         // into g_switch() if it's not ourself.
         bool target_was_me = true;
-
+        cerr << "g_switch 3" << endl;
         while (target) {
 
             if (PyGreenlet_ACTIVE(target)) {
@@ -1034,7 +1035,9 @@ public:
                     target->switching_state->set_arguments(this->args, this->kwargs);
                     this->release_args();
                 }
+                cerr << "g_switch 4" << endl;
                 err = target->switching_state->g_switchstack();
+                cerr << "g_switch 5" << endl;
                 break;
             }
             if (!PyGreenlet_STARTED(target)) {
