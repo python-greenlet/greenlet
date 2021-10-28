@@ -1868,7 +1868,7 @@ kill_greenlet(BorrowedGreenlet& self)
         try {
             self->switching_state->kill();
         }
-        catch(...) {
+        catch(const PyErrOccurred&) {
             self->parent = oldparent;
             throw;
         }
