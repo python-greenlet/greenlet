@@ -53,17 +53,6 @@ elif sys.platform == 'win32':
     # with it.
     # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
     handler = "/EHsc"
-    if '64 bit' not in sys.version:
-        # Our 32-bit switch_x64_msvc.h file
-        # reads and writes to fs:[0] and [seh]; the writes to fs:[0]
-        # generate "warning C4733:
-        #    Inline asm assigning to 'FS:0': handler not registered as safe handler"
-        # We might need to pass /SAFESEH:NO to the linker somehow, or register
-        # the slp_switch function with the .SAFESEH assembler directive. Here,
-        # we're trying to require building the table of SEH handlers.
-        # https://docs.microsoft.com/en-us/cpp/build/reference/safeseh-image-has-safe-exception-handlers?view=msvc-160
-        cpp_link_args.append('/SAFESEH')
-
     cpp_compile_args.append(handler)
 
 def readfile(filename):

@@ -32,9 +32,20 @@
 
 /* Some magic to quell warnings and keep slp_switch() from crashing when built
    with VC90. Disable global optimizations, and the warning: frame pointer
-   register 'ebp' modified by inline assembly code */
-#pragma optimize("g", off)
+   register 'ebp' modified by inline assembly code.
+
+   We used to just disable global optimizations ("g") but upstream stackless
+   Python, as well as stackman, turn off all optimizations.
+
+References:
+https://github.com/stackless-dev/stackman/blob/dbc72fe5207a2055e658c819fdeab9731dee78b9/stackman/platforms/switch_x86_msvc.h
+https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_x86_msvc.h
+*/
+
+#pragma optimize("", off) /* so that autos are stored on the stack */
 #pragma warning(disable:4731)
+#pragma warning(disable:4733) /* disable warning about modifying FS[0] */
+
 
 static int
 slp_switch(void)
@@ -44,6 +55,11 @@ slp_switch(void)
      */
     void* seh;
     register int *stackref, stsizediff;
+    /*
+     * fs:[0] is the start of the Win32 Thread Information Block (TIB or TEB).
+     * This byte is the Structured Exception Handling frame.
+     * There are compiler intrinsics that can be used to do this.
+     */
     __asm mov eax, fs:[0]
     __asm mov [seh], eax
     __asm mov stackref, esp;
@@ -65,8 +81,10 @@ slp_switch(void)
 }
 
 /* re-enable ebp warning and global optimizations. */
-#pragma optimize("g", on)
+#pragma optimize("", on)
 #pragma warning(default:4731)
+#pragma warning(default:4733) /* disable warning about modifying FS[0] */
+
 
 #endif
 
