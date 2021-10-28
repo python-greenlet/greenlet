@@ -55,10 +55,12 @@ slp_switch(void)
     /* MASM systax is typically reversed from other assemblers.
        It is usually <instruction> <destination> <source>
      */
+    int *stackref, stsizediff;
     /* store the structured exception state for this stack */
     DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
-    register int *stackref, stsizediff;
-
+    fprintf(stderr, "With target %p saving SEH state %p\n",
+            switching_thread_state,
+            (void*)seh_state);
     __asm mov stackref, esp;
     /* modify EBX, ESI and EDI in order to get them preserved */
     __asm mov ebx, ebx;
@@ -72,6 +74,10 @@ slp_switch(void)
         }
         SLP_RESTORE_STATE();
     }
+    fprintf(stderr, "On resume with target %p, SEH state is %p; will restore to %p\n",
+            switching_thread_state,
+            (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)),
+            (void*)seh_state);
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
 
     return 0;
