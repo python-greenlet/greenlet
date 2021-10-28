@@ -936,7 +936,7 @@ public:
         return this->args || this->kwargs;
     }
 
-    inline void slp_restore_state()
+    inline void slp_restore_state() G_NOEXCEPT
     {
         const OwnedGreenlet& g(target);
         PyGreenlet* owner(this->thread_state.borrow_current());
@@ -961,7 +961,7 @@ public:
         g->stack_prev = owner;
     }
 
-    inline int slp_save_state(char* stackref)
+    inline int slp_save_state(char* stackref) G_NOEXCEPT
     {
         /* must free all the C stack up to target_stop */
         const char* const target_stop = target->stack_stop;
@@ -1113,7 +1113,7 @@ protected:
     // subclass).
 
     // Returns the previous greenlet we just switched away from.
-    virtual OwnedGreenlet g_switchstack_success()
+    virtual OwnedGreenlet g_switchstack_success() G_NOEXCEPT
     {
         PyThreadState* tstate = PyThreadState_GET();
         tstate->recursion_depth = this->target->recursion_depth;
@@ -1561,7 +1561,7 @@ XXX: The above is outdated; rewrite.
         }
     }
 
-    OwnedObject g_switch_finish(const switchstack_result_t& err) G_NOEXCEPT
+    OwnedObject g_switch_finish(const switchstack_result_t& err)
     {
 
         cerr << "g_switch_finish 1" << endl;
