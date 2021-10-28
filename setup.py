@@ -52,8 +52,23 @@ elif sys.platform == 'win32':
     # /EHsc is suggested, as /EHa isn't supposed to be linked to other things not built
     # with it.
     # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
-    handler = "/EHa"
+    handler = "/EHsc"
     cpp_compile_args.append(handler)
+    # disable most optimizations
+    cpp_compile_args.append('/Od')
+    # enable assertions
+    cpp_compile_args.append('/UNDEBUG')
+    # enable more compile-time warnings
+    cpp_compile_args.append('/Wall')
+    # link with the debug C runtime
+    cpp_compile_args.append('/MDd')
+    # Support fiber-safe thread-local storage: "the compiler mustn't
+    # cache the address of the TLS array, or optimize it as a common
+    # subexpression across a function call" This would probably solve
+    # some of the issues we had with MSVC caching the thread local
+    # variables on the stack, leading to having to split some
+    # functions up.
+    cpp_compile_args.append("/GT")
 
 def readfile(filename):
     with open(filename, 'r') as f: # pylint:disable=unspecified-encoding

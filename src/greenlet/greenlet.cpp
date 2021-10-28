@@ -927,10 +927,8 @@ public:
 #ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
         return this->g_switch();
 #else
-        cerr << "kill: Using return value" << endl;
         OwnedObject result = this->g_switch();
         if (!result) {
-            cerr << "kill: false return, about to throw" << endl;
             throw PyErrOccurred();
         }
         return result;
@@ -1007,7 +1005,6 @@ public:
 
     OwnedObject g_switch()
     {
-        cerr << "g_switch 1" << endl;
         try {
             this->check_switch_allowed();
         }
@@ -1015,7 +1012,6 @@ public:
             this->release_args();
             throw;
         }
-        cerr << "g_switch 2" << endl;
 
         // Switching greenlets used to attempt to clean out ones that need
         // deleted *if* we detected a thread switch. Should it still do
@@ -1038,7 +1034,6 @@ public:
         // track of the switching_state we're going for and just call
         // into g_switch() if it's not ourself.
         bool target_was_me = true;
-        cerr << "g_switch 3" << endl;
         while (target) {
 
             if (PyGreenlet_ACTIVE(target)) {
@@ -1047,9 +1042,7 @@ public:
                     target->switching_state->set_arguments(this->args, this->kwargs);
                     this->release_args();
                 }
-                cerr << "g_switch 4" << endl;
                 err = target->switching_state->g_switchstack();
-                cerr << "g_switch 5" << endl;
                 break;
             }
             if (!PyGreenlet_STARTED(target)) {
@@ -1103,7 +1096,6 @@ public:
             return OwnedObject();
         }
 
-        cerr << "g_switch 6 " << err.the_state_that_switched << endl;
         return err.the_state_that_switched->g_switch_finish(err);
     }
 
@@ -1571,7 +1563,6 @@ XXX: The above is outdated; rewrite.
     OwnedObject g_switch_finish(const switchstack_result_t& err)
     {
 
-        cerr << "g_switch_finish 1" << endl;
         const ThreadState& state = thread_state;
         try {
             // Our only caller handler the bad error case
@@ -1584,7 +1575,6 @@ XXX: The above is outdated; rewrite.
                             err.origin_greenlet,
                             this->target);
             }
-            cerr << "g_switch_finish 2" << endl;
             // The above could have invoked arbitrary Python code, but
             // it couldn't switch back to this object and *also*
             // throw an exception, so the args won't have changed.
@@ -1594,7 +1584,6 @@ XXX: The above is outdated; rewrite.
                 // raising an exception. The switch itself was
                 // successful, but the function raised.
 #ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
-                cerr << "g_switch_finish 3 WILL THROW" << endl;
                 throw PyErrOccurred();
 #else
                 // 32-bit x86. See comments in the switching file.
@@ -1608,9 +1597,7 @@ XXX: The above is outdated; rewrite.
         catch (const PyErrOccurred&) {
             /* Turn switch errors into switch throws */
             /* Turn trace errors into switch throws */
-            cerr << "g_switch_finish 4" << endl;
             this->release_args();
-            cerr << "g_switch_finish 5" << endl;
             throw;
         }
     }
@@ -1909,12 +1896,9 @@ kill_greenlet(BorrowedGreenlet& self)
         // we need to restore the parent in case the greenlet gets
         // resurrected.
         try {
-            cerr << "Switching to kill " << self.borrow() << endl;
             self->switching_state->kill();
-            cerr << "Switched to kill " << self.borrow() << endl;
         }
         catch(const PyErrOccurred&) {
-            cerr << "Error in kill_greenlet" << endl;
             self->parent = oldparent;
             throw;
         }
@@ -2064,12 +2048,9 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     /* Save the current exception, if any. */
     PyErrPieces saved_err;
     try {
-        cerr << "Killing greenlet " << self.borrow() << endl;
         kill_greenlet(self);
-        cerr << "Killed greenlet " << self.borrow() << endl;
     }
     catch (const PyErrOccurred&) {
-        cerr << "Got PyErrOccurred killing greenlet " << self.borrow() << endl;
         PyErr_WriteUnraisable(self.borrow_o());
         /* XXX what else should we do? */
     }
