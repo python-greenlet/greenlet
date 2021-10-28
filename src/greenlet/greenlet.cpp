@@ -1053,7 +1053,7 @@ public:
                 try {
                     err = target->switching_state->g_initialstub(&dummymarker);
                 }
-                catch (const PyErrOccurred& e) {
+                catch (const PyErrOccurred&) {
                     this->release_args();
                     throw;
                 }
@@ -1345,7 +1345,7 @@ protected:
                 try {
                     result = parent->switching_state->g_switch();
                 }
-                catch (const PyErrOccurred& e) {
+                catch (const PyErrOccurred&) {
                     // Ignore.
                 }
 

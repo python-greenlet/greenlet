@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-
+from __future__ import print_function
 import sys
 import os
 import glob
@@ -48,9 +48,19 @@ elif sys.platform == 'win32':
     #          around try blocks are less aggressive.
     # /EHsc is suggested, as /EHa isn't supposed to be linked to other things not built
     # with it.
-    print("Enabling /EHsc")
-    cpp_compile_args.append("/EHsc")
-
+    # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
+    handler = "/EHsc"
+    if '64 bit' not in sys.version:
+        # Our 32-bit switch_x64_msvc.h file
+        # reads and writes to fs:[0] and [seh]; the writes to fs:[0]
+        # generate "warning C4733:
+        #    Inline asm assigning to 'FS:0': handler not registered as safe handler"
+        # We might need to pass /SAFESEH:NO to the linker somehow, or register
+        # the slp_switch function with the .SAFESEH assembler directive. Here,
+        # we're trying to enable generic SEH handling for everything.
+        handler = "/EHa"
+    print("Exception handling with", handler)
+    cpp_compile_args.append(handler)
 
 def readfile(filename):
     with open(filename, 'r') as f: # pylint:disable=unspecified-encoding
