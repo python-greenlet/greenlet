@@ -8,6 +8,7 @@
 */
 #include <string>
 #include <algorithm>
+#include <exception>
 #include <iostream> // XXX: Don't leave this in release
 
 #include "greenlet_internal.hpp"
@@ -1745,7 +1746,20 @@ g_calltrace(const OwnedObject& tracefunc,
         // greenlets. Our caller is holding another reference to the
         // tracefunc, though, so the decref won't happen until they unwind.
         GET_THREAD_STATE().state().set_tracefunc(Py_None);
-        throw PyErrOccurred();
+        cerr << "g_calltrace: Error happened. Origin:"
+             << origin.borrow()
+             << " Target: "
+             << target.borrow() << endl;
+        try {
+            throw PyErrOccurred();
+        }
+        catch (...) {
+            cerr << "g_calltrace: Caught random exception" << endl;
+#ifdef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
+            std::terminate();
+#endif
+            throw;
+        }
     }
 
     saved_exc.PyErrRestore();
