@@ -176,6 +176,9 @@ setup(
     extras_require={
         'docs': [
             'Sphinx',
+            # 0.18b1 breaks sphinx 1.8.5 which is the latest version that runs
+            # on Python 2. The version pin sphinx itself contains isn't specific enough.
+            'docutils < 0.18; python_version < "3"',
         ],
         'test': [
             'objgraph',
