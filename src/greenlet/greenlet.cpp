@@ -1499,6 +1499,11 @@ XXX: The above is outdated; rewrite.
     // catch this and clear the arguments
     inline void check_switch_allowed() const
     {
+        // TODO: Make this take a parameter of the current greenlet,
+        // or current main greenlet, to make the check for
+        // cross-thread switching cheaper. Surely somewhere up the
+        // call stack we've already accessed the thread local variable.
+
         // We expect to always have a main greenlet now; accessing the thread state
         // created it. However, if we get here and cleanup has already
         // begun because we're a greenlet that was running in a
@@ -1512,11 +1517,13 @@ XXX: The above is outdated; rewrite.
         // to a dead thread.
 
         const BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(target);
-        cerr << "Checking switch to " << this->target.borrow()
-             << "\n\tmain greenlet is " << main_greenlet.borrow()
-             << "\n\t    its state is " << (main_greenlet ? main_greenlet->thread_state : nullptr)
-             << "\n\t    our state is " << &this->thread_state
-             << endl;
+        // cerr << "Checking switch to " << this->target.borrow()
+        //      << "\n\tlineage main greenlet is " << main_greenlet.borrow()
+        //      << "\n\t            its state is " << (main_greenlet ? main_greenlet->thread_state : nullptr)
+        //      << "\n\t            our state is " << &this->thread_state
+        //      << "\n\tcurrent main greenlet is " << GET_THREAD_STATE().state().borrow_main_greenlet().borrow()
+        //      << "\n\t              ts state is " << GET_THREAD_STATE().state().borrow_main_greenlet()->thread_state
+        //      << endl;
         if (!main_greenlet) {
             PyErr_SetString(mod_globs.PyExc_GreenletError,
                             "cannot switch to a garbage collected greenlet");
@@ -1527,7 +1534,18 @@ XXX: The above is outdated; rewrite.
                             "cannot switch to a different thread (which happens to have exited)");
             throw PyErrOccurred();
         }
-        else if (main_greenlet->thread_state != &this->thread_state) {
+        // The main greenlet we found was from the .parent lineage.
+        // That may or may not have any relationship to the main
+        // greenlet of the running thread. We can't actually access
+        // our this->thread_state members to try to check that,
+        // because it could be in the process of getting destroyed,
+        // but setting the main_greenlet->thread_state member to NULL
+        // may not be visible yet. So we need to check against the
+        // current thread state (once the cheaper checks are out of
+        // the way)
+        else if (main_greenlet->thread_state != &this->thread_state
+                 || GET_THREAD_STATE().state().borrow_main_greenlet()->thread_state != &this->thread_state
+                 ) {
             PyErr_SetString(mod_globs.PyExc_GreenletError,
                             "cannot switch to a different thread");
             throw PyErrOccurred();

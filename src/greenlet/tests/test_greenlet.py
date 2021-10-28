@@ -414,21 +414,22 @@ class TestGreenlet(TestCase):
 
     @fails_leakcheck
     def test_throw_to_dead_thread_doesnt_crash(self):
-        print()
-        print("Main greenlet", greenlet.getcurrent())
+        print(file=sys.stderr)
+        print("Main greenlet", greenlet.getcurrent(), file=sys.stderr)
         result = []
         def worker():
             greenlet.getcurrent().parent.switch()
         def creator():
             g = greenlet(worker)
-            print("Background thread created greenlet", g)
+            print("Background thread created greenlet", g, file=sys.stderr)
             g.switch()
-            print("Background thread returned from greenlet", g)
+            print("Background thread returned from greenlet", g, file=sys.stderr)
             result.append(g)
         t = threading.Thread(target=creator)
         t.start()
         t.join(10)
         with self.assertRaises(greenlet.error) as exc:
+            print("Throwing to greenlet", file=sys.stderr)
             result[0].throw(SomeError)
 
         self.assertEqual(

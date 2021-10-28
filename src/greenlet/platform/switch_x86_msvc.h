@@ -39,6 +39,9 @@
 static int
 slp_switch(void)
 {
+    /* MASM systax is typically reversed from other assemblers.
+       It is usually <instruction> <destination> <source>
+     */
     void* seh;
     register int *stackref, stsizediff;
     __asm mov eax, fs:[0]
@@ -83,6 +86,6 @@ static int IS_ON_STACK(void*p)
     int stackref;
     int stackbase = ((int)&stackref) & 0xfffff000;
     return (int)p >= stackbase && (int)p < stackbase + 0x00100000;
-} 
+}
 
 #endif

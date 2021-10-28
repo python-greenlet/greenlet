@@ -299,3 +299,5 @@ class NoContextVarsTests(TestCase):
         with self.assertRaises(AttributeError):
             let1.gr_context = None
         p('h')
+        del let1
+        p('i')

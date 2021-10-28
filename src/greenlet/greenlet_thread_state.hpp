@@ -111,10 +111,23 @@ private:
 
 
     static ImmortalObject get_referrers_name;
+    static PythonAllocator<ThreadState> allocator;
 
     G_NO_COPIES_OF_CLS(ThreadState);
 
 public:
+    static void* operator new(size_t count)
+    {
+        UNUSED(count);
+        assert(count == sizeof(ThreadState));
+        return ThreadState::allocator.allocate(1);
+    }
+
+    static void operator delete(void* ptr)
+    {
+        return ThreadState::allocator.deallocate(static_cast<ThreadState*>(ptr),
+                                                 1);
+    }
 
     ThreadState()
     {
@@ -419,6 +432,7 @@ public:
 };
 
 ImmortalObject ThreadState::get_referrers_name(nullptr);
+PythonAllocator<ThreadState> ThreadState::allocator;
 
 template<typename Destructor>
 class ThreadStateCreator
