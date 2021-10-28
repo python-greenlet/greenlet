@@ -16,6 +16,9 @@ global_compile_args = []
 # Extra compiler arguments passed to C++ extensions
 cpp_compile_args = []
 
+# Extra linker arguments passed to C++ extensions
+cpp_link_args = []
+
 # Extra compiler arguments passed to the main extension
 main_compile_args = []
 
@@ -57,9 +60,8 @@ elif sys.platform == 'win32':
         #    Inline asm assigning to 'FS:0': handler not registered as safe handler"
         # We might need to pass /SAFESEH:NO to the linker somehow, or register
         # the slp_switch function with the .SAFESEH assembler directive. Here,
-        # we're trying to enable generic SEH handling for everything.
-        handler = "/EHa"
-    print("Exception handling with", handler)
+        # we're trying to disable building the table of SEH handlers.
+        cpp_link_args.append('/SAFESEH:NO')
     cpp_compile_args.append(handler)
 
 def readfile(filename):
@@ -106,6 +108,7 @@ else:
             language='c++',
             extra_objects=extra_objects,
             extra_compile_args=global_compile_args + main_compile_args + cpp_compile_args,
+            extra_link_args=cpp_link_args,
             depends=[
                 GREENLET_HEADER,
                 GREENLET_SRC_DIR + 'slp_platformselect.h',
@@ -135,6 +138,7 @@ else:
                 language="c++",
                 include_dirs=[GREENLET_HEADER_DIR],
                 extra_compile_args=global_compile_args + cpp_compile_args,
+                extra_link_args=cpp_link_args,
             )
         )
 

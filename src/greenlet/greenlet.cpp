@@ -551,6 +551,8 @@ struct ThreadState_DestroyNoGIL
             // greenlet from this thread from some other thread before
             // we clear the state pointer, it won't realize the state
             // is dead which can crash the process.
+            assert(state->borrow_main_greenlet()->thread_state == state
+                   || state->borrow_main_greenlet()->thread_state == nullptr);
             state->borrow_main_greenlet()->thread_state = nullptr;
         }
 
