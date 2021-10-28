@@ -1895,9 +1895,9 @@ kill_greenlet(BorrowedGreenlet& self)
         // we need to restore the parent in case the greenlet gets
         // resurrected.
         try {
-            cerr << "Switching to kill" << endl;
+            cerr << "Switching to kill " << self.borrow() << endl;
             self->switching_state->kill();
-            cerr << "Switched to kill" << endl;
+            cerr << "Switched to kill " << self.borrow() << endl;
         }
         catch(const PyErrOccurred&) {
             cerr << "Error in kill_greenlet" << endl;
@@ -2050,12 +2050,12 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     /* Save the current exception, if any. */
     PyErrPieces saved_err;
     try {
-        cerr << "Killing greenlet" << endl;
+        cerr << "Killing greenlet " << self.borrow() << endl;
         kill_greenlet(self);
-        cerr << "Killed greenlet" << endl;
+        cerr << "Killed greenlet " << self.borrow() << endl;
     }
     catch (const PyErrOccurred&) {
-        cerr << "Got PyErrOccurred killing greenlet" << endl;
+        cerr << "Got PyErrOccurred killing greenlet " << self.borrow() << endl;
         PyErr_WriteUnraisable(self.borrow_o());
         /* XXX what else should we do? */
     }
