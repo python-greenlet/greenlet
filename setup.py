@@ -38,8 +38,17 @@ if sys.platform == 'darwin':
     cpp_compile_args.append("--std=gnu++11")
 elif sys.platform == 'win32':
     # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
-    # correctly by default. "/EH" == exception handling. "s" == standard C++,
-    # "c" == extern C doesn't throw
+    # correctly by default. While newer versions do handle exceptions by default,
+    # they don't do it fully correctly. So we need an argument on all versions.
+    #"/EH" == exception handling.
+    #    "s" == standard C++,
+    #    "c" == extern C functions don't throw
+    # OR
+    #   "a" == standard C++, and Windows SEH; anything may throw, compiler optimizations
+    #          around try blocks are less aggressive.
+    # /EHsc is suggested, as /EHa isn't supposed to be linked to other things not built
+    # with it.
+    print("Enabling /EHsc")
     cpp_compile_args.append("/EHsc")
 
 

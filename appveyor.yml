@@ -164,6 +164,8 @@ install:
   - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"
 
 build_script:
+# Show any compiler warnings.
+  - "%CMD_IN_ENV% python setup.py build_ext"
   - "%CMD_IN_ENV% python -m pip install -U -e .[test,docs]"
 
 
