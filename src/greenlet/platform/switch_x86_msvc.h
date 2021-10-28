@@ -28,7 +28,7 @@
 
 #ifdef SLP_EVAL
 
-#define STACK_MAGIC 0
+#define STACK_MAGIC 4
 
 /* Some magic to quell warnings and keep slp_switch() from crashing when built
    with VC90. Disable global optimizations, and the warning: frame pointer

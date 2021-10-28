@@ -1154,50 +1154,6 @@ protected:
         return result;
     }
 
-    virtual OwnedObject g_switch_finish(const switchstack_result_t& err)
-    {
-        // If we don't declare this function virtual, MSVC on 32-bit
-        // appears to inline it into the caller, and because it deals
-        // with exceptions, when we actually throw an error, things go kaboom.
-        cerr << "g_switch_finish 1" << endl;
-        const ThreadState& state = thread_state;
-        try {
-            // Our only caller handler the bad error case
-            assert(err.status >= 0);
-            assert(state.borrow_current() == target);
-
-            if (OwnedObject tracefunc = state.get_tracefunc()) {
-                g_calltrace(tracefunc,
-                            this->args ? mod_globs.event_switch : mod_globs.event_throw,
-                            err.origin_greenlet,
-                            this->target);
-            }
-            cerr << "g_switch_finish 2" << endl;
-            // The above could have invoked arbitrary Python code, but
-            // it couldn't switch back to this object and *also*
-            // throw an exception, so the args won't have changed.
-
-            if (PyErr_Occurred()) {
-                // We get here if we fell of the end of the run() function
-                // raising an exception. The switch itself was
-                // successful, but the function raised.
-                cerr << "g_switch_finish 3 WILL THROW" << endl;
-                throw PyErrOccurred();
-            }
-
-            return this->convert_switch_args_to_result();
-        }
-        catch (const PyErrOccurred&) {
-            /* Turn switch errors into switch throws */
-            /* Turn trace errors into switch throws */
-            cerr << "g_switch_finish 4" << endl;
-            this->release_args();
-            cerr << "g_switch_finish 5" << endl;
-            throw;
-        }
-    }
-
-
     virtual switchstack_result_t g_initialstub(void* mark)
     {
         OwnedObject run;
@@ -1602,6 +1558,47 @@ XXX: The above is outdated; rewrite.
             PyErr_SetString(mod_globs.PyExc_GreenletError,
                             "cannot switch to a different thread");
             throw PyErrOccurred();
+        }
+    }
+
+    OwnedObject g_switch_finish(const switchstack_result_t& err) G_NOEXCEPT
+    {
+
+        cerr << "g_switch_finish 1" << endl;
+        const ThreadState& state = thread_state;
+        try {
+            // Our only caller handler the bad error case
+            assert(err.status >= 0);
+            assert(state.borrow_current() == target);
+
+            if (OwnedObject tracefunc = state.get_tracefunc()) {
+                g_calltrace(tracefunc,
+                            this->args ? mod_globs.event_switch : mod_globs.event_throw,
+                            err.origin_greenlet,
+                            this->target);
+            }
+            cerr << "g_switch_finish 2" << endl;
+            // The above could have invoked arbitrary Python code, but
+            // it couldn't switch back to this object and *also*
+            // throw an exception, so the args won't have changed.
+
+            if (PyErr_Occurred()) {
+                // We get here if we fell of the end of the run() function
+                // raising an exception. The switch itself was
+                // successful, but the function raised.
+                cerr << "g_switch_finish 3 WILL THROW" << endl;
+                throw PyErrOccurred();
+            }
+
+            return this->convert_switch_args_to_result();
+        }
+        catch (const PyErrOccurred&) {
+            /* Turn switch errors into switch throws */
+            /* Turn trace errors into switch throws */
+            cerr << "g_switch_finish 4" << endl;
+            this->release_args();
+            cerr << "g_switch_finish 5" << endl;
+            throw;
         }
     }
 
