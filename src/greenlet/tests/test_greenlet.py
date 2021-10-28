@@ -183,6 +183,36 @@ class TestGreenlet(TestCase):
         gc.collect()
         self.assertEqual(seen, [greenlet.GreenletExit, greenlet.GreenletExit])
 
+    def test_dealloc_catches_GreenletExit_throws_other(self):
+        def run():
+            try:
+                greenlet.getcurrent().parent.switch()
+            except greenlet.GreenletExit:
+                raise SomeError
+
+        g = greenlet(run)
+        g.switch()
+        # Destroying the only reference to the greenlet causes it
+        # to get GreenletExit; when it in turn raises, even though we're the parent
+        # we don't get the exception, it just gets printed.
+        # When we run on 3.8 only, we can use sys.unraisablehook
+        oldstderr = sys.stderr
+        try:
+            from cStringIO import StringIO
+        except ImportError:
+            from io import StringIO
+        stderr = sys.stderr = StringIO()
+        try:
+            del g
+        finally:
+            sys.stderr = oldstderr
+
+        v = stderr.getvalue()
+        self.assertIn("Exception", v)
+        self.assertIn('ignored', v)
+        self.assertIn("SomeError", v)
+
+
     def test_dealloc_other_thread(self):
         seen = []
         someref = []

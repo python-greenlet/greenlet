@@ -23,8 +23,9 @@ typedef unsigned int uint32_t;
 // that should be explicit. Old MSVC doesn't support explicit operator
 // methods.
 #define G_EXPLICIT_OP
-#define G_NOEXCEPT
+#define G_NOEXCEPT throw()
 #else
+// Newer, reasonable compilers implementing C++11 or so.
 #include <cstdint>
 #define G_HAS_METHOD_DELETE 1
 #define G_EXPLICIT_OP explicit
