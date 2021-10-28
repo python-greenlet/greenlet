@@ -60,8 +60,10 @@ elif sys.platform == 'win32':
         #    Inline asm assigning to 'FS:0': handler not registered as safe handler"
         # We might need to pass /SAFESEH:NO to the linker somehow, or register
         # the slp_switch function with the .SAFESEH assembler directive. Here,
-        # we're trying to disable building the table of SEH handlers.
-        cpp_link_args.append('/SAFESEH:NO')
+        # we're trying to require building the table of SEH handlers.
+        # https://docs.microsoft.com/en-us/cpp/build/reference/safeseh-image-has-safe-exception-handlers?view=msvc-160
+        cpp_link_args.append('/SAFESEH')
+
     cpp_compile_args.append(handler)
 
 def readfile(filename):

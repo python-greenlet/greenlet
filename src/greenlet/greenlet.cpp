@@ -544,7 +544,7 @@ struct ThreadState_DestroyNoGIL
         // been torn down. There is a limited number of calls that can
         // be queued: 32 (NPENDINGCALLS) in CPython 3.10, so we
         // coalesce these calls using our own queue.
-
+        cerr << "ThreadState_DestroyNoGil with state " << state << endl;
         if (state && state->has_main_greenlet()) {
             // mark the thread as dead ASAP.
             // this is racy! If we try to throw or switch to a
@@ -1512,6 +1512,11 @@ XXX: The above is outdated; rewrite.
         // to a dead thread.
 
         const BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(target);
+        cerr << "Checking switch to " << this->target.borrow()
+             << "\n\tmain greenlet is " << main_greenlet.borrow()
+             << "\n\t    its state is " << (main_greenlet ? main_greenlet->thread_state : nullptr)
+             << "\n\t    our state is " << &this->thread_state
+             << endl;
         if (!main_greenlet) {
             PyErr_SetString(mod_globs.PyExc_GreenletError,
                             "cannot switch to a garbage collected greenlet");
