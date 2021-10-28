@@ -1090,6 +1090,7 @@ public:
             assert(!err.origin_greenlet);
             return OwnedObject();
         }
+#ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
         cerr << "g_switch 6 " << err.the_state_that_switched << endl;
         try {
             return err.the_state_that_switched->g_switch_finish(err);
@@ -1098,6 +1099,15 @@ public:
             cerr << "g_switch 7 ERR unwinding" << endl;
             throw;
         }
+#else
+        cerr << "g_switch: Using return value" << endl;
+        OwnedObject result = err.the_state_that_switched()->g_switch_finish(err);
+        if (!result) {
+            cerr << "g_switch: Return was false, about to throw." << endl;
+            throw PyErrOccurred();
+        }
+        return result;
+#endif
     }
 
     virtual ~SwitchingState()
@@ -1586,8 +1596,14 @@ XXX: The above is outdated; rewrite.
                 // We get here if we fell of the end of the run() function
                 // raising an exception. The switch itself was
                 // successful, but the function raised.
+#ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
                 cerr << "g_switch_finish 3 WILL THROW" << endl;
                 throw PyErrOccurred();
+#else
+                // 32-bit x86. See comments in the switching file.
+                this->release_args();
+                return OwnedObject();
+#endif
             }
 
             return this->convert_switch_args_to_result();

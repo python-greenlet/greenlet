@@ -48,6 +48,38 @@ https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_
 #pragma warning(disable:4731)
 #pragma warning(disable:4733) /* disable warning about modifying FS[0] */
 
+/*
+ * XXX: From all the documentation I've read, we should only need to
+ * store/restore the FS:[0], aka NT_TIB.ExceptionList, in order to be able to
+ * handle exceptions correctly. But that doesn't work. Suppose we start a
+ * greenlet, then go back to the main greenlet, then deallocate the child
+ * greenlet, which raises a GreenletExit in Python; normally we translate that
+ * into a C++ exception too, after the stacks have been successfully swapped
+ * from main to child. However, even if we do that raising in a new function
+ * called through a pointer, and we've verified that the SEH is correctly
+ * saved and restored, the process terminates with error code 1 when we try to
+ * throw the exception.
+ *
+ * Documentation claims that std::terminate() calls abort which terminates the
+ * process with error code 3. So that can't be happening.
+ *
+ * Neither are we getting a Windows Access Violation, the process is just
+ * exiting.
+ *
+ * This happens no matter which compiler options we use to handle exceptions.
+ *
+ * Indications from commit fc9515879b9d514c4d8244584a1fd2b2895e5e0f in 2011
+ * are that saving the SEH was enough to solve at least some problems with
+ * Visual C++, but apparently that's not enough anymore. This is true in both
+ * an old compiler ("Visual C++ for Python\9.0"), and a much newer compiler
+ * ("Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133"). The
+ * current (as of 2021-10-28) upstream of stackman saves only the SEH, but
+ * uses quite a different switching function. The current upstream of
+ * stackless Python does nothing with SEH.
+ *
+ * Help would be appreciated.
+ */
+#define GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH 1
 
 static int
 slp_switch(void)
