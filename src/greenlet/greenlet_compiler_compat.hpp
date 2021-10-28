@@ -5,12 +5,6 @@
 /**
  * Definitions to aid with compatibility with different compilers.
  *
- * CAUTION: On 32-bit versions of MSVC, catching ... is likely to
- * cause things to crash. This probably has something to do with the way
- * the exceptions are handled, and the fact that MSVC can use
- * ``catch(...)`` to also handle Structured Exceptions (SEH).
- *
- * This applies to both old and new compilers.
  */
 
 

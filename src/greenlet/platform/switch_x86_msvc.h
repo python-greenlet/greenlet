@@ -41,6 +41,8 @@ References:
 https://github.com/stackless-dev/stackman/blob/dbc72fe5207a2055e658c819fdeab9731dee78b9/stackman/platforms/switch_x86_msvc.h
 https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_x86_msvc.h
 */
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 #pragma optimize("", off) /* so that autos are stored on the stack */
 #pragma warning(disable:4731)
@@ -53,15 +55,10 @@ slp_switch(void)
     /* MASM systax is typically reversed from other assemblers.
        It is usually <instruction> <destination> <source>
      */
-    void* seh;
+    /* store the structured exception state for this stack */
+    DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
     register int *stackref, stsizediff;
-    /*
-     * fs:[0] is the start of the Win32 Thread Information Block (TIB or TEB).
-     * This byte is the Structured Exception Handling frame.
-     * There are compiler intrinsics that can be used to do this.
-     */
-    __asm mov eax, fs:[0]
-    __asm mov [seh], eax
+
     __asm mov stackref, esp;
     /* modify EBX, ESI and EDI in order to get them preserved */
     __asm mov ebx, ebx;
@@ -75,8 +72,8 @@ slp_switch(void)
         }
         SLP_RESTORE_STATE();
     }
-    __asm mov eax, [seh]
-    __asm mov fs:[0], eax
+    __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
+
     return 0;
 }
 
