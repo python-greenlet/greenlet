@@ -1659,7 +1659,7 @@ XXX: The above is outdated; rewrite.
 };
 
 
-
+extern "C" {
 static int GREENLET_NOINLINE(slp_save_state_trampoline)(char* stackref)
 {
     return switching_thread_state->switching_state->slp_save_state(stackref);
@@ -1667,6 +1667,7 @@ static int GREENLET_NOINLINE(slp_save_state_trampoline)(char* stackref)
 static void GREENLET_NOINLINE(slp_restore_state_trampoline)()
 {
     switching_thread_state->switching_state->slp_restore_state();
+}
 }
 
 

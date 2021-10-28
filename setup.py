@@ -52,7 +52,7 @@ elif sys.platform == 'win32':
     # /EHsc is suggested, as /EHa isn't supposed to be linked to other things not built
     # with it.
     # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
-    handler = "/EHsc"
+    handler = "/EHs"
     cpp_compile_args.append(handler)
 
 def readfile(filename):
