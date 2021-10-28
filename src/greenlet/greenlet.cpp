@@ -1090,7 +1090,14 @@ public:
             assert(!err.origin_greenlet);
             return OwnedObject();
         }
-        return err.the_state_that_switched->g_switch_finish(err);
+        cerr << "g_switch 6 " << err.the_state_that_switched << endl;
+        try {
+            return err.the_state_that_switched->g_switch_finish(err);
+        }
+        catch(const PyErrOccurred&) {
+            cerr << "g_switch 7 ERR unwinding" << endl;
+            throw;
+        }
     }
 
     virtual ~SwitchingState()
@@ -1556,6 +1563,7 @@ XXX: The above is outdated; rewrite.
 
     OwnedObject g_switch_finish(const switchstack_result_t& err)
     {
+        cerr << "g_switch_finish 1" << endl;
         const ThreadState& state = thread_state;
         try {
             // Our only caller handler the bad error case
@@ -1568,6 +1576,7 @@ XXX: The above is outdated; rewrite.
                             err.origin_greenlet,
                             this->target);
             }
+            cerr << "g_switch_finish 2" << endl;
             // The above could have invoked arbitrary Python code, but
             // it couldn't switch back to this object and *also*
             // throw an exception, so the args won't have changed.
@@ -1576,6 +1585,7 @@ XXX: The above is outdated; rewrite.
                 // We get here if we fell of the end of the run() function
                 // raising an exception. The switch itself was
                 // successful, but the function raised.
+                cerr << "g_switch_finish 3 WILL THROW" << endl;
                 throw PyErrOccurred();
             }
 
@@ -1584,7 +1594,9 @@ XXX: The above is outdated; rewrite.
         catch (const PyErrOccurred&) {
             /* Turn switch errors into switch throws */
             /* Turn trace errors into switch throws */
+            cerr << "g_switch_finish 4" << endl;
             this->release_args();
+            cerr << "g_switch_finish 5" << endl;
             throw;
         }
     }
