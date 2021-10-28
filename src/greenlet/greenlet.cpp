@@ -1101,7 +1101,7 @@ public:
         }
 #else
         cerr << "g_switch: Using return value" << endl;
-        OwnedObject result = err.the_state_that_switched()->g_switch_finish(err);
+        OwnedObject result = err.the_state_that_switched->g_switch_finish(err);
         if (!result) {
             cerr << "g_switch: Return was false, about to throw." << endl;
             throw PyErrOccurred();
