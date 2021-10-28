@@ -278,14 +278,24 @@ class ContextVarsTests(TestCase):
 @skipIf(Context is not None, "ContextVar supported")
 class NoContextVarsTests(TestCase):
     def test_contextvars_errors(self):
+        import functools
+        p = functools.partial(print, file=sys.stderr)
+        p('a')
         let1 = greenlet(getcurrent().switch)
+        p('b')
         self.assertFalse(hasattr(let1, 'gr_context'))
+        p('c')
         with self.assertRaises(AttributeError):
             getattr(let1, 'gr_context')
+        p('d')
         with self.assertRaises(AttributeError):
             let1.gr_context = None
+        p('e')
         let1.switch()
+        p('f')
         with self.assertRaises(AttributeError):
             getattr(let1, 'gr_context')
+        p('g')
         with self.assertRaises(AttributeError):
             let1.gr_context = None
+        p('h')
