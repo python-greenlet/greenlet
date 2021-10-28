@@ -58,13 +58,14 @@ elif sys.platform == 'win32':
     cpp_compile_args.append('/Od')
     # enable assertions
     cpp_compile_args.append('/UNDEBUG')
-    # enable more compile-time warnings
-    cpp_compile_args.append('/Wall')
-    # link with the debug C runtime
-    cpp_compile_args.append('/MDd')
+    # enable more compile-time warnings. /Wall produces a mountain of output.
+    cpp_compile_args.append('/W4')
+    # link with the debug C runtime...except we can't because we need
+    # the Python debug lib too, and they're not around by default
+    # cpp_compile_args.append('/MDd')
     # Support fiber-safe thread-local storage: "the compiler mustn't
     # cache the address of the TLS array, or optimize it as a common
-    # subexpression across a function call" This would probably solve
+    # subexpression across a function call." This would probably solve
     # some of the issues we had with MSVC caching the thread local
     # variables on the stack, leading to having to split some
     # functions up.
