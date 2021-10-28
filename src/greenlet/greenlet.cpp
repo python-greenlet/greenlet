@@ -923,7 +923,18 @@ public:
         PyErr_SetString(mod_globs.PyExc_GreenletExit,
                         "Killing the greenlet because all references have vanished.");
         // To get here it had to have run before
+#ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
         return this->g_switch();
+#else
+        cerr << "kill: Using return value" << endl;
+        OwnedObject result = this->g_switch();
+        if (!result) {
+            cerr << "kill: false return, about to throw" << endl;
+            throw PyErrOccurred();
+        }
+        return result;
+#endif
+
     }
 
     inline const BorrowedGreenlet& get_target() const
@@ -1090,24 +1101,9 @@ public:
             assert(!err.origin_greenlet);
             return OwnedObject();
         }
-#ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
+
         cerr << "g_switch 6 " << err.the_state_that_switched << endl;
-        try {
-            return err.the_state_that_switched->g_switch_finish(err);
-        }
-        catch(const PyErrOccurred&) {
-            cerr << "g_switch 7 ERR unwinding" << endl;
-            throw;
-        }
-#else
-        cerr << "g_switch: Using return value" << endl;
-        OwnedObject result = err.the_state_that_switched->g_switch_finish(err);
-        if (!result) {
-            cerr << "g_switch: Return was false, about to throw." << endl;
-            throw PyErrOccurred();
-        }
-        return result;
-#endif
+        return err.the_state_that_switched->g_switch_finish(err);
     }
 
     virtual ~SwitchingState()
