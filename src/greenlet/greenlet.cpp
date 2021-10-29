@@ -2256,7 +2256,7 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 
     try {
 #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
-        fprintf(stderr, "\tENTERING green_switch for %p at %p\n", self, &self);
+        fprintf(stderr, "ENTERING green_switch for %p at %p\n", self, &self);
         slp_show_seh_chain();
 #endif
         OwnedObject result = single_result(self->switching_state->g_switch());
@@ -3035,7 +3035,7 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
         fprintf(stderr,  "\t\tEH_COLLIDED_UNWIND\n" );
     }
     fprintf(stderr, "\n");
-
+    fflush(NULL);
     for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
         fprintf(stderr, "\t\t\tParam %ld: %lX\n", i, ExceptionRecord->ExceptionInformation[i]);
     }

@@ -105,10 +105,14 @@ typedef struct _GExceptionRegistration {
     void* handler_f;
 } GExceptionRegistration;
 
-static void
+static void*
 slp_show_seh_chain()
 {
+    GExceptionRegistration* a = NULL; /* Third most recent */
+    GExceptionRegistration* b = NULL; /* second */
+    GExceptionRegistration* c = NULL;
     GExceptionRegistration* seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
+    a = b = c = seh_state;
     while (seh_state && seh_state != (GExceptionRegistration*)0xFFFFFFFF) {
         fprintf(stderr, "\tSEH_chain addr: %p handler: %p prev: %p\n",
                 seh_state,
@@ -117,8 +121,15 @@ slp_show_seh_chain()
             fprintf(stderr, "\tERROR: Broken chain.\n");
             break;
         }
+
+        a = b;
+        b = c;
+        c = seh_state;
+
         seh_state = seh_state->prev;
     }
+    fflush(NULL);
+    return a ? a : (b ? b : c);
 }
 
 static int
@@ -130,7 +141,7 @@ slp_switch(void)
     int *stackref, stsizediff;
     /* store the structured exception state for this stack */
     DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
-    fprintf(stderr, "\nslp_switch: Saving seh_state %p for %p\n",
+    fprintf(stderr, "\nslp_switch: Saving seh_state %p switching to %p\n",
             seh_state, switching_thread_state);
     slp_show_seh_chain();
     __asm mov stackref, esp;
@@ -146,7 +157,7 @@ slp_switch(void)
         }
         SLP_RESTORE_STATE();
     }
-    fprintf(stderr, "slp_switch: Replacing seh_state %p with %p for %p\n",
+    fprintf(stderr, "slp_switch: Replacing seh_state %p with %p switching to %p\n",
             __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)),
             seh_state,
             switching_thread_state);
@@ -154,7 +165,7 @@ slp_switch(void)
     // it references things on the stack that have just moved.
     //fprintf(stderr, "slp_switch: Before replacement:\n");
     //slp_show_seh_chain();
-    fprintf(stderr, "slp_switch: After replacement for %p:\n", switching_thread_state);
+    fprintf(stderr, "slp_switch: After replacement switching to %p:\n", switching_thread_state);
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
     slp_show_seh_chain();
     return 0;

@@ -154,7 +154,10 @@ public:
             ThreadState::get_referrers_name = Greenlet_Intern("get_referrers");
         }
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+        fprintf(stderr, "Capturing exception state for new thread. Current chain:\n");
+        slp_show_seh_chain();
         this->exception_state = slp_get_exception_state();
+        fprintf(stderr, "Saved exception state for new thread: %p\n", this->exception_state);
 #endif
     }
 
