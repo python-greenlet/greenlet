@@ -1060,8 +1060,8 @@ public:
                     this->release_args();
                 }
 
-                cerr << "Entering initial stub for " << target << endl;
-                slp_show_seh_chain();
+                // cerr << "Entering initial stub for " << target << endl;
+                // slp_show_seh_chain();
                 try {
                     // This can only throw back to us while we're
                     // still in this greenlet. Once the new greenlet
@@ -1069,8 +1069,8 @@ public:
                     err = target->switching_state->g_initialstub(&dummymarker);
                 }
                 catch (const PyErrOccurred&) {
-                    cerr << "Caught error from initialstub" << endl;
-                    slp_show_seh_chain();
+                    // cerr << "Caught error from initialstub" << endl;
+                    // slp_show_seh_chain();
                     this->release_args();
                     throw;
                 }
@@ -1295,12 +1295,10 @@ private:
 
     void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT
     {
-        cerr << "In inner bootstrap. Current chain:" << endl;
-        slp_show_seh_chain();
         // The arguments here would be another great place for move.
         // As it is, we take them as a reference so that when we clear
         // them we clear what's on the stack above us.
-        char mark;
+
         /* in the new greenlet */
         ThreadState& state = thread_state;
         const BorrowedGreenlet& self(this->target);
@@ -1412,24 +1410,24 @@ private:
             //TODO: Move semantics or better way of setting the
             // argument to express this.
             result.CLEAR();
-            cerr << "About to switch to parent " << parent
-                 << " from " << self.borrow()
-                 << " in inner_bootstrap where stack may start at about " << &mark
-                 << endl;
-            slp_show_seh_chain();
+            // cerr << "About to switch to parent " << parent
+            //      << " from " << self.borrow()
+            //      << " in inner_bootstrap where stack may start at about " << &mark
+            //      << endl;
+            // slp_show_seh_chain();
             try {
-                cerr << "Entered try block that should catch the error " << endl;
-                slp_show_seh_chain();
+                // cerr << "Entered try block that should catch the error " << endl;
+                // slp_show_seh_chain();
                 result = parent->switching_state->g_switch();
             }
             catch (const PyErrOccurred&) {
                 // Ignore.
-                cerr << endl;
-                cerr << "Ignoring error from switching. I am " << this->target.borrow()
-                     << " and parent is " << parent
-                     << " and result is " << result.borrow()
-                     << " will try going to " << parent->parent
-                     << endl;
+                // cerr << endl;
+                // cerr << "Ignoring error from switching. I am " << this->target.borrow()
+                //      << " and parent is " << parent
+                //      << " and result is " << result.borrow()
+                //      << " will try going to " << parent->parent
+                //      << endl;
             }
 
             /* Return here means switch to parent failed,
@@ -1439,7 +1437,6 @@ private:
             assert(!result);
         }
         /* We ran out of parents, cannot continue */
-        cerr << "WHOA, OUT OF PARENTS FOR " << this->target.borrow() << endl;
         PyErr_WriteUnraisable(self.borrow_o());
         Py_FatalError("greenlet: ran out of parent greenlets while propagating exception; "
                       "cannot continue");
@@ -3037,7 +3034,7 @@ static struct PyModuleDef greenlet_module_def = {
 LONG WINAPI
 GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
 {
-    // We seem to get one of these for every C++ exception, with code
+    // We get one of these for every C++ exception, with code
     // E06D7363
     // This is a special value that means "C++ exception from MSVC"
     // https://devblogs.microsoft.com/oldnewthing/20100730-00/?p=13273
@@ -3096,12 +3093,6 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
 
 #endif
 
-static void
-term_func()
-{
-    fprintf(stderr, "GREENLET: Asked to terminate from std_terminate\n");
-    exit(42);
-}
 
 static PyObject*
 greenlet_internal_mod_init() G_NOEXCEPT

@@ -21,6 +21,11 @@
   checking that the Python API ``greenlet.throw()`` does. Previously,
   it did no error checking.
 
+- Fix C++ exception handling on 32-bit Windows. This might have
+  ramifications if you embed Python in your application and also use
+  SEH on 32-bit windows, or if you embed Python in a C++ application.
+  Please contact the maintainers if you have problems in this area.
+
 1.1.2 (2021-09-29)
 ==================
 

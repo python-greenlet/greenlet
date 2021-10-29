@@ -136,11 +136,15 @@ static void*
 slp_get_exception_state()
 {
     // XXX: There appear to be three SEH handlers on the stack already at the
-    // start of the thread. Is that a guarantee? Almost certainly not.
-    // (E.g., What if faulthandler isn't active? is signal() implemented with SEH?)
+    // start of the thread. Is that a guarantee? Almost certainly not. Yet in
+    // all observed cases it has been three. This is consistent with
+    // faulthandler off or on, and optimizations off or on. It may not be
+    // consistent with other operating system versions, though: we only have
+    // CI on one or two versions (don't ask what there are).
     // In theory we could capture the number of handlers on the chain when
     // PyInit__greenlet is called: there are probably only the default
-    // handlers?
+    // handlers at that point (unless we're embedded and people have used
+    // __try/__except or a C++ handler)?
     return slp_show_seh_chain();
 }
 
