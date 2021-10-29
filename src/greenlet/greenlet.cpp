@@ -3032,27 +3032,12 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
         // C++ Exception records have 3 params.
         slp_show_seh_chain();
     }
-    if (ExceptionRecord->ExceptionCode == 0xC0000005) {
-        fprintf(stderr, "\tIGNORING ACCESS VIOLATION\n");
-        PCONTEXT Context = ExceptionInfo->ContextRecord;
-#ifdef _AMD64_
-        Context->Rip++;
-#else
-        Context->Eip++;
-#endif
-        return EXCEPTION_CONTINUE_EXECUTION;
-    }
 #endif
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
 #endif
-static void
-term_func()
-{
-    fprintf(stderr, "term_func called by terminate\n");
-    exit(42);
-}
+
 
 static PyObject*
 greenlet_internal_mod_init()
@@ -3061,7 +3046,6 @@ greenlet_internal_mod_init()
     GREENLET_NOINLINE_INIT();
 #ifdef _MSC_VER
     AddVectoredExceptionHandler(CALL_FIRST, GreenletVectorHandler);
-    std::set_terminate(term_func);
 #endif
 
     try {
