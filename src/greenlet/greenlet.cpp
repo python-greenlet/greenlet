@@ -2969,13 +2969,63 @@ static struct PyModuleDef greenlet_module_def = {
     GreenMethods,
 };
 
+#ifdef _MSC_VER
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+//addVectoredExceptionHandler constants:
+//CALL_FIRST means call this exception handler first;
+//CALL_LAST means call this exception handler last
+#define CALL_FIRST 1
+#define CALL_LAST 0
+LONG WINAPI
+GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
+{
+
+    PEXCEPTION_RECORD ExceptionRecord = ExceptionInfo->ExceptionRecord;
+    fprintf(stderr,
+            "GOT VECTORED EXCEPTION:\n"
+            "\tExceptionCode   : %ld\n"
+            "\tExceptionFlags  : %ld\n"
+            "\tExceptionAddr   : %p\n"
+            "\tNumberparams    : %ld\n",
+            ExceptionRecord->ExceptionCode,
+            ExceptionRecord->ExceptionFlags,
+            ExceptionRecord->ExceptionAddress,
+            ExceptionRecord->NumberParameters
+            );
+    if (ExceptionRecord->ExceptionFlags & 1) {
+        fprintf(stderr,  " EH_NONCONTINUABLE" );
+    }
+    if (ExceptionRecord->ExceptionFlags & 2) {
+        fprintf(stderr,  " EH_UNWINDING" );
+    }
+    if (ExceptionRecord->ExceptionFlags & 4) {
+        fprintf(stderr, " EH_EXIT_UNWIND" );
+    }
+    if (ExceptionRecord->ExceptionFlags & 8) {
+        fprintf(stderr,  " EH_STACK_INVALID" );
+    }
+    if (ExceptionRecord->ExceptionFlags & 0x10) {
+        fprintf(stderr,  " EH_NESTED_CALL" );
+    }
+    fprintf(stderr, "\n");
+    // The number params tend to be invalid and not especially useful anyway
+    // for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
+    //     fprintf(stderr, "\tParam %ld: %ul\n", i, ExceptionRecord->ExceptionInformation[i]);
+    // }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
 
 static PyObject*
 greenlet_internal_mod_init()
 {
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
     GREENLET_NOINLINE_INIT();
-
+#ifdef _MSC_VER
+    AddVectoredExceptionHandler(CALL_FIRST, GreenletVectorHandler);
+#endif
     try {
         CreatedModule m(greenlet_module_def);
 
