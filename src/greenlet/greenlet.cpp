@@ -2981,12 +2981,17 @@ static struct PyModuleDef greenlet_module_def = {
 LONG WINAPI
 GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
 {
-
+    // We seem to get one of these for every C++ exception, with code
+    // E06D7363
+    // This is a special value that means "C++ exception from MSVC"
+    // https://devblogs.microsoft.com/oldnewthing/20100730-00/?p=13273
+    //
+    //
     PEXCEPTION_RECORD ExceptionRecord = ExceptionInfo->ExceptionRecord;
     fprintf(stderr,
             "GOT VECTORED EXCEPTION:\n"
-            "\tExceptionCode   : %ld\n"
-            "\tExceptionFlags  : %ld\n"
+            "\tExceptionCode   : %p\n"
+            "\tExceptionFlags  : %p\n"
             "\tExceptionAddr   : %p\n"
             "\tNumberparams    : %ld\n",
             ExceptionRecord->ExceptionCode,
@@ -2995,28 +3000,41 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
             ExceptionRecord->NumberParameters
             );
     if (ExceptionRecord->ExceptionFlags & 1) {
-        fprintf(stderr,  " EH_NONCONTINUABLE" );
+        fprintf(stderr,  "\t\tEH_NONCONTINUABLE\n" );
     }
     if (ExceptionRecord->ExceptionFlags & 2) {
-        fprintf(stderr,  " EH_UNWINDING" );
+        fprintf(stderr,  "\t\tEH_UNWINDING\n" );
     }
     if (ExceptionRecord->ExceptionFlags & 4) {
-        fprintf(stderr, " EH_EXIT_UNWIND" );
+        fprintf(stderr, "\t\tEH_EXIT_UNWIND\n" );
     }
     if (ExceptionRecord->ExceptionFlags & 8) {
-        fprintf(stderr,  " EH_STACK_INVALID" );
+        fprintf(stderr,  "\t\tEH_STACK_INVALID\n" );
     }
     if (ExceptionRecord->ExceptionFlags & 0x10) {
-        fprintf(stderr,  " EH_NESTED_CALL" );
+        fprintf(stderr,  "\t\tEH_NESTED_CALL\n" );
+    }
+    if (ExceptionRecord->ExceptionFlags & 0x20) {
+        fprintf(stderr,  "\t\tEH_TARGET_UNWIND\n" );
+    }
+    if (ExceptionRecord->ExceptionFlags & 0x40) {
+        fprintf(stderr,  "\t\tEH_COLLIDED_UNWIND\n" );
     }
     fprintf(stderr, "\n");
-    // The number params tend to be invalid and not especially useful anyway
-    // for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
-    //     fprintf(stderr, "\tParam %ld: %ul\n", i, ExceptionRecord->ExceptionInformation[i]);
-    // }
+
+    for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
+        fprintf(stderr, "\t\t\tParam %ld: %ul\n", i, ExceptionRecord->ExceptionInformation[i]);
+    }
     return EXCEPTION_CONTINUE_SEARCH;
 }
+
 #endif
+static void
+term_func()
+{
+    fprintf(stderr, "term_func called by terminate\n");
+    exit(42);
+}
 
 static PyObject*
 greenlet_internal_mod_init()
@@ -3025,7 +3043,9 @@ greenlet_internal_mod_init()
     GREENLET_NOINLINE_INIT();
 #ifdef _MSC_VER
     AddVectoredExceptionHandler(CALL_FIRST, GreenletVectorHandler);
+    std::set_terminate(term_func);
 #endif
+
     try {
         CreatedModule m(greenlet_module_def);
 
