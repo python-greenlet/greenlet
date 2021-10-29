@@ -491,7 +491,7 @@ namespace greenlet { namespace refs {
     inline OwnedObject PyObjectPointer<T>::PyStr() const G_NOEXCEPT
     {
         assert(this->p);
-        return OwnedObject::consuming(PyObject_Str(this->p));
+        return OwnedObject::consuming(PyObject_Str(reinterpret_cast<PyObject*>(this->p)));
     }
 
     template<typename T>

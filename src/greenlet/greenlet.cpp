@@ -1060,11 +1060,17 @@ public:
                     this->release_args();
                 }
 
+                cerr << "Entering initial stub for " << target << endl;
+                slp_show_seh_chain();
                 try {
+                    // This can only throw back to us while we're
+                    // still in this greenlet. Once the new greenlet
+                    // is bootstrapped, it has its own exception state.
                     err = target->switching_state->g_initialstub(&dummymarker);
                 }
                 catch (const PyErrOccurred&) {
                     cerr << "Caught error from initialstub" << endl;
+                    slp_show_seh_chain();
                     this->release_args();
                     throw;
                 }
@@ -1262,129 +1268,8 @@ protected:
            constructed for the second time until the switch actually happens.`
         */
         if (err.status == 1) {
-            /* in the new greenlet */
-            // TODO: Move this to its own 'noexcept' function:
-            // C++ exceptions cannot propagate to the parent greenlet from here.
-            assert(this->thread_state.borrow_current() == this->target);
-            this->thread_state.restore_exception_state();
-            /* stack variables from above are no good and also will not unwind! */
-            // EXCEPT: That can't be true, we access run, among others, here.
-
-            self->stack_start = (char*)1; /* running */
-
-            // XXX: We could clear this much earlier, right?
-            Py_CLEAR(self->run_callable);
-            assert(!self->main_greenlet_s);
-            self->main_greenlet_s = state.get_main_greenlet().acquire();
-            assert(self->main_greenlet_s);
-
-
-            // We're about to possibly run Python code again, which
-            // could switch back to us, so we need to grab the
-            // arguments locally.
-            // TODO: Better way to express move.
-            OwnedObject args(OwnedObject::consuming(this->args.relinquish_ownership()));
-            OwnedObject kwargs(OwnedObject::consuming(this->kwargs.relinquish_ownership()));
-            assert(!this->args);
-            assert(!this->kwargs);
-
-            // The first switch we need to manually call the trace
-            // function here instead of in g_switch_finish.
-
-            if (OwnedObject tracefunc = state.get_tracefunc()) {
-                try {
-                    g_calltrace(tracefunc,
-                                args ? mod_globs.event_switch : mod_globs.event_throw,
-                                err.origin_greenlet,
-                                self);
-                }
-                catch (const PyErrOccurred&) {
-                    /* Turn trace errors into switch throws */
-                    args.CLEAR();
-                    kwargs.CLEAR();
-                }
-            }
-
-            // We no longer need the origin, it was only here for
-            // tracing.
-            // We may never actually exit this stack frame so we need
-            // to explicitly clear it.
-            err.origin_greenlet.CLEAR();
-
-            OwnedObject result;
-            if (!args) {
-                /* pending exception */
-                result = NULL;
-            }
-            else {
-                /* call g.run(*args, **kwargs) */
-                // This could result in further switches
-                result = run.PyCall(args, kwargs);
-            }
-            args.CLEAR();
-            kwargs.CLEAR();
-            run.CLEAR();
-
-            if (!result
-                && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)
-                && (this->args || this->kwargs)) {
-                // This can happen, for example, if our only reference
-                // goes away after we switch back to the parent.
-                // See test_dealloc_switch_args_not_lost
-                PyErrPieces clear_error;
-                result = single_result(this->convert_switch_args_to_result());
-            }
-            this->release_args();
-
-            result = g_handle_exit(result, this->target.borrow());
-            assert(this->thread_state.borrow_current() == this->target);
-            /* jump back to parent */
-            self->stack_start = NULL; /* dead */
-            for (PyGreenlet* parent = self->parent; parent != NULL; parent = parent->parent) {
-                // We need to somewhere consume a reference to
-                // the result; in most cases we'll never have control
-                // back in this stack frame again. Calling
-                // green_switch actually adds another reference!
-                // This would probably be clearer with a specific API
-                // to hand results to the parent.
-                if (!parent->switching_state) {
-                    // XXX: See green_switch
-                    parent->switching_state = new SwitchingState(parent, result, OwnedObject());
-                }
-                else {
-                    parent->switching_state->set_arguments(result, OwnedObject());
-                }
-                // The parent greenlet now owns the result; in the
-                // typical case we'll never get back here to assign to
-                // result and thus release the reference.
-                //TODO: Move semantics or better way of setting the
-                // argument to express this.
-                result.CLEAR();
-                try {
-                    result = parent->switching_state->g_switch();
-                }
-                catch (const PyErrOccurred&) {
-                    // Ignore.
-                    cerr << endl;
-                    cerr << "Ignoring error from switching. I am " << this->target.borrow()
-                         << " and parent is " << parent
-                         << " and result is " << result.borrow()
-                         << " will try going to " << parent->parent
-                         << endl;
-                }
-
-                /* Return here means switch to parent failed,
-                 * in which case we throw *current* exception
-                 * to the next parent in chain.
-                 */
-                assert(!result);
-            }
-            /* We ran out of parents, cannot continue */
-            PyErr_WriteUnraisable(self.borrow_o());
-            Py_FatalError("greenlet: ran out of parent greenlets while propagating exception; "
-                          "cannot continue");
-            // This is actually unreachable
-            throw std::runtime_error("greenlets cannot continue");
+            // This never returns!
+            this->inner_bootstrap(err.origin_greenlet, run);
         }
         // The child will take care of decrefing this.
         run.relinquish_ownership();
@@ -1407,6 +1292,150 @@ protected:
     }
 
 private:
+
+    void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT
+    {
+        // The arguments here would be another great place for move.
+        // As it is, we take them as a reference so that when we clear
+        // them we clear what's on the stack above us.
+
+        /* in the new greenlet */
+        ThreadState& state = thread_state;
+        const BorrowedGreenlet& self(this->target);
+
+        // C++ exceptions cannot propagate to the parent greenlet from here.
+        assert(this->thread_state.borrow_current() == this->target);
+        this->thread_state.restore_exception_state();
+        /* stack variables from above are no good and also will not unwind! */
+        // EXCEPT: That can't be true, we access run, among others, here.
+
+        self->stack_start = (char*)1; /* running */
+
+        // XXX: We could clear this much earlier, right?
+        // Or would that introduce the possibility of running Python
+        // code when we don't want to?
+        Py_CLEAR(self->run_callable);
+        assert(!self->main_greenlet_s);
+        self->main_greenlet_s = state.get_main_greenlet().acquire();
+        assert(self->main_greenlet_s);
+
+
+        // We're about to possibly run Python code again, which
+        // could switch back to us, so we need to grab the
+        // arguments locally.
+        // TODO: Better way to express move.
+        OwnedObject args(OwnedObject::consuming(this->args.relinquish_ownership()));
+        OwnedObject kwargs(OwnedObject::consuming(this->kwargs.relinquish_ownership()));
+        assert(!this->args);
+        assert(!this->kwargs);
+
+        // The first switch we need to manually call the trace
+        // function here instead of in g_switch_finish, because we
+        // never return there.
+
+        if (OwnedObject tracefunc = state.get_tracefunc()) {
+            try {
+                g_calltrace(tracefunc,
+                            args ? mod_globs.event_switch : mod_globs.event_throw,
+                            origin_greenlet,
+                            self);
+            }
+            catch (const PyErrOccurred&) {
+                /* Turn trace errors into switch throws */
+                args.CLEAR();
+                kwargs.CLEAR();
+            }
+        }
+
+        // We no longer need the origin, it was only here for
+        // tracing.
+        // We may never actually exit this stack frame so we need
+        // to explicitly clear it.
+        // This could run Python code and switch.
+        origin_greenlet.CLEAR();
+
+        OwnedObject result;
+        if (!args) {
+            /* pending exception */
+            result = NULL;
+        }
+        else {
+            /* call g.run(*args, **kwargs) */
+            // This could result in further switches
+            result = run.PyCall(args, kwargs);
+        }
+        args.CLEAR();
+        kwargs.CLEAR();
+        run.CLEAR();
+
+        if (!result
+            && PyErr_ExceptionMatches(mod_globs.PyExc_GreenletExit)
+            && (this->args || this->kwargs)) {
+            // This can happen, for example, if our only reference
+            // goes away after we switch back to the parent.
+            // See test_dealloc_switch_args_not_lost
+            PyErrPieces clear_error;
+            result = single_result(this->convert_switch_args_to_result());
+        }
+        this->release_args();
+
+        result = g_handle_exit(result, this->target.borrow());
+        assert(this->thread_state.borrow_current() == this->target);
+        /* jump back to parent */
+        self->stack_start = NULL; /* dead */
+        for (PyGreenlet* parent = self->parent; parent != NULL; parent = parent->parent) {
+            // We need to somewhere consume a reference to
+            // the result; in most cases we'll never have control
+            // back in this stack frame again. Calling
+            // green_switch actually adds another reference!
+            // This would probably be clearer with a specific API
+            // to hand results to the parent.
+            if (!parent->switching_state) {
+                // XXX: See green_switch
+                parent->switching_state = new SwitchingState(parent, result, OwnedObject());
+            }
+            else {
+                parent->switching_state->set_arguments(result, OwnedObject());
+            }
+            // The parent greenlet now owns the result; in the
+            // typical case we'll never get back here to assign to
+            // result and thus release the reference.
+            //TODO: Move semantics or better way of setting the
+            // argument to express this.
+            result.CLEAR();
+            cerr << "About to switch to parent " << parent
+                 << " from " << self.borrow()
+                 << " in inner_bootstrap where stack may start at about " << &state
+                 << endl;
+            slp_show_seh_chain();
+            try {
+                result = parent->switching_state->g_switch();
+            }
+            catch (const PyErrOccurred&) {
+                // Ignore.
+                cerr << endl;
+                cerr << "Ignoring error from switching. I am " << this->target.borrow()
+                     << " and parent is " << parent
+                     << " and result is " << result.borrow()
+                     << " will try going to " << parent->parent
+                     << endl;
+            }
+
+            /* Return here means switch to parent failed,
+             * in which case we throw *current* exception
+             * to the next parent in chain.
+             */
+            assert(!result);
+        }
+        /* We ran out of parents, cannot continue */
+        PyErr_WriteUnraisable(self.borrow_o());
+        Py_FatalError("greenlet: ran out of parent greenlets while propagating exception; "
+                      "cannot continue");
+        // This is actually unreachable
+        throw std::runtime_error("greenlets cannot continue");
+    }
+
+
     /**
        Perform a stack switch according to some thread-local variables
        that must be set in ``g_thread_state_global`` before calling this

@@ -88,6 +88,14 @@ extern "C" {
         "greenlet needs to be ported to this platform, or taught how to detect your compiler properly."
 #endif /* !STACK_MAGIC */
 
+#ifndef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+static void*
+slp_show_seh_chain()
+{
+    return nullptr;
+}
+#endif
+
 #ifdef EXTERNAL_ASM
 /* CCP addition: Make these functions, to be called from assembler.
  * The token include file for the given platform should enable the

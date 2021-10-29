@@ -104,6 +104,7 @@ slp_show_seh_chain()
     GExceptionRegistration* c = NULL;
     GExceptionRegistration* seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
     a = b = c = seh_state;
+    fprintf(stderr, "====== SEH Chain ======\n");
     while (seh_state && seh_state != (GExceptionRegistration*)0xFFFFFFFF) {
         fprintf(stderr, "\tSEH_chain addr: %p handler: %p prev: %p\n",
                 seh_state,
@@ -119,6 +120,7 @@ slp_show_seh_chain()
 
         seh_state = seh_state->prev;
     }
+    fprintf(stderr, "====== End SEH Chain ======\n");
     fflush(NULL);
     return a ? a : (b ? b : c);
 }
