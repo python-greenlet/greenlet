@@ -55,20 +55,21 @@ elif sys.platform == 'win32':
     handler = "/EHsc"
     cpp_compile_args.append(handler)
     # disable most optimizations
-    cpp_compile_args.append('/Od')
+    #cpp_compile_args.append('/Od')
     # enable assertions
     cpp_compile_args.append('/UNDEBUG')
     # enable more compile-time warnings. /Wall produces a mountain of output.
-    cpp_compile_args.append('/W4')
+    #cpp_compile_args.append('/W4')
     # link with the debug C runtime...except we can't because we need
     # the Python debug lib too, and they're not around by default
     # cpp_compile_args.append('/MDd')
+
     # Support fiber-safe thread-local storage: "the compiler mustn't
     # cache the address of the TLS array, or optimize it as a common
     # subexpression across a function call." This would probably solve
     # some of the issues we had with MSVC caching the thread local
     # variables on the stack, leading to having to split some
-    # functions up.
+    # functions up. Revisit those.
     cpp_compile_args.append("/GT")
 
 def readfile(filename):
@@ -212,7 +213,8 @@ setup(
         ],
         'test': [
             'objgraph',
-            'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"',
+            # Faulthandler temp off to see if it changes the handlers.
+            # 'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"',
         ],
     },
     python_requires=">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*",

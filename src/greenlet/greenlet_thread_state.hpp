@@ -136,10 +136,7 @@ public:
     {
         this->main_greenlet = OwnedMainGreenlet::consuming(green_create_main());
         this->current_greenlet = main_greenlet;
-        // fprintf(stderr, "ThreadState %p has main greenlet %p ot %p\n",
-        //         this,
-        //         this->main_greenlet.borrow(),
-        //         &this->main_greenlet);
+
         if(!this->main_greenlet) {
             // We failed to create the main greenlet. That's bad.
             Py_FatalError("Failed to create main greenlet");
@@ -154,22 +151,16 @@ public:
             ThreadState::get_referrers_name = Greenlet_Intern("get_referrers");
         }
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
-        fprintf(stderr, "Capturing exception state for new thread. Current chain:\n");
-        slp_show_seh_chain();
         this->exception_state = slp_get_exception_state();
-        fprintf(stderr, "Saved exception state for new thread: %p\n", this->exception_state);
 #endif
     }
 
     inline void restore_exception_state()
     {
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
-        // temp debug
-        fprintf(stderr, "About to restore exception state in new greenlet. Current chain:\n");
-        slp_show_seh_chain();
+        // It's probably important this be inlined and only call C
+        // functions to avoid adding an SEH frame.
         slp_set_exception_state(this->exception_state);
-        fprintf(stderr, "Did restore exception state in new greenlet. Current chain:\n");
-        slp_show_seh_chain();
 #endif
     }
 

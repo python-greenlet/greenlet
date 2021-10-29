@@ -1305,11 +1305,15 @@ private:
         ThreadState& state = thread_state;
         const BorrowedGreenlet& self(this->target);
 
+
+        assert(this->thread_state.borrow_current() == this->target);
         // C++ exceptions cannot propagate to the parent greenlet from
         // here.
         // NOTE: On 32-bit Windows, the call chain is extremely
-        // important here; we can only have one level
-        assert(this->thread_state.borrow_current() == this->target);
+        // important here in ways that are subtle and not completely
+        // understood, having to do with the depth of the SEH list.
+        // The call to restore it MUST NOT add a new SEH handler to
+        // the list, or we'll restore it to the wrong thing.
         this->thread_state.restore_exception_state();
         /* stack variables from above are no good and also will not unwind! */
         // EXCEPT: That can't be true, we access run, among others, here.

@@ -137,10 +137,11 @@ slp_get_exception_state()
 {
     // XXX: There appear to be three SEH handlers on the stack already at the
     // start of the thread. Is that a guarantee? Almost certainly not.
-    // What happens if we create a thread with NO exception handlers?
-    // We probably at least need the root, right?
+    // (E.g., What if faulthandler isn't active? is signal() implemented with SEH?)
+    // In theory we could capture the number of handlers on the chain when
+    // PyInit__greenlet is called: there are probably only the default
+    // handlers?
     return slp_show_seh_chain();
-    //return (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
 }
 
 static int
