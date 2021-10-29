@@ -79,7 +79,21 @@ https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_
  *
  * Help would be appreciated.
  */
-#define GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH 1
+//#define GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH 1
+
+#define GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+
+static void*
+slp_get_exception_state()
+{
+    return (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
+}
+
+static void
+slp_set_exception_state(const void *const seh_state)
+{
+    __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
+}
 
 typedef struct _GExceptionRegistration {
     struct _GExceptionRegistration* prev;

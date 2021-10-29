@@ -13,9 +13,10 @@
 
 #include "greenlet_internal.hpp"
 #include "greenlet_refs.hpp"
+#include "greenlet_slp_switch.hpp"
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
-#include "greenlet_slp_switch.hpp"
+
 using std::swap;
 using std::cerr;
 using std::endl;
@@ -1258,7 +1259,10 @@ protected:
         */
         if (err.status == 1) {
             /* in the new greenlet */
+            // TODO: Move this to its own 'noexcept' function:
+            // C++ exceptions cannot propagate to the parent greenlet from here.
             assert(this->thread_state.borrow_current() == this->target);
+            this->thread_state.restore_exception_state();
             /* stack variables from above are no good and also will not unwind! */
             // EXCEPT: That can't be true, we access run, among others, here.
 

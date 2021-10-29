@@ -109,6 +109,9 @@ private:
        them. */
     greenlet::g_deleteme_t deleteme;
 
+#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+    void* exception_state;
+#endif
 
     static ImmortalObject get_referrers_name;
     static PythonAllocator<ThreadState> allocator;
@@ -150,6 +153,21 @@ public:
         if (!get_referrers_name) {
             ThreadState::get_referrers_name = Greenlet_Intern("get_referrers");
         }
+#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+        this->exception_state = slp_get_exception_state();
+#endif
+    }
+
+    inline void restore_exception_state()
+    {
+#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+        // temp debug
+        fprintf(stderr, "About to restore exception state in new greenlet. Current chain:\n");
+        slp_show_seh_chain();
+        slp_set_exception_state(this->exception_state);
+        fprintf(stderr, "Did restore exception state in new greenlet. Current chain:\n");
+        slp_show_seh_chain();
+#endif
     }
 
     inline bool has_main_greenlet()
