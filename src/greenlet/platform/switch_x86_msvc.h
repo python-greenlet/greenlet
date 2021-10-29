@@ -83,16 +83,7 @@ https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_
 
 #define GREENLET_NEEDS_EXCEPTION_STATE_SAVED
 
-static void*
-slp_get_exception_state()
-{
-    // XXX: There appear to be three SEH handlers on the stack already at the
-    // start of the thread. Is that a guarantee? Almost certainly not.
-    // What happens if we create a thread with NO exception handlers?
-    // We probably at least need the root, right?
-    return (void*)0xFFFFFFFF;
-    //return (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
-}
+
 
 static void
 slp_set_exception_state(const void *const seh_state)
@@ -108,7 +99,7 @@ typedef struct _GExceptionRegistration {
 static void*
 slp_show_seh_chain()
 {
-    GExceptionRegistration* a = NULL; /* Third most recent */
+    GExceptionRegistration* a = NULL; /* Closest to the top */
     GExceptionRegistration* b = NULL; /* second */
     GExceptionRegistration* c = NULL;
     GExceptionRegistration* seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
@@ -130,6 +121,17 @@ slp_show_seh_chain()
     }
     fflush(NULL);
     return a ? a : (b ? b : c);
+}
+
+static void*
+slp_get_exception_state()
+{
+    // XXX: There appear to be three SEH handlers on the stack already at the
+    // start of the thread. Is that a guarantee? Almost certainly not.
+    // What happens if we create a thread with NO exception handlers?
+    // We probably at least need the root, right?
+    return slp_show_seh_chain();
+    //return (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
 }
 
 static int
