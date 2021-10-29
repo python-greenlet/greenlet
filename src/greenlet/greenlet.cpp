@@ -3027,10 +3027,20 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
         fprintf(stderr, "\t\t\tParam %ld: %ul\n", i, ExceptionRecord->ExceptionInformation[i]);
     }
 #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
-    fprintf(stderr, "\tAbout to traverse SEH chain\n");
     if (ExceptionRecord->NumberParameters == 3) {
+        fprintf(stderr, "\tAbout to traverse SEH chain\n");
         // C++ Exception records have 3 params.
         slp_show_seh_chain();
+    }
+    if (ExceptionRecord->ExceptionCode == 0xC0000005) {
+        fprintf(stderr, "\tIGNORING ACCESS VIOLATION\n");
+        PCONTEXT Context = ExceptionInfo->ContextRecord;
+#ifdef _AMD64_
+        Context->Rip++;
+#else
+        Context->Eip++;
+#endif
+        return EXCEPTION_CONTINUE_EXECUTION;
     }
 #endif
     return EXCEPTION_CONTINUE_SEARCH;

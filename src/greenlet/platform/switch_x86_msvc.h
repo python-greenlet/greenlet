@@ -89,15 +89,22 @@ typedef struct _GExceptionRegistration {
 static void
 slp_show_seh_chain()
 {
+    __try {
     GExceptionRegistration* seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
     while (seh_state && seh_state != (GExceptionRegistration*)0xFFFFFFFF) {
-        fprintf(stderr, "\tSEH_chain handler=%p prev=%p\n", seh_state->handler_f, seh_state->prev);
+        fprintf(stderr, "\tSEH_chain addr=%p handler=%p prev=%p\n",
+                seh_state,
+                seh_state->handler_f, seh_state->prev);
         if ((void*)seh_state->prev < (void*)100) {
             fprintf(stderr, "\tERROR: Broken chain. Attempting to fix.\n");
             seh_state->prev = (GExceptionRegistration*)0xFFFFFFFF;
             break;
         }
         seh_state = seh_state->prev;
+    }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        fprintf(stderr, "ERROR: Got exception accessing last state\n");
     }
 }
 
@@ -110,7 +117,7 @@ slp_switch(void)
     int *stackref, stsizediff;
     /* store the structured exception state for this stack */
     DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
-    fprintf(stderr, "slp_switch: Saving seh_state %p", seh_state);
+    fprintf(stderr, "\nslp_switch: Saving seh_state %p\n", seh_state);
     slp_show_seh_chain();
     __asm mov stackref, esp;
     /* modify EBX, ESI and EDI in order to get them preserved */
@@ -125,12 +132,14 @@ slp_switch(void)
         }
         SLP_RESTORE_STATE();
     }
-    fprintf(stderr, "slp_switch: Replacing seh_state %p with %p",
+    fprintf(stderr, "slp_switch: Replacing seh_state %p with %p\n",
             __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)),
             seh_state);
+    fprintf(stderr, "slp_switch: Before replacement:\n");
     slp_show_seh_chain();
+    fprintf(stderr, "slp_switch: After replacement:\n");
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
-
+    slp_show_seh_chain();
     return 0;
 }
 
