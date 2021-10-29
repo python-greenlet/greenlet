@@ -394,9 +394,12 @@ class TestGreenlet(TestCase):
 
     def test_parent_return_failure(self):
         # No run causes AttributeError on switch
+        print("Main", greenlet.getcurrent(), file=sys.stderr)
         g1 = greenlet()
+        print("g1", g1, file=sys.stderr)
         # Greenlet that implicitly switches to parent
         g2 = greenlet(lambda: None, parent=g1)
+        print("g2", g2, file=sys.stderr)
         # AttributeError should propagate to us, no fatal errors
         with self.assertRaises(AttributeError):
             g2.switch()

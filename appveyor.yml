@@ -12,6 +12,7 @@ image: Visual Studio 2015
 
 environment:
   global:
+    GREENLET_SKIP_LEAKCHECKS: 1
     APPVEYOR_SAVE_CACHE_ON_ERROR: "true"
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
     # /E:ON and /V:ON options are not enabled in the batch script interpreter
@@ -172,7 +173,7 @@ build_script:
 
 test_script:
   - "%CMD_IN_ENV% python -c \"import faulthandler; assert faulthandler.is_enabled()\""
-  - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests"
+  - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests -p test_greenlet.py"
 # XXX: Doctest disabled pending sphinx release for 3.10; see tests.yml.
 #  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 

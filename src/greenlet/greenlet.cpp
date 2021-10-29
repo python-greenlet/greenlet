@@ -1064,6 +1064,7 @@ public:
                     err = target->switching_state->g_initialstub(&dummymarker);
                 }
                 catch (const PyErrOccurred&) {
+                    cerr << "Caught error from initialstub" << endl;
                     this->release_args();
                     throw;
                 }
@@ -1186,6 +1187,9 @@ protected:
         */
         run = self.PyGetAttr(mod_globs.str_run);
         if (!run) {
+            cerr << endl;
+            cerr << "Error getting run attribute on " << self.borrow()
+                 << endl;
             throw PyErrOccurred();
         }
 
@@ -1361,6 +1365,12 @@ protected:
                 }
                 catch (const PyErrOccurred&) {
                     // Ignore.
+                    cerr << endl;
+                    cerr << "Ignoring error from switching. I am " << this->target.borrow()
+                         << " and parent is " << parent
+                         << " and result is " << result.borrow()
+                         << " will try going to " << parent->parent
+                         << endl;
                 }
 
                 /* Return here means switch to parent failed,
