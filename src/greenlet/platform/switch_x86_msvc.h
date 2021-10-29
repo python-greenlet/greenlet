@@ -92,7 +92,7 @@ slp_get_exception_state()
 static void
 slp_set_exception_state(const void *const seh_state)
 {
-    __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
+    __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), (DWORD)seh_state);
 }
 
 typedef struct _GExceptionRegistration {
