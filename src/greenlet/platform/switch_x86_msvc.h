@@ -129,8 +129,10 @@ slp_switch(void)
     fprintf(stderr, "slp_switch: Replacing seh_state %p with %p\n",
             __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)),
             seh_state);
-    fprintf(stderr, "slp_switch: Before replacement:\n");
-    slp_show_seh_chain();
+    // Traversing before the return is likely to be invalid because
+    // it references things on the stack that have just moved.
+    //fprintf(stderr, "slp_switch: Before replacement:\n");
+    //slp_show_seh_chain();
     fprintf(stderr, "slp_switch: After replacement:\n");
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
     slp_show_seh_chain();
