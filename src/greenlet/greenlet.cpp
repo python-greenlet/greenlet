@@ -3053,7 +3053,7 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
 
 
 static PyObject*
-greenlet_internal_mod_init()
+greenlet_internal_mod_init() G_NOEXCEPT
 {
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
     GREENLET_NOINLINE_INIT();
@@ -3149,11 +3149,17 @@ greenlet_internal_mod_init()
 
 }
 
-
+extern "C" {
 #if PY_MAJOR_VERSION >= 3
 PyMODINIT_FUNC
 PyInit__greenlet(void)
 {
+#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+        // temp debug
+        fprintf(stderr, "In PyInit__greenlet. Current chain:\n");
+        slp_show_seh_chain();
+#endif
+
     return greenlet_internal_mod_init();
 }
 #else
@@ -3163,6 +3169,7 @@ init_greenlet(void)
     greenlet_internal_mod_init();
 }
 #endif
+};
 
 #ifdef __clang__
 #    pragma clang diagnostic pop
