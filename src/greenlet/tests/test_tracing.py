@@ -33,7 +33,7 @@ class TestGreenletTracing(TestCase):
     Tests of ``greenlet.settrace()``
     """
 
-    def test_greenlet_tracing(self):
+    def test_a_greenlet_tracing(self):
         main = greenlet.getcurrent()
         def dummy():
             pass
@@ -53,12 +53,15 @@ class TestGreenletTracing(TestCase):
             ('throw', (g2, main)),
         ])
 
-    def test_exception_disables_tracing(self):
+    def test_b_exception_disables_tracing(self):
         main = greenlet.getcurrent()
         def dummy():
+            print("Running in child greenlet", greenlet.getcurrent(), file=sys.stderr)
             main.switch()
         g = greenlet.greenlet(dummy)
+        print("Switching from main greenlet", main, "to child", g, file=sys.stderr)
         g.switch()
+        print("Returned from child greenlet, switching back", file=sys.stderr)
         with GreenletTracer(error_on_trace=True) as actions:
             self.assertRaises(SomeError, g.switch)
             self.assertEqual(greenlet.gettrace(), None)
