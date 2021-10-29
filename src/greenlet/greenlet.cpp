@@ -3166,6 +3166,12 @@ PyInit__greenlet(void)
 PyMODINIT_FUNC
 init_greenlet(void)
 {
+#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
+        // temp debug
+        fprintf(stderr, "In PyInit__greenlet. Current chain:\n");
+        slp_show_seh_chain();
+#endif
+
     greenlet_internal_mod_init();
 }
 #endif

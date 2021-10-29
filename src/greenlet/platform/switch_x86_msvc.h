@@ -86,7 +86,12 @@ https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_
 static void*
 slp_get_exception_state()
 {
-    return (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
+    // XXX: There appear to be three SEH handlers on the stack already at the
+    // start of the thread. Is that a guarantee? Almost certainly not.
+    // What happens if we create a thread with NO exception handlers?
+    // We probably at least need the root, right?
+    return (void*)0xFFFFFFFF;
+    //return (void*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
 }
 
 static void
