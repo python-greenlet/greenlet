@@ -1295,6 +1295,8 @@ private:
 
     void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT
     {
+        cerr << "In inner bootstrap. Current chain:" << endl;
+        slp_show_seh_chain();
         // The arguments here would be another great place for move.
         // As it is, we take them as a reference so that when we clear
         // them we clear what's on the stack above us.
@@ -1303,7 +1305,10 @@ private:
         ThreadState& state = thread_state;
         const BorrowedGreenlet& self(this->target);
 
-        // C++ exceptions cannot propagate to the parent greenlet from here.
+        // C++ exceptions cannot propagate to the parent greenlet from
+        // here.
+        // NOTE: On 32-bit Windows, the call chain is extremely
+        // important here; we can only have one level
         assert(this->thread_state.borrow_current() == this->target);
         this->thread_state.restore_exception_state();
         /* stack variables from above are no good and also will not unwind! */
