@@ -81,6 +81,26 @@ https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_
  */
 #define GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH 1
 
+typedef struct _GExceptionRegistration {
+    struct _GExceptionRegistration* prev;
+    void* handler_f;
+} GExceptionRegistration;
+
+static void
+slp_show_seh_chain()
+{
+    GExceptionRegistration* seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
+    while (seh_state && seh_state != (GExceptionRegistration*)0xFFFFFFFF) {
+        fprintf(stderr, "\tSEH_chain handler=%p prev=%p\n", seh_state->handler_f, seh_state->prev);
+        if ((void*)seh_state->prev < (void*)100) {
+            fprintf(stderr, "\tERROR: Broken chain. Attempting to fix.\n");
+            seh_state->prev = (GExceptionRegistration*)0xFFFFFFFF;
+            break;
+        }
+        seh_state = seh_state->prev;
+    }
+}
+
 static int
 slp_switch(void)
 {
@@ -90,6 +110,8 @@ slp_switch(void)
     int *stackref, stsizediff;
     /* store the structured exception state for this stack */
     DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
+    fprintf(stderr, "slp_switch: Saving seh_state %p", seh_state);
+    slp_show_seh_chain();
     __asm mov stackref, esp;
     /* modify EBX, ESI and EDI in order to get them preserved */
     __asm mov ebx, ebx;
@@ -103,6 +125,10 @@ slp_switch(void)
         }
         SLP_RESTORE_STATE();
     }
+    fprintf(stderr, "slp_switch: Replacing seh_state %p with %p",
+            __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)),
+            seh_state);
+    slp_show_seh_chain();
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
 
     return 0;

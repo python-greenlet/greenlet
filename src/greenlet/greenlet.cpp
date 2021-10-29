@@ -2978,6 +2978,7 @@ static struct PyModuleDef greenlet_module_def = {
 //CALL_LAST means call this exception handler last
 #define CALL_FIRST 1
 #define CALL_LAST 0
+
 LONG WINAPI
 GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
 {
@@ -3025,6 +3026,13 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
     for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
         fprintf(stderr, "\t\t\tParam %ld: %ul\n", i, ExceptionRecord->ExceptionInformation[i]);
     }
+#if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
+    fprintf(stderr, "\tAbout to traverse SEH chain\n");
+    if (ExceptionRecord->NumberParameters == 3) {
+        // C++ Exception records have 3 params.
+        slp_show_seh_chain();
+    }
+#endif
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
