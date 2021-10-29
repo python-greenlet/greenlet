@@ -143,9 +143,9 @@ slp_switch(void)
     int *stackref, stsizediff;
     /* store the structured exception state for this stack */
     DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
-    fprintf(stderr, "\nslp_switch: Saving seh_state %p switching to %p\n",
-            seh_state, switching_thread_state);
-    slp_show_seh_chain();
+    /* fprintf(stderr, "\nslp_switch: Saving seh_state %p switching to %p\n", */
+    /*         seh_state, switching_thread_state); */
+    /* slp_show_seh_chain(); */
     __asm mov stackref, esp;
     /* modify EBX, ESI and EDI in order to get them preserved */
     __asm mov ebx, ebx;
@@ -159,17 +159,17 @@ slp_switch(void)
         }
         SLP_RESTORE_STATE();
     }
-    fprintf(stderr, "slp_switch: Replacing seh_state %p with %p switching to %p\n",
-            __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)),
-            seh_state,
-            switching_thread_state);
+    /* fprintf(stderr, "slp_switch: Replacing seh_state %p with %p switching to %p\n", */
+    /*         __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList)), */
+    /*         seh_state, */
+    /*         switching_thread_state); */
     // Traversing before the return is likely to be invalid because
     // it references things on the stack that have just moved.
     //fprintf(stderr, "slp_switch: Before replacement:\n");
     //slp_show_seh_chain();
-    fprintf(stderr, "slp_switch: After replacement switching to %p:\n", switching_thread_state);
+    /* fprintf(stderr, "slp_switch: After replacement switching to %p:\n", switching_thread_state); */
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
-    slp_show_seh_chain();
+    /* slp_show_seh_chain(); */
     return 0;
 }
 

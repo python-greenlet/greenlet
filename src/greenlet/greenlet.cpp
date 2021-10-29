@@ -2255,10 +2255,6 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
     // second byte of the CALL_METHOD op for ``getcurrent()``).
 
     try {
-#if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
-        fprintf(stderr, "ENTERING green_switch for %p at %p\n", self, &self);
-        slp_show_seh_chain();
-#endif
         OwnedObject result = single_result(self->switching_state->g_switch());
 #ifndef NDEBUG
         // Note that the current greenlet isn't necessarily self. If self
@@ -2272,11 +2268,6 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
             assert(!current_state->has_arguments());
         }
 #endif
-#if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
-        fprintf(stderr, "EXITING green_switch for %p at %p\n", self, &self);
-        slp_show_seh_chain();
-#endif
-
         return result.relinquish_ownership();
     }
     catch(const PyErrOccurred&) {
@@ -3002,6 +2993,9 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
     //
     //
     PEXCEPTION_RECORD ExceptionRecord = ExceptionInfo->ExceptionRecord;
+    if (ExceptionRecord->ExceptionCode == (DWORD)0xE06D7363) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
     fprintf(stderr,
             "GOT VECTORED EXCEPTION:\n"
             "\tExceptionCode   : %p\n"
@@ -3039,13 +3033,13 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
     for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
         fprintf(stderr, "\t\t\tParam %ld: %lX\n", i, ExceptionRecord->ExceptionInformation[i]);
     }
-#if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
-    if (ExceptionRecord->NumberParameters == 3) {
-        fprintf(stderr, "\tAbout to traverse SEH chain\n");
-        // C++ Exception records have 3 params.
-        slp_show_seh_chain();
-    }
-#endif
+// #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
+//     if (ExceptionRecord->NumberParameters == 3) {
+//         fprintf(stderr, "\tAbout to traverse SEH chain\n");
+//         // C++ Exception records have 3 params.
+//         slp_show_seh_chain();
+//     }
+// #endif
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
