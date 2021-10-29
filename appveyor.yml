@@ -168,12 +168,12 @@ build_script:
 # Show any compiler warnings.
   - "%CMD_IN_ENV% python setup.py build_ext"
   - "%CMD_IN_ENV% python -m pip install -U -e .[test,docs]"
-
+  - "%CMD_IN_ENV% python -m pip install -U zope.testrunner"
 
 
 test_script:
   - "%CMD_IN_ENV% python -c \"import faulthandler; assert faulthandler.is_enabled()\""
-  - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests -p test_greenlet.py"
+  - "%CMD_IN_ENV% python -m zope.testrunner --test-path=src -vvv -t test_parent_return"
 # XXX: Doctest disabled pending sphinx release for 3.10; see tests.yml.
 #  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 
