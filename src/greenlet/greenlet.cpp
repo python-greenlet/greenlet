@@ -3024,7 +3024,7 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
     fprintf(stderr, "\n");
 
     for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
-        fprintf(stderr, "\t\t\tParam %ld: %ul\n", i, ExceptionRecord->ExceptionInformation[i]);
+        fprintf(stderr, "\t\t\tParam %ld: %lX\n", i, ExceptionRecord->ExceptionInformation[i]);
     }
 #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
     if (ExceptionRecord->NumberParameters == 3) {

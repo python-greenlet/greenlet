@@ -89,22 +89,16 @@ typedef struct _GExceptionRegistration {
 static void
 slp_show_seh_chain()
 {
-    __try {
     GExceptionRegistration* seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
     while (seh_state && seh_state != (GExceptionRegistration*)0xFFFFFFFF) {
         fprintf(stderr, "\tSEH_chain addr=%p handler=%p prev=%p\n",
                 seh_state,
                 seh_state->handler_f, seh_state->prev);
         if ((void*)seh_state->prev < (void*)100) {
-            fprintf(stderr, "\tERROR: Broken chain. Attempting to fix.\n");
-            seh_state->prev = (GExceptionRegistration*)0xFFFFFFFF;
+            fprintf(stderr, "\tERROR: Broken chain.\n");
             break;
         }
         seh_state = seh_state->prev;
-    }
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        fprintf(stderr, "ERROR: Got exception accessing last state\n");
     }
 }
 
