@@ -1440,8 +1440,6 @@ private:
         PyErr_WriteUnraisable(self.borrow_o());
         Py_FatalError("greenlet: ran out of parent greenlets while propagating exception; "
                       "cannot continue");
-        // This is actually unreachable
-        throw std::runtime_error("greenlets cannot continue");
     }
 
 
@@ -3101,7 +3099,6 @@ greenlet_internal_mod_init() G_NOEXCEPT
     GREENLET_NOINLINE_INIT();
 #ifdef _MSC_VER
     AddVectoredExceptionHandler(CALL_FIRST, GreenletVectorHandler);
-    set_terminate(term_func);
 #endif
 
     try {
