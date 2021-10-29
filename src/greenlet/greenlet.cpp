@@ -1298,7 +1298,7 @@ private:
         // The arguments here would be another great place for move.
         // As it is, we take them as a reference so that when we clear
         // them we clear what's on the stack above us.
-
+        char mark;
         /* in the new greenlet */
         ThreadState& state = thread_state;
         const BorrowedGreenlet& self(this->target);
@@ -1405,10 +1405,12 @@ private:
             result.CLEAR();
             cerr << "About to switch to parent " << parent
                  << " from " << self.borrow()
-                 << " in inner_bootstrap where stack may start at about " << &state
+                 << " in inner_bootstrap where stack may start at about " << &mark
                  << endl;
             slp_show_seh_chain();
             try {
+                cerr << "Entered try block that should catch the error " << endl;
+                slp_show_seh_chain();
                 result = parent->switching_state->g_switch();
             }
             catch (const PyErrOccurred&) {
@@ -1428,6 +1430,7 @@ private:
             assert(!result);
         }
         /* We ran out of parents, cannot continue */
+        cerr << "WHOA, OUT OF PARENTS FOR " << this->target.borrow() << endl;
         PyErr_WriteUnraisable(self.borrow_o());
         Py_FatalError("greenlet: ran out of parent greenlets while propagating exception; "
                       "cannot continue");
@@ -3084,6 +3087,12 @@ GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
 
 #endif
 
+static void
+term_func()
+{
+    fprintf(stderr, "GREENLET: Asked to terminate from std_terminate\n");
+    exit(42);
+}
 
 static PyObject*
 greenlet_internal_mod_init() G_NOEXCEPT
@@ -3092,6 +3101,7 @@ greenlet_internal_mod_init() G_NOEXCEPT
     GREENLET_NOINLINE_INIT();
 #ifdef _MSC_VER
     AddVectoredExceptionHandler(CALL_FIRST, GreenletVectorHandler);
+    set_terminate(term_func);
 #endif
 
     try {
