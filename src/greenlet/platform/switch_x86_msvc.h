@@ -84,17 +84,24 @@ https://github.com/stackless-dev/stackless/blob/main-slp/Stackless/platf/switch_
 #define GREENLET_NEEDS_EXCEPTION_STATE_SAVED
 
 
-
-static void
-slp_set_exception_state(const void *const seh_state)
-{
-    __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), (DWORD)seh_state);
-}
-
 typedef struct _GExceptionRegistration {
     struct _GExceptionRegistration* prev;
     void* handler_f;
 } GExceptionRegistration;
+
+static void
+slp_set_exception_state(const void *const seh_state)
+{
+    // Because the stack from from which we do this is ALSO a handler, and
+    // that one we want to keep, we need to relink the current SEH handler
+    // frame to point to this one, cutting out the middle men, as it were.
+    //
+    // Entering a try block doesn't change the SEH frame, but entering a
+    // function containing a try block does.
+    GExceptionRegistration* current_seh_state = (GExceptionRegistration*)__readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
+    current_seh_state->prev = (GExceptionRegistration*)seh_state;
+}
+
 
 static void*
 slp_show_seh_chain()
