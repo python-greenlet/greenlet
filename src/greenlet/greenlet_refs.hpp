@@ -819,9 +819,8 @@ namespace greenlet { namespace refs {
             }
 
             if (traceback && !PyTraceBack_Check(traceback.borrow())) {
-                PyErr_SetString(PyExc_TypeError,
-                                "throw() third argument must be a traceback object");
-                throw PyErrOccurred();
+                throw PyErrOccurred(PyExc_TypeError,
+                                    "throw() third argument must be a traceback object");
             }
 
             if (PyExceptionClass_Check(type)) {
@@ -837,10 +836,9 @@ namespace greenlet { namespace refs {
             else if (PyExceptionInstance_Check(type)) {
                 /* Raising an instance. The value should be a dummy. */
                 if (instance && !instance.is_None()) {
-                    PyErr_SetString(
+                    throw PyErrOccurred(
                                     PyExc_TypeError,
                                     "instance exception may not have a separate value");
-                    throw PyErrOccurred();
                 }
                 /* Normalize to raise <class>, <instance> */
                 this->instance = this->type;

@@ -12,7 +12,6 @@ image: Visual Studio 2015
 
 environment:
   global:
-    GREENLET_SKIP_LEAKCHECKS: 1
     APPVEYOR_SAVE_CACHE_ON_ERROR: "true"
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
     # /E:ON and /V:ON options are not enabled in the batch script interpreter

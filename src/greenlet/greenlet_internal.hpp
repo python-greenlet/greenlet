@@ -130,6 +130,12 @@ namespace greenlet
         {
             assert(PyErr_Occurred());
         }
+
+        PyErrOccurred(PyObject* exc_kind, const char* const msg)
+            : std::runtime_error(msg)
+        {
+            PyErr_SetString(exc_kind, msg);
+        }
     };
 
     static inline PyObject*

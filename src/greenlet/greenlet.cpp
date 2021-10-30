@@ -925,16 +925,7 @@ public:
         PyErr_SetString(mod_globs.PyExc_GreenletExit,
                         "Killing the greenlet because all references have vanished.");
         // To get here it had to have run before
-#ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
         return this->g_switch();
-#else
-        OwnedObject result = this->g_switch();
-        if (!result) {
-            throw PyErrOccurred();
-        }
-        return result;
-#endif
-
     }
 
     inline const BorrowedGreenlet& get_target() const
@@ -1060,8 +1051,6 @@ public:
                     this->release_args();
                 }
 
-                // cerr << "Entering initial stub for " << target << endl;
-                // slp_show_seh_chain();
                 try {
                     // This can only throw back to us while we're
                     // still in this greenlet. Once the new greenlet
@@ -1069,8 +1058,6 @@ public:
                     err = target->switching_state->g_initialstub(&dummymarker);
                 }
                 catch (const PyErrOccurred&) {
-                    // cerr << "Caught error from initialstub" << endl;
-                    // slp_show_seh_chain();
                     this->release_args();
                     throw;
                 }
@@ -1181,47 +1168,45 @@ protected:
         // We'll restore them when we return in that case.
         // Scope them tightly to avoid ref leaks.
         {
-        OwnedObject args = this->args;
-        OwnedObject kwargs = this->kwargs;
+            OwnedObject args = this->args;
+            OwnedObject kwargs = this->kwargs;
 
-        /* save exception in case getattr clears it */
-        PyErrPieces saved;
+            /* save exception in case getattr clears it */
+            PyErrPieces saved;
 
-        /*
-          self.run is the object to call in the new greenlet.
-          This could run arbitrary python code and switch greenlets!
-        */
-        run = self.PyGetAttr(mod_globs.str_run);
-        if (!run) {
-            cerr << endl;
-            cerr << "Error getting run attribute on " << self.borrow()
-                 << endl;
-            throw PyErrOccurred();
-        }
+            /*
+              self.run is the object to call in the new greenlet.
+              This could run arbitrary python code and switch greenlets!
+            */
+            run = self.PyGetAttr(mod_globs.str_run);
+            if (!run) {
+                // TODO: Make PyGetAttr throw this.
+                throw PyErrOccurred();
+            }
 
 
-        /* restore saved exception */
-        saved.PyErrRestore();
+            /* restore saved exception */
+            saved.PyErrRestore();
 
 
-        /* recheck that it's safe to switch in case greenlet reparented anywhere above */
-        this->check_switch_allowed();
+            /* recheck that it's safe to switch in case greenlet reparented anywhere above */
+            this->check_switch_allowed();
 
-        /* by the time we got here another start could happen elsewhere,
-         * that means it should now be a regular switch.
-         * This can happen if the Python code is a subclass that implements
-         * __getattribute__ or __getattr__, or makes ``run`` a descriptor;
-         * all of those can run arbitrary code that switches back into
-         * this greenlet.
-         */
-        if (self.started()) {
-            // the successful switch cleared these out, we need to
-            // restore our version.
-            assert(!this->args);
-            assert(!this->kwargs);
-            this->set_arguments(args, kwargs);
-            throw GreenletStartedWhileInPython();
-        }
+            /* by the time we got here another start could happen elsewhere,
+             * that means it should now be a regular switch.
+             * This can happen if the Python code is a subclass that implements
+             * __getattribute__ or __getattr__, or makes ``run`` a descriptor;
+             * all of those can run arbitrary code that switches back into
+             * this greenlet.
+             */
+            if (self.started()) {
+                // the successful switch cleared these out, we need to
+                // restore our version.
+                assert(!this->args);
+                assert(!this->kwargs);
+                this->set_arguments(args, kwargs);
+                throw GreenletStartedWhileInPython();
+            }
         }
 
         // Sweet, if we got here, we have the go-ahead and will switch
@@ -1306,7 +1291,8 @@ private:
 
         assert(this->thread_state.borrow_current() == this->target);
         // C++ exceptions cannot propagate to the parent greenlet from
-        // here.
+        // here. (TODO: Do we need a catch(...) clause, perhaps on the
+        // function itself? ALl we could do is terminate the program.)
         // NOTE: On 32-bit Windows, the call chain is extremely
         // important here in ways that are subtle and not completely
         // understood, having to do with the depth of the SEH list.
@@ -1410,24 +1396,11 @@ private:
             //TODO: Move semantics or better way of setting the
             // argument to express this.
             result.CLEAR();
-            // cerr << "About to switch to parent " << parent
-            //      << " from " << self.borrow()
-            //      << " in inner_bootstrap where stack may start at about " << &mark
-            //      << endl;
-            // slp_show_seh_chain();
             try {
-                // cerr << "Entered try block that should catch the error " << endl;
-                // slp_show_seh_chain();
                 result = parent->switching_state->g_switch();
             }
             catch (const PyErrOccurred&) {
                 // Ignore.
-                // cerr << endl;
-                // cerr << "Ignoring error from switching. I am " << this->target.borrow()
-                //      << " and parent is " << parent
-                //      << " and result is " << result.borrow()
-                //      << " will try going to " << parent->parent
-                //      << endl;
             }
 
             /* Return here means switch to parent failed,
@@ -1575,22 +1548,14 @@ XXX: The above is outdated; rewrite.
         // to a dead thread.
 
         const BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(target);
-        // cerr << "Checking switch to " << this->target.borrow()
-        //      << "\n\tlineage main greenlet is " << main_greenlet.borrow()
-        //      << "\n\t            its state is " << (main_greenlet ? main_greenlet->thread_state : nullptr)
-        //      << "\n\t            our state is " << &this->thread_state
-        //      << "\n\tcurrent main greenlet is " << GET_THREAD_STATE().state().borrow_main_greenlet().borrow()
-        //      << "\n\t              ts state is " << GET_THREAD_STATE().state().borrow_main_greenlet()->thread_state
-        //      << endl;
+
         if (!main_greenlet) {
-            PyErr_SetString(mod_globs.PyExc_GreenletError,
-                            "cannot switch to a garbage collected greenlet");
-            throw PyErrOccurred();
+            throw PyErrOccurred(mod_globs.PyExc_GreenletError,
+                                "cannot switch to a garbage collected greenlet");
         }
         else if (!main_greenlet->thread_state) {
-            PyErr_SetString(mod_globs.PyExc_GreenletError,
-                            "cannot switch to a different thread (which happens to have exited)");
-            throw PyErrOccurred();
+            throw PyErrOccurred(mod_globs.PyExc_GreenletError,
+                                "cannot switch to a different thread (which happens to have exited)");
         }
         // The main greenlet we found was from the .parent lineage.
         // That may or may not have any relationship to the main
@@ -1604,9 +1569,8 @@ XXX: The above is outdated; rewrite.
         else if (main_greenlet->thread_state != &this->thread_state
                  || GET_THREAD_STATE().state().borrow_main_greenlet()->thread_state != &this->thread_state
                  ) {
-            PyErr_SetString(mod_globs.PyExc_GreenletError,
-                            "cannot switch to a different thread");
-            throw PyErrOccurred();
+            throw PyErrOccurred(mod_globs.PyExc_GreenletError,
+                                "cannot switch to a different thread");
         }
     }
 
@@ -1633,13 +1597,7 @@ XXX: The above is outdated; rewrite.
                 // We get here if we fell of the end of the run() function
                 // raising an exception. The switch itself was
                 // successful, but the function raised.
-#ifndef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
                 throw PyErrOccurred();
-#else
-                // 32-bit x86. See comments in the switching file.
-                this->release_args();
-                return OwnedObject();
-#endif
             }
 
             return this->convert_switch_args_to_result();
@@ -1783,20 +1741,7 @@ g_calltrace(const OwnedObject& tracefunc,
         // greenlets. Our caller is holding another reference to the
         // tracefunc, though, so the decref won't happen until they unwind.
         GET_THREAD_STATE().state().set_tracefunc(Py_None);
-        cerr << "g_calltrace: Error happened. Origin:"
-             << origin.borrow()
-             << " Target: "
-             << target.borrow() << endl;
-        try {
-            throw PyErrOccurred();
-        }
-        catch (...) {
-            cerr << "g_calltrace: Caught random exception" << endl;
-#ifdef GREENLET_CANNOT_USE_EXCEPTIONS_NEAR_SWITCH
-            std::terminate();
-#endif
-            throw;
-        }
+        throw PyErrOccurred();
     }
 
     saved_exc.PyErrRestore();
@@ -3019,77 +2964,6 @@ static struct PyModuleDef greenlet_module_def = {
     GreenMethods,
 };
 
-#ifdef _MSC_VER
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-//addVectoredExceptionHandler constants:
-//CALL_FIRST means call this exception handler first;
-//CALL_LAST means call this exception handler last
-#define CALL_FIRST 1
-#define CALL_LAST 0
-
-LONG WINAPI
-GreenletVectorHandler(PEXCEPTION_POINTERS ExceptionInfo)
-{
-    // We get one of these for every C++ exception, with code
-    // E06D7363
-    // This is a special value that means "C++ exception from MSVC"
-    // https://devblogs.microsoft.com/oldnewthing/20100730-00/?p=13273
-    //
-    //
-    PEXCEPTION_RECORD ExceptionRecord = ExceptionInfo->ExceptionRecord;
-    if (ExceptionRecord->ExceptionCode == (DWORD)0xE06D7363) {
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
-    fprintf(stderr,
-            "GOT VECTORED EXCEPTION:\n"
-            "\tExceptionCode   : %p\n"
-            "\tExceptionFlags  : %p\n"
-            "\tExceptionAddr   : %p\n"
-            "\tNumberparams    : %ld\n",
-            ExceptionRecord->ExceptionCode,
-            ExceptionRecord->ExceptionFlags,
-            ExceptionRecord->ExceptionAddress,
-            ExceptionRecord->NumberParameters
-            );
-    if (ExceptionRecord->ExceptionFlags & 1) {
-        fprintf(stderr,  "\t\tEH_NONCONTINUABLE\n" );
-    }
-    if (ExceptionRecord->ExceptionFlags & 2) {
-        fprintf(stderr,  "\t\tEH_UNWINDING\n" );
-    }
-    if (ExceptionRecord->ExceptionFlags & 4) {
-        fprintf(stderr, "\t\tEH_EXIT_UNWIND\n" );
-    }
-    if (ExceptionRecord->ExceptionFlags & 8) {
-        fprintf(stderr,  "\t\tEH_STACK_INVALID\n" );
-    }
-    if (ExceptionRecord->ExceptionFlags & 0x10) {
-        fprintf(stderr,  "\t\tEH_NESTED_CALL\n" );
-    }
-    if (ExceptionRecord->ExceptionFlags & 0x20) {
-        fprintf(stderr,  "\t\tEH_TARGET_UNWIND\n" );
-    }
-    if (ExceptionRecord->ExceptionFlags & 0x40) {
-        fprintf(stderr,  "\t\tEH_COLLIDED_UNWIND\n" );
-    }
-    fprintf(stderr, "\n");
-    fflush(NULL);
-    for(DWORD i = 0; i < ExceptionRecord->NumberParameters; i++) {
-        fprintf(stderr, "\t\t\tParam %ld: %lX\n", i, ExceptionRecord->ExceptionInformation[i]);
-    }
-// #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
-//     if (ExceptionRecord->NumberParameters == 3) {
-//         fprintf(stderr, "\tAbout to traverse SEH chain\n");
-//         // C++ Exception records have 3 params.
-//         slp_show_seh_chain();
-//     }
-// #endif
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-#endif
 
 
 static PyObject*
@@ -3097,9 +2971,6 @@ greenlet_internal_mod_init() G_NOEXCEPT
 {
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
     GREENLET_NOINLINE_INIT();
-#ifdef _MSC_VER
-    AddVectoredExceptionHandler(CALL_FIRST, GreenletVectorHandler);
-#endif
 
     try {
         CreatedModule m(greenlet_module_def);
@@ -3194,24 +3065,12 @@ extern "C" {
 PyMODINIT_FUNC
 PyInit__greenlet(void)
 {
-#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
-        // temp debug
-        fprintf(stderr, "In PyInit__greenlet. Current chain:\n");
-        slp_show_seh_chain();
-#endif
-
     return greenlet_internal_mod_init();
 }
 #else
 PyMODINIT_FUNC
 init_greenlet(void)
 {
-#ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
-        // temp debug
-        fprintf(stderr, "In PyInit__greenlet. Current chain:\n");
-        slp_show_seh_chain();
-#endif
-
     greenlet_internal_mod_init();
 }
 #endif

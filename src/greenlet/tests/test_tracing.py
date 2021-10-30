@@ -56,12 +56,9 @@ class TestGreenletTracing(TestCase):
     def test_b_exception_disables_tracing(self):
         main = greenlet.getcurrent()
         def dummy():
-            print("Running in child greenlet", greenlet.getcurrent(), file=sys.stderr)
             main.switch()
         g = greenlet.greenlet(dummy)
-        print("Switching from main greenlet", main, "to child", g, file=sys.stderr)
         g.switch()
-        print("Returned from child greenlet, switching back", file=sys.stderr)
         with GreenletTracer(error_on_trace=True) as actions:
             self.assertRaises(SomeError, g.switch)
             self.assertEqual(greenlet.gettrace(), None)
