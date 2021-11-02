@@ -16,7 +16,7 @@ using greenlet::refs::OwnedGreenlet;
 using greenlet::refs::OwnedList;
 using greenlet::refs::PyErrFetchParam;
 using greenlet::refs::PyArgParseParam;
-using greenlet::refs::ImmortalObject;
+using greenlet::refs::ImmortalString;
 using greenlet::refs::CreatedModule;
 using greenlet::refs::PyErrPieces;
 using greenlet::refs::NewReference;
@@ -113,7 +113,7 @@ private:
     void* exception_state;
 #endif
 
-    static ImmortalObject get_referrers_name;
+    static ImmortalString get_referrers_name;
     static PythonAllocator<ThreadState> allocator;
 
     G_NO_COPIES_OF_CLS(ThreadState);
@@ -147,9 +147,8 @@ public:
         // greenlet.
         assert(this->main_greenlet.REFCNT() == 3);
         this->main_greenlet->thread_state = this;
-        if (!get_referrers_name) {
-            ThreadState::get_referrers_name = Greenlet_Intern("get_referrers");
-        }
+        ThreadState::get_referrers_name = "get_referrers";
+
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
         this->exception_state = slp_get_exception_state();
 #endif
@@ -443,7 +442,7 @@ public:
 
 };
 
-ImmortalObject ThreadState::get_referrers_name(nullptr);
+ImmortalString ThreadState::get_referrers_name(nullptr);
 PythonAllocator<ThreadState> ThreadState::allocator;
 
 template<typename Destructor>

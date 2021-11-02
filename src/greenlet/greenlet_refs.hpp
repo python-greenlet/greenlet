@@ -487,6 +487,32 @@ namespace greenlet { namespace refs {
         }
     };
 
+    class ImmortalString : public ImmortalObject
+    {
+    private:
+        G_NO_COPIES_OF_CLS(ImmortalString);
+        const char* str;
+    public:
+        ImmortalString(const char* const str) :
+            ImmortalObject(str ? Require(Greenlet_Intern(str)) : nullptr)
+        {
+            this->str = str;
+        }
+
+        inline ImmortalString& operator=(const char* const str)
+        {
+            if (!this->p) {
+                this->p = Require(Greenlet_Intern(str));
+                this->str = str;
+            }
+            else {
+                assert(this->str == str);
+            }
+            return *this;
+        }
+
+    };
+
     template<typename T>
     inline OwnedObject PyObjectPointer<T>::PyStr() const G_NOEXCEPT
     {
@@ -527,7 +553,9 @@ namespace greenlet { namespace refs {
     inline OwnedObject PyObjectPointer<T>::PyRequireAttr(const ImmortalObject& name) const
     {
         assert(this->p);
-        return OwnedObject::consuming(Require(PyObject_GetAttr(this->p, name)));
+        return OwnedObject::consuming(Require(
+                   PyObject_GetAttr(reinterpret_cast<PyObject*>(this->p),
+                                    name)));
     }
 
     template<typename T>
