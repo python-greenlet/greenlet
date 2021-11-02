@@ -17,7 +17,7 @@ export PIP_NO_WARN_SCRIPT_LOCATION=1
 
 if [ -d /greenlet -a -d /opt/python ]; then
     # Running inside docker
-
+    export GREENLET_MANYLINUX=1
     # Build for speed (we're going to test this anyway) and without assertions.
     # Note: -Ofast includes -ffast-math which affects process-wide floating-point flags (e.g. can affect numpy).
     # It may also violate standards compliance in a few ways. Rather than opt-out with -fno-fast-math,
@@ -38,7 +38,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
 
         python -mpip install -U pip
         python setup.py bdist_wheel
-        python -mpip install -U .
+        python -mpip install -U .[test]
         python -m unittest discover -v greenlet.tests
         PATH="$OPATH" auditwheel repair dist/greenlet*.whl
         cp wheelhouse/greenlet*.whl /greenlet/wheelhouse

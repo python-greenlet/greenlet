@@ -4,9 +4,10 @@
 
 /**
  * Definitions to aid with compatibility with different compilers.
+ *
  */
 
-
+#define UNUSED(expr) do { (void)(expr); } while (0)
 /* The compiler used for Python 2.7 on Windows doesn't include
    either stdint.h or cstdint.h. Nor does it understand nullptr or have
    std::shared_ptr. = delete, etc Sigh. */
@@ -14,22 +15,36 @@
 typedef unsigned long long uint64_t;
 typedef signed long long int64_t;
 typedef unsigned int uint32_t;
+// C++ defines NULL to be 0, which is ambiguous
+// with an integer in certain cases, and won't autoconvert to a
+// pointer in other cases.
 #define nullptr NULL
 #define G_HAS_METHOD_DELETE 0
+// Use G_EXPLICIT_OP as the prefix for operator methods
+// that should be explicit. Old MSVC doesn't support explicit operator
+// methods.
+#define G_EXPLICIT_OP
+#define G_NOEXCEPT throw()
 #else
+// Newer, reasonable compilers implementing C++11 or so.
 #include <cstdint>
 #define G_HAS_METHOD_DELETE 1
+#define G_EXPLICIT_OP explicit
+#define G_NOEXCEPT noexcept
 #endif
 
 #if G_HAS_METHOD_DELETE == 1
 #    define G_NO_COPIES_OF_CLS(Cls) public:     \
     Cls(const Cls& other) = delete; \
     Cls& operator=(const Cls& other) = delete
-
+#    define G_NO_ASSIGNMENT_OF_CLS(Cls) public:  \
+    Cls& operator=(const Cls& other) = delete
 #else
 #    define G_NO_COPIES_OF_CLS(Cls) private: \
     Cls(const Cls& other); \
     Cls& operator=(const Cls& other)
+#    define G_NO_ASSIGNMENT_OF_CLS(Cls) private: \
+        Cls& operator=(const Cls& other)
 #endif
 
 // CAUTION: MSVC is stupidly picky:

@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-
+from __future__ import print_function
 import sys
 import os
 import glob
@@ -15,6 +15,9 @@ global_compile_args = []
 
 # Extra compiler arguments passed to C++ extensions
 cpp_compile_args = []
+
+# Extra linker arguments passed to C++ extensions
+cpp_link_args = []
 
 # Extra compiler arguments passed to the main extension
 main_compile_args = []
@@ -38,10 +41,39 @@ if sys.platform == 'darwin':
     cpp_compile_args.append("--std=gnu++11")
 elif sys.platform == 'win32':
     # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
-    # correctly by default. "/EH" == exception handling. "s" == standard C++,
-    # "c" == extern C doesn't throw
-    cpp_compile_args.append("/EHsc")
+    # correctly by default. While newer versions do handle exceptions by default,
+    # they don't do it fully correctly. So we need an argument on all versions.
+    #"/EH" == exception handling.
+    #    "s" == standard C++,
+    #    "c" == extern C functions don't throw
+    # OR
+    #   "a" == standard C++, and Windows SEH; anything may throw, compiler optimizations
+    #          around try blocks are less aggressive.
+    # /EHsc is suggested, as /EHa isn't supposed to be linked to other things not built
+    # with it.
+    # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
+    handler = "/EHsc"
+    cpp_compile_args.append(handler)
+    # To disable most optimizations:
+    #cpp_compile_args.append('/Od')
 
+    # To enable assertions:
+    #cpp_compile_args.append('/UNDEBUG')
+
+    # To enable more compile-time warnings (/Wall produces a mountain of output).
+    #cpp_compile_args.append('/W4')
+
+    # To link with the debug C runtime...except we can't because we need
+    # the Python debug lib too, and they're not around by default
+    # cpp_compile_args.append('/MDd')
+
+    # Support fiber-safe thread-local storage: "the compiler mustn't
+    # cache the address of the TLS array, or optimize it as a common
+    # subexpression across a function call." This would probably solve
+    # some of the issues we had with MSVC caching the thread local
+    # variables on the stack, leading to having to split some
+    # functions up. Revisit those.
+    cpp_compile_args.append("/GT")
 
 def readfile(filename):
     with open(filename, 'r') as f: # pylint:disable=unspecified-encoding
@@ -88,6 +120,7 @@ else:
             language='c++',
             extra_objects=extra_objects,
             extra_compile_args=global_compile_args + main_compile_args + cpp_compile_args,
+            extra_link_args=cpp_link_args,
             depends=[
                 GREENLET_HEADER,
                 GREENLET_SRC_DIR + 'slp_platformselect.h',
@@ -107,18 +140,15 @@ else:
             include_dirs=[GREENLET_HEADER_DIR],
             extra_compile_args=global_compile_args,
         ),
+        Extension(
+            name='greenlet.tests._test_extension_cpp',
+            sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
+            language="c++",
+            include_dirs=[GREENLET_HEADER_DIR],
+            extra_compile_args=global_compile_args + cpp_compile_args,
+            extra_link_args=cpp_link_args,
+        ),
     ]
-
-    if os.environ.get('GREENLET_TEST_CPP', 'yes').lower() not in ('0', 'no', 'false'):
-        ext_modules.append(
-            Extension(
-                name='greenlet.tests._test_extension_cpp',
-                sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
-                language="c++",
-                include_dirs=[GREENLET_HEADER_DIR],
-                extra_compile_args=global_compile_args + cpp_compile_args,
-            )
-        )
 
 
 def get_greenlet_version():
@@ -177,8 +207,13 @@ setup(
     extras_require={
         'docs': [
             'Sphinx',
+            # 0.18b1 breaks sphinx 1.8.5 which is the latest version that runs
+            # on Python 2. The version pin sphinx itself contains isn't specific enough.
+            'docutils < 0.18; python_version < "3"',
         ],
         'test': [
+            'objgraph',
+             'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"',
         ],
     },
     python_requires=">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*",

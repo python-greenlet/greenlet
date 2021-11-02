@@ -20,7 +20,9 @@ namespace greenlet {
     class ThreadState;
 };
 struct _PyMainGreenlet;
+class SwitchingState;
 #define main_greenlet_ptr_t struct _PyMainGreenlet*
+#define switching_state_ptr_t SwitchingState*
 
 
 #include "greenlet.h"
@@ -29,6 +31,10 @@ struct _PyMainGreenlet;
 
 #include <vector>
 #include <memory>
+#include <stdexcept>
+
+
+extern PyTypeObject PyGreenlet_Type;
 
 // Define a special type for the main greenlets. This way it can have
 // a thread state pointer without having to carry the expense of a
@@ -38,7 +44,7 @@ struct _PyMainGreenlet;
 typedef struct _PyMainGreenlet
 {
     PyGreenlet super;
-    greenlet::ThreadState* thread_state;
+    greenlet::ThreadState* volatile thread_state;
 } PyMainGreenlet;
 
 // GCC and clang support mixing designated and non-designated
@@ -52,69 +58,121 @@ static PyTypeObject PyMainGreenlet_Type = {
 };
 
 
-#define UNUSED(expr) do { (void)(expr); } while (0)
 
-namespace greenlet {
 
-// This allocator is stateless; all instances are identical.
-// It can *ONLY* be used when we're sure we're holding the GIL
-// (Python's allocators require the GIL).
-template <class T>
-struct PythonAllocator : public std::allocator<T> {
-    // As a reminder: the `delete` expression first executes
-    // the destructors, and then it calls the static ``operator delete``
-    // on the type to release the storage. That's what our dispose()
-    // mimics.
-    PythonAllocator(const PythonAllocator& other)
-        : std::allocator<T>()
-    {
-        UNUSED(other);
-    }
+namespace greenlet
+{
 
-    PythonAllocator(const std::allocator<T> other)
-        : std::allocator<T>(other)
-    {}
+    // This allocator is stateless; all instances are identical.
+    // It can *ONLY* be used when we're sure we're holding the GIL
+    // (Python's allocators require the GIL).
+    template <class T>
+    struct PythonAllocator : public std::allocator<T> {
 
-    template <class U>
-    PythonAllocator(const std::allocator<U>& other)
-        : std::allocator<T>(other)
-    {
-    }
-
-    PythonAllocator() : std::allocator<T>() {}
-
-    T* allocate(size_t number_objects, const void* hint=0)
-    {
-        UNUSED(hint);
-        void* p;
-        if (number_objects == 1)
-            p = PyObject_Malloc(sizeof(T));
-        else
-            p = PyMem_Malloc(sizeof(T) * number_objects);
-        return static_cast<T*>(p);
-    }
-
-    void deallocate(T* t, size_t n)
-    {
-        void* p = t;
-        if (n == 1) {
-            PyObject_Free(p);
+        PythonAllocator(const PythonAllocator& other)
+            : std::allocator<T>()
+        {
+            UNUSED(other);
         }
-        else
-            PyMem_Free(p);
-    }
 
-    // Destroy and deallocate in one step.
-    void dispose(T* other)
+        PythonAllocator(const std::allocator<T> other)
+            : std::allocator<T>(other)
+        {}
+
+        template <class U>
+        PythonAllocator(const std::allocator<U>& other)
+            : std::allocator<T>(other)
+        {
+        }
+
+        PythonAllocator() : std::allocator<T>() {}
+
+        T* allocate(size_t number_objects, const void* hint=0)
+        {
+            UNUSED(hint);
+            void* p;
+            if (number_objects == 1)
+                p = PyObject_Malloc(sizeof(T));
+            else
+                p = PyMem_Malloc(sizeof(T) * number_objects);
+            return static_cast<T*>(p);
+        }
+
+        void deallocate(T* t, size_t n)
+        {
+            void* p = t;
+            if (n == 1) {
+                PyObject_Free(p);
+            }
+            else
+                PyMem_Free(p);
+        }
+
+    };
+
+    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
+
+    class TypeError : public std::runtime_error
     {
-        this->destroy(other);
-        this->deallocate(other, 1);
-    }
+    public:
+        TypeError(const char* const what) : std::runtime_error(what)
+        {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_TypeError, what);
+            }
+        }
+    };
+
+    class PyErrOccurred : public std::runtime_error
+    {
+    public:
+        PyErrOccurred() : std::runtime_error("")
+        {
+            assert(PyErr_Occurred());
+        }
+
+        PyErrOccurred(PyObject* exc_kind, const char* const msg)
+            : std::runtime_error(msg)
+        {
+            PyErr_SetString(exc_kind, msg);
+        }
+    };
+
+    /**
+     * Calls `Py_FatalError` when constructed, so you can't actually
+     * throw this. It just makes static analysis easier.
+     */
+    class PyFatalError : public std::runtime_error
+    {
+    public:
+        PyFatalError(const char* const msg)
+            : std::runtime_error(msg)
+        {
+            Py_FatalError(msg);
+        }
+    };
+
+    static inline PyObject*
+    Require(PyObject* p)
+    {
+        if (!p) {
+            throw PyErrOccurred();
+        }
+        return p;
+    };
+
+    static inline void
+    Require(const int retval)
+    {
+        if (retval < 0) {
+            throw PyErrOccurred();
+        }
+    };
+
+
+
 };
 
-typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
-
-};
 
 /**
   * Forward declarations needed in multiple files.
@@ -130,5 +188,5 @@ static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs
 #endif
 
 // Local Variables:
-// flycheck-clang-include-path: ("../../include" "/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7")
+// flycheck-clang-include-path: ("../../include" "/opt/local/Library/Frameworks/Python.framework/Versions/3.10/include/python3.10")
 // End:

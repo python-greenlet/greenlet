@@ -36,6 +36,11 @@ environment:
 
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
+    - PYTHON: "C:\\Python27"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "2.7.x"
+      PYTHON_EXE: python
+
     - PYTHON: "C:\\Python310-x64"
       PYTHON_VERSION: "3.10.0"
       PYTHON_ARCH: "64"
@@ -53,11 +58,6 @@ environment:
       PYTHON_VERSION: "3.9.x"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-
-    - PYTHON: "C:\\Python27"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "2.7.x"
-      PYTHON_EXE: python
 
     - PYTHON: "C:\\Python27-x64"
       PYTHON_ARCH: "64"
@@ -164,11 +164,15 @@ install:
   - "%CMD_IN_ENV% pip install --upgrade -r dev-requirements.txt"
 
 build_script:
+# Show any compiler warnings.
+  - "%CMD_IN_ENV% python setup.py build_ext"
   - "%CMD_IN_ENV% python -m pip install -U -e .[test,docs]"
+  - "%CMD_IN_ENV% python -m pip install -U zope.testrunner"
 
 
 test_script:
-  - "%CMD_IN_ENV% python -m unittest discover -v greenlet.tests"
+  - "%CMD_IN_ENV% python -c \"import faulthandler; assert faulthandler.is_enabled()\""
+  - "%CMD_IN_ENV% python -m zope.testrunner --test-path=src -vvv"
 # XXX: Doctest disabled pending sphinx release for 3.10; see tests.yml.
 #  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 
