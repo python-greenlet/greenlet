@@ -5,6 +5,9 @@
 2.0.0 (unreleased)
 ==================
 
+- Add experimental, untested support for 64-bit Windows on ARM using
+  MSVC. See `PR 271 <https://github.com/python-greenlet/greenlet/pull/271>`_.
+
 - Drop support for very old versions of GCC and MSVC.
 
 - Compilation now requires a compiler that either supports C++11 or
