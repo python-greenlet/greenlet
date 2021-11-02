@@ -702,13 +702,9 @@ g_calltrace(PyObject* tracefunc, PyObject* event, PyGreenlet* origin,
     PyThreadState* tstate;
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
     tstate = PyThreadState_GET();
-    tstate->tracing++;
-    TSTATE_USE_TRACING(tstate) = 0;
+    PyThreadState_EnterTracing(tstate);
     retval = PyObject_CallFunction(tracefunc, "O(OO)", event, origin, target);
-    tstate->tracing--;
-    TSTATE_USE_TRACING(tstate) =
-        (tstate->tracing <= 0 &&
-         ((tstate->c_tracefunc != NULL) || (tstate->c_profilefunc != NULL)));
+    PyThreadState_LeaveTracing(tstate);
     if (retval == NULL) {
         /* In case of exceptions trace function is removed */
         GET_THREAD_STATE().state().del_tracefunc();

@@ -20,10 +20,8 @@ Python 3.10 beta 1 changed tstate->use_tracing to a nested cframe member.
 See https://github.com/python/cpython/pull/25276
 We have to save and restore this as well.
 */
-#    define TSTATE_USE_TRACING(tstate) (tstate->cframe->use_tracing)
 #    define GREENLET_USE_CFRAME 1
 #else
-#    define TSTATE_USE_TRACING(tstate) (tstate->use_tracing)
 #    define GREENLET_USE_CFRAME 0
 #endif
 
@@ -92,6 +90,34 @@ struct PyModuleDef {
 PyObject* PyModule_Create(PyModuleDef* m)
 {
     return Py_InitModule(m->m_name, m->m_methods);
+}
+#endif
+
+// bpo-43760 added PyThreadState_EnterTracing() to Python 3.11.0a2
+#if PY_VERSION_HEX < 0x030B00A2 && !defined(PYPY_VERSION)
+static inline void PyThreadState_EnterTracing(PyThreadState *tstate)
+{
+    tstate->tracing++;
+#if PY_VERSION_HEX >= 0x030A00A1
+    tstate->cframe->use_tracing = 0;
+#else
+    tstate->use_tracing = 0;
+#endif
+}
+#endif
+
+// bpo-43760 added PyThreadState_LeaveTracing() to Python 3.11.0a2
+#if PY_VERSION_HEX < 0x030B00A2 && !defined(PYPY_VERSION)
+static inline void PyThreadState_LeaveTracing(PyThreadState *tstate)
+{
+    tstate->tracing--;
+    int use_tracing = (tstate->c_tracefunc != NULL
+                       || tstate->c_profilefunc != NULL);
+#if PY_VERSION_HEX >= 0x030A00A1
+    tstate->cframe->use_tracing = use_tracing;
+#else
+    tstate->use_tracing = use_tracing;
+#endif
 }
 #endif
 
