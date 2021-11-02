@@ -31,34 +31,41 @@ using greenlet::Require;
 // Helpers for reference counting.
 // XXX: running the test cases for greenlet 1.1.2 under Python 3.10+pydebug
 // with zope.testrunner's "report refcounts" option shows a growth of
-// 515 references when running 90 tests at a steady state (10 repeats)
+// over 500 references when running 90 tests at a steady state (10 repeats)
 // Running in verbose mode and adding objgraph to report gives us this
-// invo in a steady state:
-// tuple                 2807       +16
-// list                  1721       +14
-// function              6294       +11
-// dict                  3610        +9
-// cell                   698        +9
-// greenlet                73        +8
-// method                  98        +5
-// Genlet                  36        +4
-// list_iterator           27        +3
-// getset_descriptor      914        +2
-//   sum detail refcount=55942    sys refcount=379356   change=523
+// info in a steady state:
+//   Ran 90 tests with 0 failures, 0 errors and 1 skipped in 2.120 seconds.
+// Showing growth
+// tuple                 2811       +16
+// list                  1733       +14
+// function              6304       +11
+// dict                  3604        +9
+// cell                   707        +9
+// greenlet                81        +8
+// method                 103        +5
+// Genlet                  40        +4
+// list_iterator           30        +3
+// getset_descriptor      916        +2
+//   sum detail refcount=341678   sys refcount=379357   change=523
 //     Leak details, changes in instances and refcounts by type/class:
 //     type/class                                               insts   refs
 //     -------------------------------------------------------  -----   ----
+//     builtins.NoneType                                            0      2
 //     builtins.cell                                                9     20
-//     builtins.dict                                                9     82
+//     builtins.code                                                0     31
+//     builtins.dict                                               18     91
+//     builtins.frame                                              20     32
 //     builtins.function                                           11     28
 //     builtins.getset_descriptor                                   2      2
+//     builtins.int                                                 2     42
 //     builtins.list                                               14     37
 //     builtins.list_iterator                                       3      3
 //     builtins.method                                              5      5
 //     builtins.method_descriptor                                   0      9
+//     builtins.str                                                11     76
 //     builtins.traceback                                           1      2
-//     builtins.tuple                                              16     20
-//     builtins.type                                                2     19
+//     builtins.tuple                                              20     42
+//     builtins.type                                                2     28
 //     builtins.weakref                                             2      2
 //     greenlet.GreenletExit                                        1      1
 //     greenlet.greenlet                                            8     26
@@ -67,252 +74,51 @@ using greenlet::Require;
 //     greenlet.tests.test_generator_nested.Genlet                  4     26
 //     greenlet.tests.test_greenlet.convoluted                      1      2
 //     -------------------------------------------------------  -----   ----
-//     total                                                       89    286
+//     total                                                      135    509
 //
-// The merge ("Merge: 5d76ab4 7d85029" ) commit
-// 772045446e4a4ac278297666d633ae35a3cfb737, the first part of the C++
-// rewrite, reports a growth of 583 references when running 95 tests
-// at a steady state.
-// Running in verbose mode and adding objgraph to report gives us this
-// info in a steady state:
-//
-// function              6416       +21
-// tuple                 2864       +20
-// list                  1728       +13
-// cell                   717       +10
-// dict                  3616        +8
-// getset_descriptor      958        +6
-// method                  93        +4
-// Genlet                  40        +4
-// weakref               1568        +3
-// type                   952        +3
-//   sum detail refcount=56466    sys refcount=381354   change=595
+// As of the commit that adds this comment, we're doing better than
+// 1.1.2, but still not perfect:
+//   Ran 115 tests with 0 failures, 0 errors, 1 skipped in 8.623 seconds.
+// tuple            21310       +23
+// dict              5428       +18
+// frame              183       +17
+// list              1760       +14
+// function          6359       +11
+// cell               698        +8
+// method             105        +5
+// int               2709        +4
+// TheGenlet           40        +4
+// list_iterator       30        +3
+//   sum detail refcount=345051   sys refcount=383043   change=494
 //     Leak details, changes in instances and refcounts by type/class:
 //     type/class                                               insts   refs
 //     -------------------------------------------------------  -----   ----
-//     builtins.cell                                               10     18
-//     builtins.dict                                                8     82
-//     builtins.function                                           21     37
-//     builtins.getset_descriptor                                   6      6
-//     builtins.list                                               13     38
-//     builtins.list_iterator                                       3      3
-//     builtins.method                                              4      4
-//     builtins.method_descriptor                                   0      7
-//     builtins.set                                                 2      2
-//     builtins.tuple                                              20     24
-//     builtins.type                                                3     29
-//     builtins.weakref                                             3      3
-//     greenlet.greenlet                                            2      2
-//     greenlet.main_greenlet                                       1     14
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.Genlet                  4     26
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     -------------------------------------------------------  -----   ----
-//     total                                                      103    299
-//
-// The commit that adds this comment is actually leaking worse (for
-// the first time, I think), so the new code is also leaky:
-// function              6446       +26
-// tuple                 2846       +20
-// list                  1721       +13
-// cell                   707       +10
-// dict                  3615        +8
-// getset_descriptor      952        +6
-// method                  89        +4
-// Genlet                  36        +4
-// weakref               1566        +3
-// type                   950        +3
-//   sum detail refcount=56358    sys refcount=381575   change=635
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.cell                                               10     18
-//     builtins.dict                                                8     92
-//     builtins.function                                           26     42
-//     builtins.getset_descriptor                                   6      6
-//     builtins.list                                               13     38
-//     builtins.list_iterator                                       3      3
-//     builtins.method                                              4      4
-//     builtins.method_descriptor                                   0      7
-//     builtins.set                                                 2      2
-//     builtins.tuple                                              20     24
-//     builtins.type                                                3     29
-//     builtins.weakref                                             3      3
-//     greenlet.greenlet                                            2      2
-//     greenlet.main_greenlet                                       1     14
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.Genlet                  4     26
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     -------------------------------------------------------  -----   ----
-//     total                                                      108    314
-//
-// The commit adding this fixes a leak for run functions passed to the
-// constructor of a greenlet that is never switched to. Numbers are
-// almost as good as the original:
-// tuple                 2866       +20
-// function              6352       +14
-// list                  1734       +13
-// cell                   717       +10
-// dict                  3623        +8
-// getset_descriptor      958        +6
-// method                  93        +4
-// Genlet                  40        +4
-// weakref               1569        +3
-// type                   953        +3
-//   sum detail refcount=56311    sys refcount=381237   change=538
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.cell                                               10     18
-//     builtins.dict                                                8     68
-//     builtins.function                                           14     30
-//     builtins.getset_descriptor                                   6      6
-//     builtins.list                                               13     38
-//     builtins.list_iterator                                       3      3
-//     builtins.method                                              4      4
-//     builtins.method_descriptor                                   0      7
-//     builtins.set                                                 2      2
-//     builtins.tuple                                              20     24
-//     builtins.type                                                3     29
-//     builtins.weakref                                             3      3
-//     greenlet.greenlet                                            2      2
-//     greenlet.main_greenlet                                       1     14
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.Genlet                  4     26
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     -------------------------------------------------------  -----   ----
-//     total                                                       96    278
-
-//Progress with the commit that adds this comment:
-// tuple                 2846       +18
-// list                  1734       +13
-// function              6322       +11
-// dict                  3623        +8
-// cell                   687        +7
-// getset_descriptor      958        +6
-// Genlet                  40        +4
-// weakref               1569        +3
-// type                   953        +3
-// list_iterator           30        +3
-//   sum detail refcount=56042    sys refcount=380784   change=492
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.cell                                                7     13
-//     builtins.dict                                                8     62
-//     builtins.function                                           11     23
-//     builtins.getset_descriptor                                   6      6
-//     builtins.list                                               13     38
-//     builtins.list_iterator                                       3      3
-//     builtins.method_descriptor                                   0      7
-//     builtins.set                                                 2      2
-//     builtins.tuple                                              18     22
-//     builtins.type                                                3     29
-//     builtins.weakref                                             3      3
-//     greenlet.greenlet                                            2      2
-//     greenlet.main_greenlet                                       1     15
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.Genlet                  4     22
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     -------------------------------------------------------  -----   ----
-//     total                                                       84    251
-//
-// Current leakage:
-//
-// tuple                 2880       +21
-// function              6422       +17
-// list                  1756       +14
-// cell                   718       +10
-// dict                  3655        +9
-// getset_descriptor      964        +6
-// method                 103        +5
-// weakref               1586        +4
-// type                   951        +4
-// TheGenlet               40        +4
-//   sum detail refcount=56950    sys refcount=384079   change=618
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.cell                                               10     18
-//     builtins.dict                                                9     77
-//     builtins.function                                           17     34
-//     builtins.getset_descriptor                                   6      6
-//     builtins.list                                               14     39
-//     builtins.list_iterator                                       3      3
-//     builtins.method                                              5      5
-//     builtins.method_descriptor                                   0      8
-//     builtins.set                                                 2      2
-//     builtins.tuple                                              21     25
-//     builtins.type                                                4     35
-//     builtins.weakref                                             4      4
-//     greenlet.greenlet                                            1      1
-//     greenlet.main_greenlet                                       1     16
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.TheGenlet               4     29
-//     greenlet.tests.test_greenlet.convoluted                      1      2
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     -------------------------------------------------------  -----   ----
-//     total                                                      105  308
-//
-// NOTE: All the above was actually in a PyDebug build, but without
-// --with-trace-refs, so sys.getobjects() wasn't available and I
-// patched zope.testrunner to use gc.getobjects(). If I actually make
-// the build correct and use sys.getobjects, I see this:
-//
-//   Ran 113 tests with 0 failures, 0 errors and 1 skipped in 7.422 seconds.
-// tuple                 2796       +21
-// function              6354       +17
-// list                  1700       +14
-// cell                   678       +10
-// dict                  3619        +9
-// getset_descriptor      940        +6
-// method                  83        +5
-// weakref               1570        +4
-// type                   935        +4
-// TheGenlet               24        +4
-// Using getobjects
-//   sum detail refcount=343780   sys refcount=381719   change=618
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.NoneType                                            0      6
+//     builtins.NoneType                                            0     12
 //     builtins.bool                                                0      2
-//     builtins.cell                                               10     18
-//     builtins.code                                                0     34
-//     builtins.dict                                               20     88
+//     builtins.cell                                                8     16
+//     builtins.code                                                0     28
+//     builtins.dict                                               18     74
 //     builtins.frame                                              17     28
-//     builtins.function                                           17     34
-//     builtins.getset_descriptor                                   6      6
-//     builtins.int                                                 6     56
+//     builtins.function                                           11     28
+//     builtins.getset_descriptor                                   2      2
+//     builtins.int                                                 4     44
 //     builtins.list                                               14     39
 //     builtins.list_iterator                                       3      3
 //     builtins.method                                              5      5
 //     builtins.method_descriptor                                   0      8
-//     builtins.set                                                 2      2
-//     builtins.str                                                38    129
-//     builtins.tuple                                              27     46
-//     builtins.type                                                4     50
-//     builtins.weakref                                             4      4
+//     builtins.str                                                -2     69
+//     builtins.tuple                                              23     42
+//     builtins.type                                                2     28
+//     builtins.weakref                                             2      2
 //     greenlet.greenlet                                            1      1
 //     greenlet.main_greenlet                                       1     16
 //     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
 //     greenlet.tests.test_gc.object_with_finalizer                 1      1
 //     greenlet.tests.test_generator_nested.TheGenlet               4     29
 //     greenlet.tests.test_greenlet.convoluted                      1      2
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
-//     greenlet.tests.test_leaks.JustDelMe                          1      1
+//     greenlet.tests.test_leaks.HasFinalizerTracksInstances        2      2
 //     -------------------------------------------------------  -----   ----
-//     total                                                      183    610
+//     total                                                      117    482
 
 using greenlet::refs::BorrowedObject;
 using greenlet::refs::BorrowedGreenlet;

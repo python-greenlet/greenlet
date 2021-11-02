@@ -17,7 +17,6 @@ class GreenletTracer(object):
     def __call__(self, *args):
         self.actions.append(args)
         if self.error_on_trace:
-            print("Raising error on event", args, file=sys.stderr)
             raise SomeError
 
     def __enter__(self):
