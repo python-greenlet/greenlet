@@ -1508,40 +1508,36 @@ private:
 
 
     /**
-       Perform a stack switch according to some thread-local variables
-       that must be set in ``g_thread_state_global`` before calling this
-       function. Those variables are:
+       Perform a stack switch into this greenlet.
 
-       - current greenlet (holds a reference)
-       - target greenlet: greenlet to switch to (weak reference)
-       - switch_args: NULL if PyErr_Occurred(),
-       else a tuple of args sent to ts_target (weak reference)
-       - switch_kwargs: switch kwargs (weak reference)
+       This temporarily sets the global variable
+       ``switching_thread_state`` to this greenlet; as soon as the
+       call to ``slp_switch`` completes, this is reset to NULL.
+       Consequently, this depends on the GIL.
+
+       TODO: Adopt the stackman model and pass ``slp_switch`` a
+       callback function and context pointer; this eliminates the need
+       for global variables altogether.
 
        Because the stack switch happens in this function, this function
        can't use its own stack (local) variables, set before the switch,
        and then accessed after the switch.
 
-       Further, you con't even access ``g_thread_state_global`` before and
-       after the switch from the global variable. Because it is thread
-       local (and hard to declare as volatile), some compilers cache it in
-       a register/on the stack, notably new versions of MSVC; this breaks
-       with strange crashes sometime later, because writing to anything in
-       ``g_thread_state_global`` after the switch is actually writing to
-       random memory. For this reason, we call a non-inlined function to
-       finish the operation.
-
-
-       On return results are passed via those same global variables, plus:
-
-       - origin: originating greenlet (holds a reference)
+       Further, you con't even access ``g_thread_state_global`` before
+       and after the switch from the global variable. Because it is
+       thread local some compilers cache it in a register/on the
+       stack, notably new versions of MSVC; this breaks with strange
+       crashes sometime later, because writing to anything in
+       ``g_thread_state_global`` after the switch is actually writing
+       to random memory. For this reason, we call a non-inlined
+       function to finish the operation. (XXX: The ``/GT`` MSVC
+       compiler argument probably fixes that.)
 
        It is very important that stack switch is 'atomic', i.e. no
        calls into other Python code allowed (except very few that
        are safe), because global variables are very fragile. (This should
        no longer be the case with thread-local variables.)
 
-XXX: The above is outdated; rewrite.
     */
     switchstack_result_t g_switchstack(void)
     {

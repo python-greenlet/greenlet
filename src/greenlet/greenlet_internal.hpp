@@ -58,7 +58,7 @@ static PyTypeObject PyMainGreenlet_Type = {
 };
 
 
-#define UNUSED(expr) do { (void)(expr); } while (0)
+
 
 namespace greenlet
 {

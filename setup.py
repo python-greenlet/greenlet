@@ -54,13 +54,16 @@ elif sys.platform == 'win32':
     # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
     handler = "/EHsc"
     cpp_compile_args.append(handler)
-    # disable most optimizations
+    # To disable most optimizations:
     #cpp_compile_args.append('/Od')
-    # enable assertions
-    cpp_compile_args.append('/UNDEBUG')
-    # enable more compile-time warnings. /Wall produces a mountain of output.
+
+    # To enable assertions:
+    #cpp_compile_args.append('/UNDEBUG')
+
+    # To enable more compile-time warnings (/Wall produces a mountain of output).
     #cpp_compile_args.append('/W4')
-    # link with the debug C runtime...except we can't because we need
+
+    # To link with the debug C runtime...except we can't because we need
     # the Python debug lib too, and they're not around by default
     # cpp_compile_args.append('/MDd')
 
@@ -136,19 +139,15 @@ else:
             include_dirs=[GREENLET_HEADER_DIR],
             extra_compile_args=global_compile_args,
         ),
+        Extension(
+            name='greenlet.tests._test_extension_cpp',
+            sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
+            language="c++",
+            include_dirs=[GREENLET_HEADER_DIR],
+            extra_compile_args=global_compile_args + cpp_compile_args,
+            extra_link_args=cpp_link_args,
+        ),
     ]
-
-    if os.environ.get('GREENLET_TEST_CPP', 'yes').lower() not in ('0', 'no', 'false'):
-        ext_modules.append(
-            Extension(
-                name='greenlet.tests._test_extension_cpp',
-                sources=[GREENLET_TEST_DIR + '_test_extension_cpp.cpp'],
-                language="c++",
-                include_dirs=[GREENLET_HEADER_DIR],
-                extra_compile_args=global_compile_args + cpp_compile_args,
-                extra_link_args=cpp_link_args,
-            )
-        )
 
 
 def get_greenlet_version():

@@ -7,7 +7,7 @@
  *
  */
 
-
+#define UNUSED(expr) do { (void)(expr); } while (0)
 /* The compiler used for Python 2.7 on Windows doesn't include
    either stdint.h or cstdint.h. Nor does it understand nullptr or have
    std::shared_ptr. = delete, etc Sigh. */
