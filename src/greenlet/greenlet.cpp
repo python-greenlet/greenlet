@@ -353,7 +353,7 @@ static void GREENLET_NOINLINE(g_switchstack_success)(ThreadState*);
 extern "C" {
     static void GREENLET_NOINLINE(slp_restore_state)(ThreadState*);
     static int GREENLET_NOINLINE(slp_save_state)(char*, ThreadState*);
-#    if !(defined(MS_WIN64) && defined(_M_X64))
+#    if !(defined(MS_WIN64) && (defined(_M_X64) || defined(_M_ARM64)))
     static int GREENLET_NOINLINE(slp_switch)(void);
 #    endif
 };
