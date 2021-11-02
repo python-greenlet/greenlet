@@ -98,4 +98,31 @@ PyObject* PyModule_Create(PyModuleDef* m)
 }
 #endif
 
+// bpo-43760 added PyThreadState_EnterTracing() to Python 3.11.0a2
+// bpo-43760 added PyThreadState_LeaveTracing() to Python 3.11.0a2
+#if PY_VERSION_HEX < 0x030B00A2
+static inline void PyThreadState_EnterTracing(PyThreadState *tstate)
+{
+    tstate->tracing++;
+#if GREENLET_USE_CFRAME
+    tstate->cframe->use_tracing = 0;
+#else
+    tstate->use_tracing = 0;
+#endif
+}
+
+
+static inline void PyThreadState_LeaveTracing(PyThreadState *tstate)
+{
+    tstate->tracing--;
+    int use_tracing = (tstate->c_tracefunc != NULL
+                       || tstate->c_profilefunc != NULL);
+#if GREENLET_USE_CFRAME
+    tstate->cframe->use_tracing = use_tracing;
+#else
+    tstate->use_tracing = use_tracing;
+#endif
+}
+#endif
+
 #endif /* GREENLET_CPYTHON_COMPAT_H */

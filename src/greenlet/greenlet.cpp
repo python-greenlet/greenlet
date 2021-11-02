@@ -1547,6 +1547,50 @@ static void GREENLET_NOINLINE(slp_restore_state_trampoline)()
 
 /***********************************************************/
 
+class TracingGuard
+{
+private:
+    PyThreadState* tstate;
+public:
+    TracingGuard()
+        : tstate(PyThreadState_GET())
+    {
+        PyThreadState_EnterTracing(this->tstate);
+    }
+
+    ~TracingGuard()
+    {
+        PyThreadState_LeaveTracing(this->tstate);
+        this->tstate = nullptr;
+    }
+
+    inline void CallTraceFunction(const OwnedObject& tracefunc,
+                                  const ImmortalEventName& event,
+                                  const BorrowedGreenlet& origin,
+                                  const BorrowedGreenlet& target)
+    {
+        // TODO: This calls tracefunc(event, (origin, target)). Add a shortcut
+        // function for that that's specialized to avoid the Py_BuildValue
+        // string parsing, or start with just using "ON" format with PyTuple_Pack(2,
+        // origin, target). That seems like what the N format is meant
+        // for.
+        // XXX: Why does event not automatically cast back to a PyObject?
+        // It tries to call the "deleted constructor ImmortalEventName
+        // const" instead.
+        assert(tracefunc);
+        assert(event);
+        assert(origin);
+        assert(target);
+        NewReference retval(PyObject_CallFunction(tracefunc.borrow(),
+                                             "O(OO)",
+                                             event.borrow(),
+                                             origin.borrow(),
+                                             target.borrow()));
+        if (!retval) {
+            throw PyErrOccurred();
+        }
+    }
+};
 
 static void
 g_calltrace(const OwnedObject& tracefunc,
@@ -1554,43 +1598,17 @@ g_calltrace(const OwnedObject& tracefunc,
             const BorrowedGreenlet& origin,
             const BorrowedGreenlet& target)
 {
-    PyThreadState* tstate;
     PyErrPieces saved_exc;
-    tstate = PyThreadState_GET();
-    tstate->tracing++;
-    TSTATE_USE_TRACING(tstate) = 0;
-    // TODO: This calls tracefunc(event, (origin, target)). Add a shortcut
-    // function for that that's specialized to avoid the Py_BuildValue
-    // string parsing, or start with just using "ON" format with PyTuple_Pack(2,
-    // origin, target). That seems like what the N format is meant
-    // for.
-    // XXX: Why does event not automatically cast back to a PyObject?
-    // It tries to call the "deleted constructor ImmortalEventName
-    // const" instead.
-    assert(event);
-    assert(origin);
-    assert(target);
-    NewReference retval(PyObject_CallFunction(tracefunc.borrow(),
-                                             "O(OO)",
-                                             event.borrow(),
-                                             origin.borrow(),
-                                             target.borrow()));
-    tstate->tracing--;
-    TSTATE_USE_TRACING(tstate) =
-        (tstate->tracing <= 0 &&
-         ((tstate->c_tracefunc != NULL) || (tstate->c_profilefunc != NULL)));
-
-    if (!retval) {
+    try {
+        TracingGuard tracing_guard;
+        tracing_guard.CallTraceFunction(tracefunc, event, origin, target);
+    }
+    catch (const PyErrOccurred&) {
         // In case of exceptions trace function is removed,
         // and any existing exception is replaced with the tracing
         // exception.
-        assert(PyErr_Occurred());
-        // In principle, the DECREF of the tracefunc that happens here
-        // could run arbitrary Python code and maybe even switch
-        // greenlets. Our caller is holding another reference to the
-        // tracefunc, though, so the decref won't happen until they unwind.
         GET_THREAD_STATE().state().set_tracefunc(Py_None);
-        throw PyErrOccurred();
+        throw;
     }
 
     saved_exc.PyErrRestore();
