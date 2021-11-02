@@ -138,6 +138,20 @@ namespace greenlet
         }
     };
 
+    /**
+     * Calls `Py_FatalError` when constructed, so you can't actually
+     * throw this. It just makes static analysis easier.
+     */
+    class PyFatalError : public std::runtime_error
+    {
+    public:
+        PyFatalError(const char* const msg)
+            : std::runtime_error(msg)
+        {
+            Py_FatalError(msg);
+        }
+    };
+
     static inline PyObject*
     Require(PyObject* p)
     {
@@ -151,7 +165,6 @@ namespace greenlet
     Require(const int retval)
     {
         if (retval < 0) {
-            assert(PyErr_Occurred());
             throw PyErrOccurred();
         }
     };

@@ -9,7 +9,7 @@
 #include <string>
 #include <algorithm>
 #include <exception>
-#include <iostream> // XXX: Don't leave this in release
+
 
 #include "greenlet_internal.hpp"
 #include "greenlet_refs.hpp"
@@ -17,15 +17,13 @@
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
 
-using std::swap;
-using std::cerr;
-using std::endl;
 using greenlet::ThreadState;
 using greenlet::Mutex;
 using greenlet::LockGuard;
 using greenlet::LockInitError;
 using greenlet::PyErrOccurred;
 using greenlet::Require;
+using greenlet::PyFatalError;
 
 
 // Helpers for reference counting.
@@ -461,7 +459,7 @@ static G_THREAD_LOCAL_VAR ThreadStateCreator g_thread_state_global;
 typedef greenlet::ThreadStateCreator<ThreadState_DestroyWithGIL> ThreadStateCreator;
 #define G_THREAD_STATE_DICT_CLEANUP_TYPE
 #include "greenlet_thread_state_dict_cleanup.hpp"
-
+typedef greenlet::refs::OwnedReference<PyGreenletCleanup> OwnedGreenletCleanup;
 // RECALL: legacy thread-local objects (__thread on GCC, __declspec(thread) on
 // MSVC) can't have constructors or destructors, they have to be
 // constant. So we indirect through a pointer and a function.
@@ -478,35 +476,24 @@ static ThreadStateCreator& GET_THREAD_STATE()
         // is much more useful.
         _g_thread_state_global_ptr = new ThreadStateCreator();
         if (!_g_thread_state_global_ptr) {
-            const char* const err ="greenlet: Failed to create greenlet thread state.";
-            Py_FatalError(err);
-            throw std::runtime_error(err);
+            throw PyFatalError("greenlet: Failed to create greenlet thread state.");
         }
 
-        PyGreenletCleanup* cleanup = (PyGreenletCleanup*)PyType_GenericAlloc(&PyGreenletCleanup_Type, 0);
+        OwnedGreenletCleanup cleanup(OwnedGreenletCleanup::consuming(PyType_GenericAlloc(&PyGreenletCleanup_Type, 0)));
         if (!cleanup) {
-            const char* const err ="greenlet: Failed to create greenlet thread state cleanup.";
-            Py_FatalError(err);
-            throw std::runtime_error(err);
+            throw PyFatalError("greenlet: Failed to create greenlet thread state cleanup.");
         }
 
         cleanup->thread_state_creator = _g_thread_state_global_ptr;
-        assert(PyObject_GC_IsTracked((PyObject*)cleanup));
+        assert(PyObject_GC_IsTracked(cleanup.borrow_o()));
 
         PyObject* ts_dict_w = PyThreadState_GetDict();
         if (!ts_dict_w) {
-            const char* const err = "greenlet: Failed to get Python thread state.";
-            Py_FatalError(err);
-            throw std::runtime_error(err);
+            throw PyFatalError("greenlet: Failed to get Python thread state.");
         }
-        if (PyDict_SetItemString(ts_dict_w, "__greenlet_cleanup", (PyObject*)cleanup) < 0) {
-            const char* const err = "greenlet: Failed to save cleanup key in Python thread state.";
-            Py_FatalError(err);
-            throw std::runtime_error(err);
+        if (PyDict_SetItemString(ts_dict_w, "__greenlet_cleanup", cleanup.borrow_o()) < 0) {
+            throw PyFatalError("greenlet: Failed to save cleanup key in Python thread state.");
         }
-        // The dict owns one reference now.
-        Py_DECREF(cleanup);
-
     }
     return *_g_thread_state_global_ptr;
 }

@@ -182,7 +182,7 @@ namespace greenlet { namespace refs {
 
         static OwnedReference<T> consuming(PyObject* p)
         {
-            return OwnedReference<T>(p);
+            return OwnedReference<T>(reinterpret_cast<T*>(p));
         }
 
         static OwnedReference<T> owning(T* p)
