@@ -29,9 +29,19 @@ class SwitchingState;
 #define switching_state_ptr_t SwitchingState*
 #define exception_state_ptr_t greenlet::ExceptionState
 #define python_state_t greenlet::PythonState
+#define stack_state_t greenlet::StackState
 
 
 #include "greenlet.h"
+
+#undef PyGreenlet_MAIN
+#undef PyGreenlet_STARTED
+#undef PyGreenlet_ACTIVE
+
+#define PyGreenlet_MAIN(op) (((PyGreenlet*)(op))->stack_state.main())
+#define PyGreenlet_STARTED(op) (((PyGreenlet*)(op))->stack_state.started())
+#define PyGreenlet_ACTIVE(op) (((PyGreenlet*)(op))->stack_state.active())
+
 
 #include <vector>
 #include <memory>

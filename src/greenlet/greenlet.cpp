@@ -26,6 +26,7 @@ using greenlet::PyErrOccurred;
 using greenlet::Require;
 using greenlet::PyFatalError;
 using greenlet::ExceptionState;
+using greenlet::StackState;
 
 
 // Helpers for reference counting.
@@ -538,8 +539,8 @@ green_create_main(void)
         Py_FatalError("green_create_main failed to alloc");
         return NULL;
     }
-    gmain->super.stack_start = (char*)1;
-    gmain->super.stack_stop = (char*)-1;
+    gmain->super.stack_state = StackState::make_main();
+
     // circular reference; the pending call will clean this up.
     gmain->super.main_greenlet_s = gmain;
     Py_INCREF(gmain);
@@ -848,53 +849,21 @@ public:
 #ifdef SLP_BEFORE_RESTORE_STATE
         SLP_BEFORE_RESTORE_STATE();
 #endif
-
-        /* Restore the heap copy back into the C stack */
-        if (g->stack_saved != 0) {
-            memcpy(g->stack_start, g->stack_copy, g->stack_saved);
-            PyMem_Free(g->stack_copy);
-            g->stack_copy = NULL;
-            g->stack_saved = 0;
-        }
-        if (owner->stack_start == NULL) {
-            owner = owner->stack_prev; /* greenlet is dying, skip it */
-        }
-        while (owner && owner->stack_stop <= g->stack_stop) {
-            owner = owner->stack_prev; /* find greenlet with more stack */
-        }
-        g->stack_prev = owner;
+        // XXX: The correctness of this might actually depend on it
+        // being inlined?
+        g->stack_state.copy_heap_to_stack(owner->stack_state);
     }
 
     inline int slp_save_state(char* stackref) G_NOEXCEPT
     {
-        /* must free all the C stack up to target_stop */
-        const char* const target_stop = target->stack_stop;
-        PyGreenlet* owner(this->thread_state.borrow_current());
-        assert(owner->stack_saved == 0);
-        if (owner->stack_start == NULL) {
-            owner = owner->stack_prev; /* not saved if dying */
-        }
-        else {
-            owner->stack_start = stackref;
-        }
-
+        // XXX: This used to happen in the middle, before saving, but
+        // after finding the next owner. Does that matter? This is
+        // only defined for Sparc/GCC where it flushes register
+        // windows to the stack (I think)
 #ifdef SLP_BEFORE_SAVE_STATE
         SLP_BEFORE_SAVE_STATE();
 #endif
-
-        while (owner->stack_stop < target_stop) {
-            /* ts_current is entierely within the area to free */
-            if (g_save(owner, owner->stack_stop)) {
-                return -1; /* XXX */
-            }
-            owner = owner->stack_prev;
-        }
-        if (owner != (target.borrow())) {
-            if (g_save(owner, target_stop)) {
-                return -1; /* XXX */
-            }
-        }
-        return 0;
+        return this->target->stack_state.copy_stack_to_heap(stackref, this->thread_state.borrow_current()->stack_state);
     }
 
     OwnedObject g_switch()
@@ -1086,15 +1055,7 @@ protected:
         self->python_state.set_new_cframe(trace_info);
 #endif
         /* start the greenlet */
-        self->stack_start = NULL;
-        self->stack_stop = (char*)mark;
-        if ((state.borrow_current())->stack_start == NULL) {
-            /* ts_current is dying */
-            self->stack_prev = (state.borrow_current())->stack_prev;
-        }
-        else {
-            self->stack_prev = state.borrow_current().borrow();
-        }
+        self->stack_state = StackState(mark, state.borrow_current()->stack_state);
         self->python_state.set_initial_state(PyThreadState_GET());
         self->exception_state.clear();
 
@@ -1127,9 +1088,7 @@ protected:
         if (err.status < 0) {
             /* start failed badly, restore greenlet state */
             // XXX: This code path is not tested.
-            self->stack_start = NULL;
-            self->stack_stop = NULL;
-            self->stack_prev = NULL;
+            self->stack_state = StackState();
         }
         return err;
     }
@@ -1160,7 +1119,7 @@ private:
         /* stack variables from above are no good and also will not unwind! */
         // EXCEPT: That can't be true, we access run, among others, here.
 
-        self->stack_start = (char*)1; /* running */
+        self->stack_state.set_active(); /* running */
 
         // XXX: We could clear this much earlier, right?
         // Or would that introduce the possibility of running Python
@@ -1230,7 +1189,7 @@ private:
         result = g_handle_exit(result, this->target.borrow());
         assert(this->thread_state.borrow_current() == this->target);
         /* jump back to parent */
-        self->stack_start = NULL; /* dead */
+        self->stack_state.set_inactive(); /* dead */
         for (PyGreenlet* parent = self->parent; parent != NULL; parent = parent->parent) {
             // We need to somewhere consume a reference to
             // the result; in most cases we'll never have control
@@ -1434,40 +1393,6 @@ private:
             this->release_args();
             throw;
         }
-    }
-
-
-
-
-    static int
-    g_save(PyGreenlet* g, const char *const stop) G_NOEXCEPT
-    {
-        /* Save more of g's stack into the heap -- at least up to 'stop'
-
-           g->stack_stop |________|
-           |        |
-           |    __ stop       . . . . .
-           |        |    ==>  .       .
-           |________|          _______
-           |        |         |       |
-           |        |         |       |
-           g->stack_start |        |         |_______| g->stack_copy
-
-        */
-        intptr_t sz1 = g->stack_saved;
-        intptr_t sz2 = stop - g->stack_start;
-        assert(g->stack_start != NULL);
-        if (sz2 > sz1) {
-            char* c = (char*)PyMem_Realloc(g->stack_copy, sz2);
-            if (!c) {
-                PyErr_NoMemory();
-                return -1;
-            }
-            memcpy(c + sz1, g->stack_start + sz1, sz2 - sz1);
-            g->stack_copy = c;
-            g->stack_saved = sz2;
-        }
-        return 0;
     }
 
 };
@@ -1687,7 +1612,10 @@ kill_greenlet(BorrowedGreenlet& self)
         // The thread is dead, we can't raise an exception.
         // We need to make it look non-active, though, so that dealloc
         // finishes killing it.
-        self->stack_start = NULL;
+        self->stack_state = StackState(); // XXX: This was only
+                                          // defining stack_start,
+                                          // yes? Do we need any of
+                                          // the other variables?
         assert(!self.active());
         self->python_state.tp_clear(true);
     }
@@ -2112,7 +2040,7 @@ green_getdead(PyGreenlet* self, void* c)
 static PyObject*
 green_get_stack_saved(PyGreenlet* self, void* c)
 {
-    return PyLong_FromSsize_t(self->stack_saved);
+    return PyLong_FromSsize_t(self->stack_state.stack_saved());
 }
 
 static PyObject*
@@ -2465,6 +2393,47 @@ PyGreenlet_Throw(PyGreenlet* self, PyObject* typ, PyObject* val, PyObject* tb)
     }
 }
 
+static int
+Extern_PyGreenlet_MAIN(PyGreenlet* self)
+{
+    if (!PyGreenlet_Check(self)) {
+        PyErr_BadArgument();
+        return -1;
+    }
+    return self->stack_state.main();
+}
+
+static int
+Extern_PyGreenlet_ACTIVE(PyGreenlet* self)
+{
+    if (!PyGreenlet_Check(self)) {
+        PyErr_BadArgument();
+        return -1;
+    }
+    return self->stack_state.active();
+}
+
+static int
+Extern_PyGreenlet_STARTED(PyGreenlet* self)
+{
+    if (!PyGreenlet_Check(self)) {
+        PyErr_BadArgument();
+        return -1;
+    }
+    return self->stack_state.started();
+}
+
+static PyGreenlet*
+Extern_PyGreenlet_GET_PARENT(PyGreenlet* self)
+{
+    if (!PyGreenlet_Check(self)) {
+        PyErr_BadArgument();
+        return NULL;;
+    }
+    Py_XINCREF(self->parent);
+    return self->parent;
+}
+
 /** End C API ****************************************************************/
 
 static PyMethodDef green_methods[] = {
@@ -2761,6 +2730,12 @@ greenlet_internal_mod_init() G_NOEXCEPT
         _PyGreenlet_API[PyGreenlet_Throw_NUM] = (void*)PyGreenlet_Throw;
         _PyGreenlet_API[PyGreenlet_Switch_NUM] = (void*)PyGreenlet_Switch;
         _PyGreenlet_API[PyGreenlet_SetParent_NUM] = (void*)PyGreenlet_SetParent;
+
+        /* Previously macros, but now need to be functions externally. */
+        _PyGreenlet_API[PyGreenlet_MAIN_NUM] = (void*)Extern_PyGreenlet_MAIN;
+        _PyGreenlet_API[PyGreenlet_STARTED_NUM] = (void*)Extern_PyGreenlet_STARTED;
+        _PyGreenlet_API[PyGreenlet_ACTIVE_NUM] = (void*)Extern_PyGreenlet_ACTIVE;
+        _PyGreenlet_API[PyGreenlet_GET_PARENT_NUM] = (void*)Extern_PyGreenlet_GET_PARENT;
 
         /* XXX: Note that our module name is ``greenlet._greenlet``, but for
            backwards compatibility with existing C code, we need the _C_API to

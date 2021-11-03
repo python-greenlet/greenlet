@@ -69,9 +69,9 @@ do {                                                    \
     stackref += STACK_MAGIC;                 \
     if (slp_save_state_trampoline((char*)stackref))    \
         return -1;                                     \
-    if (!PyGreenlet_ACTIVE(switching_thread_state))    \
+    if (!switching_thread_state->stack_state.active()) \
         return 1;                                      \
-    stsizediff = switching_thread_state->stack_start - (char*)stackref; \
+    stsizediff = switching_thread_state->stack_state.stack_start() - (char*)stackref; \
 } while (0)
 
 #define SLP_RESTORE_STATE() slp_restore_state_trampoline()

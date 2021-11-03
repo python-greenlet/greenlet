@@ -78,6 +78,40 @@ namespace greenlet
 #endif
         void will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT;
     };
+
+    class StackState
+    {
+        // By having only plain C (POD) members, no virtual functions
+        // or bases, we get a trivial assignment operator generated
+        // for us.
+    private:
+        char* _stack_start;
+        char* stack_stop;
+        char* stack_copy;
+        intptr_t _stack_saved;
+        StackState* stack_prev;
+        int copy_stack_to_heap_up_to(const char* const stop);
+    public:
+        /**
+         * Creates a started, but inactive, state.
+         */
+        StackState(void* mark, StackState& current);
+        /**
+         * Creates an inactive, unstarted, state.
+         */
+        StackState();
+
+        inline void copy_heap_to_stack(const StackState& current) G_NOEXCEPT;
+        inline int copy_stack_to_heap(char* const stackref, const StackState& current) G_NOEXCEPT;
+        inline bool started() const G_NOEXCEPT;
+        inline bool main() const G_NOEXCEPT;
+        inline bool active() const G_NOEXCEPT;
+        inline void set_active() G_NOEXCEPT;
+        inline void set_inactive() G_NOEXCEPT;
+        inline intptr_t stack_saved() const G_NOEXCEPT;
+        inline char* stack_start() const G_NOEXCEPT;
+        static inline StackState make_main() G_NOEXCEPT;
+    };
 };
 
 template<typename T>
@@ -349,7 +383,159 @@ OwnedObject& PythonState::context()
 {
     return this->_context;
 }
-
 #endif
+
+using greenlet::StackState;
+
+StackState::StackState(void* mark, StackState& current)
+    : _stack_start(nullptr),
+      stack_stop((char*)mark),
+      stack_copy(nullptr),
+      _stack_saved(0)
+{
+    if (!current._stack_start) {
+        /* ts_current is dying */
+        this->stack_prev = current.stack_prev;
+    }
+    else {
+        this->stack_prev = &current;
+    }
+}
+
+StackState::StackState()
+    : _stack_start(nullptr),
+      stack_stop(nullptr),
+      stack_copy(nullptr),
+      _stack_saved(0)
+{}
+
+inline void StackState::copy_heap_to_stack(const StackState& current) G_NOEXCEPT
+{
+    /* Restore the heap copy back into the C stack */
+    if (this->_stack_saved != 0) {
+        memcpy(this->_stack_start, this->stack_copy, this->_stack_saved);
+        PyMem_Free(this->stack_copy);
+        this->stack_copy = nullptr;
+        this->_stack_saved = 0;
+    }
+    StackState* owner = const_cast<StackState*>(&current);
+    if (owner->_stack_start == NULL) {
+        owner = owner->stack_prev; /* greenlet is dying, skip it */
+    }
+    while (owner && owner->stack_stop <= this->stack_stop) {
+        owner = owner->stack_prev; /* find greenlet with more stack */
+    }
+    this->stack_prev = owner;
+}
+
+int StackState::copy_stack_to_heap_up_to(const char* const stop)
+{
+    /* Save more of g's stack into the heap -- at least up to 'stop'
+       g->stack_stop |________|
+                     |        |
+                     |    __ stop       . . . . .
+                     |        |    ==>  .       .
+                     |________|          _______
+                     |        |         |       |
+                     |        |         |       |
+      g->stack_start |        |         |_______| g->stack_copy
+     */
+    intptr_t sz1 = this->_stack_saved;
+    intptr_t sz2 = stop - this->_stack_start;
+    assert(this->_stack_start != NULL);
+    if (sz2 > sz1) {
+        char* c = (char*)PyMem_Realloc(this->stack_copy, sz2);
+        if (!c) {
+            PyErr_NoMemory();
+            return -1;
+        }
+        memcpy(c + sz1, this->_stack_start + sz1, sz2 - sz1);
+        this->stack_copy = c;
+        this->_stack_saved = sz2;
+    }
+    return 0;
+}
+
+inline int StackState::copy_stack_to_heap(char* const stackref,
+                                          const StackState& current) G_NOEXCEPT
+{
+    /* must free all the C stack up to target_stop */
+    const char* const target_stop = this->stack_stop;
+
+    StackState* owner = const_cast<StackState*>(&current);
+    assert(owner->_stack_saved == 0); // everything is present on the stack
+    if (owner->_stack_start == nullptr) {
+        owner = owner->stack_prev; /* not saved if dying */
+    }
+    else {
+        owner->_stack_start = stackref;
+    }
+
+    while (owner->stack_stop < target_stop) {
+        /* ts_current is entierely within the area to free */
+        if (owner->copy_stack_to_heap_up_to(owner->stack_stop)) {
+            return -1; /* XXX */
+        }
+        owner = owner->stack_prev;
+    }
+    if (owner != this) {
+        if (owner->copy_stack_to_heap_up_to(target_stop)) {
+            return -1; /* XXX */
+        }
+    }
+    return 0;
+}
+
+inline bool StackState::started() const G_NOEXCEPT
+{
+    return this->stack_stop != nullptr;
+}
+
+inline bool StackState::main() const G_NOEXCEPT
+{
+    return this->stack_stop == (char*)-1;
+}
+
+inline bool StackState::active() const G_NOEXCEPT
+{
+    return this->_stack_start != nullptr;
+}
+
+inline void StackState::set_active() G_NOEXCEPT
+{
+    assert(this->_stack_start == nullptr);
+    this->_stack_start = (char*)1;
+}
+
+inline void StackState::set_inactive() G_NOEXCEPT
+{
+    this->_stack_start = nullptr;
+    // XXX: What if we still have memory out there?
+    // That case is actually triggered by
+    // test_issue251_issue252_explicit_reference_not_collectable (greenlet.tests.test_leaks.TestLeaks)
+    // and
+    // test_issue251_issue252_need_to_collect_in_background (greenlet.tests.test_leaks.TestLeaks)
+}
+
+inline intptr_t StackState::stack_saved() const G_NOEXCEPT
+{
+    return this->_stack_saved;
+}
+
+inline char* StackState::stack_start() const G_NOEXCEPT
+{
+    return this->_stack_start;
+}
+
+
+inline StackState StackState::make_main() G_NOEXCEPT
+{
+    StackState s;
+    s._stack_start = (char*)1;
+    s.stack_stop = (char*)-1;
+    return s;
+}
+
+
 
 #endif

@@ -236,10 +236,11 @@ private:
                 if (murder) {
                     // Force each greenlet to appear dead; we can't raise an
                     // exception into it anymore anyway.
+                    // XXX: If they have saved stack, it leaks!
                     Py_CLEAR(to_del->main_greenlet_s);
                     if (PyGreenlet_ACTIVE(to_del)) {
                         assert(to_del->python_state.has_top_frame());
-                        to_del->stack_start = NULL;
+                        to_del->stack_state.set_inactive();
                         assert(!PyGreenlet_ACTIVE(to_del));
 
                         // We're holding a borrowed reference to the last
