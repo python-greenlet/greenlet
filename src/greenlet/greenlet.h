@@ -17,6 +17,8 @@ extern "C" {
 #ifndef GREENLET_MODULE
 #define main_greenlet_ptr_t void*
 #define switching_state_ptr_t void*
+// TODO: This will become a member of this type, not a pointer.
+#define exception_state_ptr_t void*
 #endif
 
 typedef struct _greenlet {
@@ -33,14 +35,9 @@ typedef struct _greenlet {
     struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
     int recursion_depth;
     PyObject* weakreflist;
-#if PY_VERSION_HEX >= 0x030700A3
-    _PyErr_StackItem* exc_info;
-    _PyErr_StackItem exc_state;
-#else
-    PyObject* exc_type;
-    PyObject* exc_value;
-    PyObject* exc_traceback;
-#endif
+    // This is only temporary!
+    exception_state_ptr_t exception_state;
+
     PyObject* dict;
 #if PY_VERSION_HEX >= 0x030700A3
     PyObject* context;

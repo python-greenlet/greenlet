@@ -13,21 +13,24 @@
  *
  * C++ templates and inline functions should go here.
  */
-
+#include "greenlet_compiler_compat.hpp"
+#include "greenlet_cpython_compat.hpp"
+#include "greenlet_exceptions.hpp"
+#include "greenlet_greenlet.hpp"
 
 #define GREENLET_MODULE
 namespace greenlet {
     class ThreadState;
+    class ExceptionState;
 };
 struct _PyMainGreenlet;
 class SwitchingState;
 #define main_greenlet_ptr_t struct _PyMainGreenlet*
 #define switching_state_ptr_t SwitchingState*
+#define exception_state_ptr_t greenlet::ExceptionState
 
 
 #include "greenlet.h"
-#include "greenlet_compiler_compat.hpp"
-#include "greenlet_cpython_compat.hpp"
 
 #include <vector>
 #include <memory>
@@ -111,65 +114,6 @@ namespace greenlet
     };
 
     typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
-
-    class TypeError : public std::runtime_error
-    {
-    public:
-        TypeError(const char* const what) : std::runtime_error(what)
-        {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_TypeError, what);
-            }
-        }
-    };
-
-    class PyErrOccurred : public std::runtime_error
-    {
-    public:
-        PyErrOccurred() : std::runtime_error("")
-        {
-            assert(PyErr_Occurred());
-        }
-
-        PyErrOccurred(PyObject* exc_kind, const char* const msg)
-            : std::runtime_error(msg)
-        {
-            PyErr_SetString(exc_kind, msg);
-        }
-    };
-
-    /**
-     * Calls `Py_FatalError` when constructed, so you can't actually
-     * throw this. It just makes static analysis easier.
-     */
-    class PyFatalError : public std::runtime_error
-    {
-    public:
-        PyFatalError(const char* const msg)
-            : std::runtime_error(msg)
-        {
-            Py_FatalError(msg);
-        }
-    };
-
-    static inline PyObject*
-    Require(PyObject* p)
-    {
-        if (!p) {
-            throw PyErrOccurred();
-        }
-        return p;
-    };
-
-    static inline void
-    Require(const int retval)
-    {
-        if (retval < 0) {
-            throw PyErrOccurred();
-        }
-    };
-
-
 
 };
 

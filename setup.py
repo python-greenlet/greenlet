@@ -116,7 +116,9 @@ else:
     ext_modules = [
         Extension(
             name='greenlet._greenlet',
-            sources=[GREENLET_SRC_DIR + 'greenlet.cpp'],
+            sources=[
+                GREENLET_SRC_DIR + 'greenlet.cpp',
+            ],
             language='c++',
             extra_objects=extra_objects,
             extra_compile_args=global_compile_args + main_compile_args + cpp_compile_args,

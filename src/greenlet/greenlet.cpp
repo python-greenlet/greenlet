@@ -16,6 +16,7 @@
 #include "greenlet_slp_switch.hpp"
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
+#include "greenlet_greenlet.hpp"
 
 using greenlet::ThreadState;
 using greenlet::Mutex;
@@ -24,6 +25,7 @@ using greenlet::LockInitError;
 using greenlet::PyErrOccurred;
 using greenlet::Require;
 using greenlet::PyFatalError;
+using greenlet::ExceptionState;
 
 
 // Helpers for reference counting.
@@ -129,6 +131,31 @@ using greenlet::refs::ImmortalObject;
 using greenlet::refs::CreatedModule;
 using greenlet::refs::PyErrPieces;
 using greenlet::refs::PyObjectPointer;
+
+// ******* Implementation of things from included files
+template<typename T>
+greenlet::refs::_BorrowedGreenlet<T>& greenlet::refs::_BorrowedGreenlet<T>::operator=(const greenlet::refs::BorrowedObject& other)
+{
+    if (!PyGreenlet_Check(other)) {
+        throw TypeError("Expected a greenlet");
+    }
+    this->_set_raw_pointer(static_cast<PyObject*>(other));
+    return *this;
+}
+
+// TODO: These two methods only make sense for greenlet
+// objects, but there's not a good spot in the inheritance
+// tree to put them without introducing VTable pointers
+template<typename T>
+bool PyObjectPointer<T>::active() const
+{
+    return PyGreenlet_ACTIVE(this->p);
+}
+template<typename T>
+bool PyObjectPointer<T>::started() const
+{
+    return PyGreenlet_STARTED(this->p);
+}
 
 
 #include "structmember.h"
@@ -499,22 +526,6 @@ static ThreadStateCreator& GET_THREAD_STATE()
 }
 #endif
 
-
-static void
-green_clear_exc(PyObjectPointer<PyGreenlet>& g)
-{
-#if GREENLET_PY37
-    g->exc_info = NULL;
-    g->exc_state.exc_type = NULL;
-    g->exc_state.exc_value = NULL;
-    g->exc_state.exc_traceback = NULL;
-    g->exc_state.previous_item = NULL;
-#else
-    g->exc_type = NULL;
-    g->exc_value = NULL;
-    g->exc_traceback = NULL;
-#endif
-}
 
 static PyMainGreenlet*
 green_create_main(void)
@@ -1017,16 +1028,7 @@ protected:
         tstate->context_ver++;
 #endif
 
-#if GREENLET_PY37
-        tstate->exc_state = this->target->exc_state;
-        tstate->exc_info =
-            this->target->exc_info ? this->target->exc_info : &tstate->exc_state;
-#else
-        tstate->exc_type = this->target->exc_type;
-        tstate->exc_value = this->target->exc_value;
-        tstate->exc_traceback = this->target->exc_traceback;
-#endif
-        green_clear_exc(const_cast<BorrowedGreenlet&>(this->target));
+        this->target->exception_state >> tstate;
 #if GREENLET_USE_CFRAME
         tstate->cframe = this->target->cframe;
         /*
@@ -1128,7 +1130,7 @@ protected:
             self->stack_prev = state.borrow_current().borrow();
         }
         self->top_frame = NULL;
-        green_clear_exc(const_cast<BorrowedGreenlet&>(self));
+        self->exception_state.clear();
         self->recursion_depth = PyThreadState_GET()->recursion_depth;
 
         /* perform the initial switch */
@@ -1349,14 +1351,7 @@ private:
 #if GREENLET_PY37
             current->context = tstate->context;
 #endif
-#if GREENLET_PY37
-            current->exc_info = tstate->exc_info;
-            current->exc_state = tstate->exc_state;
-#else
-            current->exc_type = tstate->exc_type;
-            current->exc_value = tstate->exc_value;
-            current->exc_traceback = tstate->exc_traceback;
-#endif
+            current->exception_state << tstate;
 #if GREENLET_USE_CFRAME
             /*
               IMPORTANT: ``cframe`` is a pointer into the STACK.
@@ -1382,7 +1377,7 @@ private:
             // XXX: This code path is not tested.
             BorrowedGreenlet current(GET_THREAD_STATE().borrow_current());
             current->top_frame = NULL;
-            green_clear_exc(current);
+            current->exception_state.clear();
 
             switching_thread_state = NULL;
             //GET_THREAD_STATE().state().wref_target(NULL);
@@ -1647,10 +1642,13 @@ g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead)
 static PyGreenlet*
 green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 {
+    UNUSED(args);
+    UNUSED(kwds);
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o != NULL) {
         o->parent = GET_THREAD_STATE().state().get_current().relinquish_ownership();
+
 #if GREENLET_USE_CFRAME
         /*
           The PyThreadState->cframe pointer usually points to memory on the
@@ -1814,15 +1812,7 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 #if GREENLET_PY37
     Py_VISIT(self->context);
 #endif
-#if GREENLET_PY37
-    Py_VISIT(self->exc_state.exc_type);
-    Py_VISIT(self->exc_state.exc_value);
-    Py_VISIT(self->exc_state.exc_traceback);
-#else
-    Py_VISIT(self->exc_type);
-    Py_VISIT(self->exc_value);
-    Py_VISIT(self->exc_traceback);
-#endif
+    self->exception_state.tp_traverse(visit, arg);
     Py_VISIT(self->dict);
     if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
         // The thread is dead. Our implicit weak reference to the
@@ -1879,15 +1869,7 @@ green_clear(PyGreenlet* self)
 #if GREENLET_PY37
     Py_CLEAR(self->context);
 #endif
-#if GREENLET_PY37
-    Py_CLEAR(self->exc_state.exc_type);
-    Py_CLEAR(self->exc_state.exc_value);
-    Py_CLEAR(self->exc_state.exc_traceback);
-#else
-    Py_CLEAR(self->exc_type);
-    Py_CLEAR(self->exc_value);
-    Py_CLEAR(self->exc_traceback);
-#endif
+    self->exception_state.tp_clear();
     Py_CLEAR(self->dict);
     if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
         if (self->top_frame) {
@@ -2000,19 +1982,10 @@ green_dealloc(PyGreenlet* self)
     Py_CLEAR(self->context);
     assert(already_in_err || !PyErr_Occurred());
 #endif
-#if GREENLET_PY37
-    Py_CLEAR(self->exc_state.exc_type);
-    Py_CLEAR(self->exc_state.exc_value);
-    Py_CLEAR(self->exc_state.exc_traceback);
+    // TODO: Express this in the reference object framework better.
+    self->exception_state.tp_clear();
+
     assert(already_in_err || !PyErr_Occurred());
-#else
-    Py_CLEAR(self->exc_type);
-    assert(already_in_err || !PyErr_Occurred());
-    Py_CLEAR(self->exc_value);
-    assert(already_in_err || !PyErr_Occurred());
-    Py_CLEAR(self->exc_traceback);
-    assert(already_in_err || !PyErr_Occurred());
-#endif
     Py_CLEAR(self->dict);
     assert(already_in_err || !PyErr_Occurred());
     if (self->switching_state) {
@@ -2275,10 +2248,10 @@ green_getparent(PyGreenlet* self, void* c)
     return result;
 }
 
+
 static int
 green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c)
 {
-
     PyGreenlet* run_info = NULL;
     if (!nparent) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
@@ -2537,34 +2510,32 @@ PyGreenlet_SetParent(PyGreenlet* g, PyGreenlet* nparent)
 static PyGreenlet*
 PyGreenlet_New(PyObject* run, PyGreenlet* parent)
 {
-    /* XXX: Why doesn't this call green_new()? There's some duplicate
-     code. */
-    PyGreenlet* g = NULL;
-    g = (PyGreenlet*)PyType_GenericAlloc(&PyGreenlet_Type, 0);
-    if (g == NULL) {
+    using greenlet::refs::NewDictReference;
+    // In the past, we didn't use green_new and green_init, but that
+    // was a maintenance issue because we duplicated code. This way is
+    // much safer, but slightly slower. If that's a problem, we could
+    // refactor green_init to separate argument parsing from initialization.
+    OwnedGreenlet g = OwnedGreenlet::consuming(green_new(&PyGreenlet_Type, nullptr, nullptr));
+    if (!g) {
         return NULL;
     }
 
-    if (run != NULL) {
-        green_setrun(g, run, nullptr);
+    try {
+        NewDictReference kwargs;
+        if (run) {
+            kwargs.SetItem(mod_globs.str_run, run);
+        }
+        if (parent) {
+            kwargs.SetItem("parent", (PyObject*)parent);
+        }
+
+        Require(green_init(g, mod_globs.empty_tuple, kwargs));
+    }
+    catch (const PyErrOccurred&) {
+        return nullptr;
     }
 
-    if (parent != NULL) {
-        if (PyGreenlet_SetParent(g, parent)) {
-            Py_DECREF(g);
-            return NULL;
-        }
-    }
-    else {
-        if ((g->parent = PyGreenlet_GetCurrent()) == NULL) {
-            Py_DECREF(g);
-            return NULL;
-        }
-    }
-#if GREENLET_USE_CFRAME
-    g->cframe = &PyThreadState_GET()->root_cframe;
-#endif
-    return g;
+    return g.relinquish_ownership();
 }
 
 static PyObject*

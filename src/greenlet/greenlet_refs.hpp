@@ -1,7 +1,19 @@
 #ifndef GREENLET_REFS_HPP
 #define GREENLET_REFS_HPP
 
-#include "greenlet_internal.hpp"
+#include <Python.h>
+//#include "greenlet_internal.hpp"
+#include "greenlet_compiler_compat.hpp"
+#include "greenlet_cpython_compat.hpp"
+#include "greenlet_exceptions.hpp"
+
+struct _greenlet;
+struct _PyMainGreenlet;
+
+typedef struct _greenlet PyGreenlet;
+typedef struct _PyMainGreenlet PyMainGreenlet;
+
+
 
 namespace greenlet { namespace refs {
     // A set of classes to make reference counting rules in python
@@ -111,15 +123,8 @@ namespace greenlet { namespace refs {
         // TODO: These two methods only make sense for greenlet
         // objects, but there's not a good spot in the inheritance
         // tree to put them without introducing VTable pointers
-        inline bool active() const
-        {
-            return PyGreenlet_ACTIVE(this->p);
-        }
-
-        inline bool started() const
-        {
-            return PyGreenlet_STARTED(this->p);
-        }
+        bool active() const;
+        bool started() const;
 
         inline OwnedObject PyStr() const G_NOEXCEPT;
         inline const char* as_str() const G_NOEXCEPT;
@@ -195,7 +200,7 @@ namespace greenlet { namespace refs {
         OwnedReference() : PyObjectPointer<T>(nullptr)
         {}
 
-        OwnedReference(const PyObjectPointer<>& other) : PyObjectPointer<T>(nullptr)
+        explicit OwnedReference(const PyObjectPointer<>& other) : PyObjectPointer<T>(nullptr)
         {
             this->p = other.borrow();
             Py_XINCREF(this->p);
@@ -279,6 +284,12 @@ namespace greenlet { namespace refs {
         }
     };
 
+    static inline
+    void operator<<=(PyObject*& target, OwnedObject& o)
+    {
+        target = o.relinquish_ownership();
+    }
+
     class NewReference : public OwnedObject
     {
     private:
@@ -288,6 +299,29 @@ namespace greenlet { namespace refs {
         // for API return values.
         NewReference(PyObject* it) : OwnedObject(it)
         {
+        }
+    };
+
+    class NewDictReference : public NewReference
+    {
+    private:
+        G_NO_COPIES_OF_CLS(NewDictReference);
+    public:
+        NewDictReference() : NewReference(PyDict_New())
+        {
+            if (!this->p) {
+                throw PyErrOccurred();
+            }
+        }
+
+        void SetItem(const char* const key, PyObject* value)
+        {
+            Require(PyDict_SetItemString(this->p, key, value));
+        }
+
+        void SetItem(const PyObjectPointer<>& key, PyObject* value)
+        {
+            Require(PyDict_SetItem(this->p, key.borrow_o(), value));
         }
     };
 
@@ -380,6 +414,9 @@ namespace greenlet { namespace refs {
         BorrowedReference(T* it) : PyObjectPointer<T>(it)
         {}
 
+        BorrowedReference(const PyObjectPointer<T>& ref) : PyObjectPointer<T>(ref.borrow())
+        {}
+
         BorrowedReference() : PyObjectPointer<T>(nullptr)
         {}
 
@@ -404,18 +441,20 @@ namespace greenlet { namespace refs {
             BorrowedReference<T>(it)
         {}
 
-        _BorrowedGreenlet(const BorrowedObject& it) :
-            BorrowedReference<T>(nullptr)
-        {
-            if (!PyGreenlet_Check(it)) {
-                throw TypeError("Expected a greenlet");
-            }
-            this->_set_raw_pointer(static_cast<PyObject*>(it));
-        }
+        //_BorrowedGreenlet(const BorrowedObject& it);
+        //     BorrowedReference<T>(nullptr)
+        // {
+        //     if (!PyGreenlet_Check(it)) {
+        //         throw TypeError("Expected a greenlet");
+        //     }
+        //     this->_set_raw_pointer(static_cast<PyObject*>(it));
+        // }
 
         _BorrowedGreenlet(const OwnedGreenlet& it) :
             BorrowedReference<T>(it.borrow())
         {}
+
+        _BorrowedGreenlet<T>& operator=(const BorrowedObject& other);
 
         // We get one of these for PyGreenlet, but one for PyObject
         // is handy as well
