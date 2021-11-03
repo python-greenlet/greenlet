@@ -743,12 +743,6 @@ private:
     SwitchingArgs switch_args;
     ThreadState& thread_state;
 
-    /* Used internally in ``g_switchstack()`` when
-       GREENLET_USE_CFRAME is true. */
-#if GREENLET_USE_CFRAME
-    int switchstack_use_tracing;
-#endif
-
     // Also TODO: Switch away from integer error codes and to enums,
     // or throw exceptions when possible.
     struct switchstack_result_t
@@ -821,9 +815,6 @@ public:
     SwitchingState(const BorrowedGreenlet& target) :
         target(target),
         thread_state(GET_THREAD_STATE().state())
-#if GREENLET_USE_CFRAME
-        ,switchstack_use_tracing(0)
-#endif
     {
 
     }
@@ -1017,28 +1008,10 @@ protected:
     virtual OwnedGreenlet g_switchstack_success() G_NOEXCEPT
     {
         PyThreadState* tstate = PyThreadState_GET();
-        tstate->recursion_depth = this->target->recursion_depth;
-        tstate->frame = this->target->top_frame;
-        this->target->top_frame = NULL;
-#if GREENLET_PY37
-        tstate->context = this->target->context;
-        this->target->context = NULL;
-        /* Incrementing this value invalidates the contextvars cache,
-           which would otherwise remain valid across switches */
-        tstate->context_ver++;
-#endif
 
+        this->target->python_state >> tstate;
         this->target->exception_state >> tstate;
-#if GREENLET_USE_CFRAME
-        tstate->cframe = this->target->cframe;
-        /*
-          If we were tracing, we need to keep tracing.
-          There should never be the possibility of hitting the
-          root_cframe here. See note above about why we can't
-          just copy this from ``origin->cframe->use_tracing``.
-        */
-        tstate->cframe->use_tracing = this->switchstack_use_tracing;
-#endif
+
         // The thread state hasn't been changed yet.
         OwnedGreenlet result(thread_state.get_current());
         thread_state.set_current(this->target);
@@ -1051,15 +1024,7 @@ protected:
         OwnedObject run;
         ThreadState& state = thread_state;
         const BorrowedGreenlet& self(this->target);
-#if GREENLET_USE_CFRAME
-        /*
-          See green_new(). This is a stack-allocated variable used
-          while *self* is in PyObject_Call().
-          We want to defer copying the state info until we're sure
-          we need it and are in a stable place to do so.
-        */
-        CFrame trace_info;
-#endif
+
         // We need to grab a reference to the current switch arguments
         // in case we're entered concurrently during the call to
         // GetAttr() and have to try again.
@@ -1110,14 +1075,15 @@ protected:
 
 #if GREENLET_USE_CFRAME
         /* OK, we need it, we're about to switch greenlets, save the state. */
-        trace_info = *PyThreadState_GET()->cframe;
-        /* Make the target greenlet refer to the stack value. */
-        self->cframe = &trace_info;
         /*
-          And restore the link to the previous frame so this one gets
-          unliked appropriately.
+          See green_new(). This is a stack-allocated variable used
+          while *self* is in PyObject_Call().
+          We want to defer copying the state info until we're sure
+          we need it and are in a stable place to do so.
         */
-        self->cframe->previous = &PyThreadState_GET()->root_cframe;
+        CFrame trace_info;
+
+        self->python_state.set_new_cframe(trace_info);
 #endif
         /* start the greenlet */
         self->stack_start = NULL;
@@ -1129,9 +1095,8 @@ protected:
         else {
             self->stack_prev = state.borrow_current().borrow();
         }
-        self->top_frame = NULL;
+        self->python_state.set_initial_state(PyThreadState_GET());
         self->exception_state.clear();
-        self->recursion_depth = PyThreadState_GET()->recursion_depth;
 
         /* perform the initial switch */
         switchstack_result_t err = this->g_switchstack();
@@ -1346,26 +1311,9 @@ private:
                                             this, thread_state.borrow_current());
             }
             PyThreadState* tstate = PyThreadState_GET();
-            current->recursion_depth = tstate->recursion_depth;
-            current->top_frame = tstate->frame;
-#if GREENLET_PY37
-            current->context = tstate->context;
-#endif
+            current->python_state << tstate;
             current->exception_state << tstate;
-#if GREENLET_USE_CFRAME
-            /*
-              IMPORTANT: ``cframe`` is a pointer into the STACK.
-              Thus, because the call to ``slp_switch()``
-              changes the contents of the stack, you cannot read from
-              ``ts_current->cframe`` after that call and necessarily
-              get the same values you get from reading it here. Anything
-              you need to restore from now to then must be saved
-              in a global/threadlocal variable (because we can't use stack variables
-              here either).
-            */
-            current->cframe = tstate->cframe;
-            switchstack_use_tracing = tstate->cframe->use_tracing;
-#endif
+            this->target->python_state.will_switch_from(tstate);
             switching_thread_state = this->target;
         }
         // If this is the first switch into a greenlet, this will
@@ -1376,7 +1324,7 @@ private:
         if (err < 0) { /* error */
             // XXX: This code path is not tested.
             BorrowedGreenlet current(GET_THREAD_STATE().borrow_current());
-            current->top_frame = NULL;
+            //current->top_frame = NULL; // This probably leaks?
             current->exception_state.clear();
 
             switching_thread_state = NULL;
@@ -1649,50 +1597,9 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
     if (o != NULL) {
         o->parent = GET_THREAD_STATE().state().get_current().relinquish_ownership();
 
-#if GREENLET_USE_CFRAME
-        /*
-          The PyThreadState->cframe pointer usually points to memory on the
-          stack, alloceted in a call into PyEval_EvalFrameDefault.
-
-          Initially, before any evaluation begins, it points to the initial
-          PyThreadState object's ``root_cframe`` object, which is statically
-          allocated for the lifetime of the thread.
-
-          A greenlet can last for longer than a call to
-          PyEval_EvalFrameDefault, so we can't set its ``cframe`` pointer to
-          be the current ``PyThreadState->cframe``; nor could we use one from
-          the greenlet parent for the same reason. Yet a further no: we can't
-          allocate one scoped to the greenlet and then destroy it when the
-          greenlet is deallocated, because inside the interpreter the CFrame
-          objects form a linked list, and that too can result in accessing
-          memory beyond its dynamic lifetime (if the greenlet doesn't actually
-          finish before it dies, its entry could still be in the list).
-
-          Using the ``root_cframe`` is problematic, though, because its
-          members are never modified by the interpreter and are set to 0,
-          meaning that its ``use_tracing`` flag is never updated. We don't
-          want to modify that value in the ``root_cframe`` ourself: it
-          *shouldn't* matter much because we should probably never get back to
-          the point where that's the only cframe on the stack; even if it did
-          matter, the major consequence of an incorrect value for
-          ``use_tracing`` is that if its true the interpreter does some extra
-          work --- however, it's just good code hygiene.
-
-          Our solution: before a greenlet runs, after its initial creation,
-          it uses the ``root_cframe`` just to have something to put there.
-          However, once the greenlet is actually switched to for the first
-          time, ``g_initialstub`` (which doesn't actually "return" while the
-          greenlet is running) stores a new CFrame on its local stack, and
-          copies the appropriate values from the currently running CFrame;
-          this is then made the CFrame for the newly-minted greenlet.
-          ``g_initialstub`` then proceeds to call ``glet.run()``, which
-          results in ``PyEval_...`` adding the CFrame to the list. Switches
-          continue as normal. Finally, when the greenlet finishes, the call to
-          ``glet.run()`` returns and the CFrame is taken out of the linked
-          list and the stack value is now unused and free to expire.
-        */
-        o->cframe = &PyThreadState_GET()->root_cframe;
-#endif
+        // XXX: Temporary. Manually call the C++ constructors of
+        // contained objects.
+        new((void*)&o->python_state) PythonState;
     }
     return o;
 }
@@ -1777,11 +1684,12 @@ kill_greenlet(BorrowedGreenlet& self)
         self->main_greenlet_s->thread_state->delete_when_thread_running(self);
     }
     else {
+        // The thread is dead, we can't raise an exception.
         // We need to make it look non-active, though, so that dealloc
         // finishes killing it.
         self->stack_start = NULL;
         assert(!self.active());
-        Py_CLEAR(self->top_frame);
+        self->python_state.tp_clear(true);
     }
     return;
 }
@@ -1809,19 +1717,23 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
     Py_VISIT((PyObject*)self->parent);
     Py_VISIT(self->main_greenlet_s);
     Py_VISIT(self->run_callable);
-#if GREENLET_PY37
-    Py_VISIT(self->context);
-#endif
-    self->exception_state.tp_traverse(visit, arg);
-    Py_VISIT(self->dict);
-    if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
-        // The thread is dead. Our implicit weak reference to the
-        // frame is now all that's left; we consider ourselves to
-        // strongly own it now.
-        if (self->top_frame) {
-            Py_VISIT(self->top_frame);
-        }
+
+    int result;
+    if ((result = self->exception_state.tp_traverse(visit, arg)) != 0) {
+        return result;
     }
+    //XXX: This is ugly. But so is handling everything having to do
+    //with the top frame.
+    bool visit_top_frame = (!self->main_greenlet_s || !self->main_greenlet_s->thread_state);
+    // When true, the thread is dead. Our implicit weak reference to the
+    // frame is now all that's left; we consider ourselves to
+    // strongly own it now.
+    if ((result = self->python_state.tp_traverse(visit, arg, visit_top_frame)) != 0) {
+        return result;
+    }
+
+    Py_VISIT(self->dict);
+
     return 0;
 }
 
@@ -1866,16 +1778,11 @@ green_clear(PyGreenlet* self)
     Py_CLEAR(self->parent);
     Py_CLEAR(self->main_greenlet_s); // XXX breaks when this is a state
     Py_CLEAR(self->run_callable);
-#if GREENLET_PY37
-    Py_CLEAR(self->context);
-#endif
+
+    bool own_top_frame = (!self->main_greenlet_s || !self->main_greenlet_s->thread_state);
+    self->python_state.tp_clear(own_top_frame);
     self->exception_state.tp_clear();
     Py_CLEAR(self->dict);
-    if (!self->main_greenlet_s || !self->main_greenlet_s->thread_state) {
-        if (self->top_frame) {
-            Py_CLEAR(self->top_frame);
-        }
-    }
     return 0;
 }
 
@@ -1976,13 +1883,13 @@ green_dealloc(PyGreenlet* self)
     assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->parent);
     assert(already_in_err || !PyErr_Occurred());
+    bool own_top_frame = (!self->main_greenlet_s || !self->main_greenlet_s->thread_state);
     Py_CLEAR(self->main_greenlet_s);
     assert(already_in_err || !PyErr_Occurred());
-#if GREENLET_PY37
-    Py_CLEAR(self->context);
-    assert(already_in_err || !PyErr_Occurred());
-#endif
+
     // TODO: Express this in the reference object framework better.
+    self->python_state.tp_clear(own_top_frame);
+
     self->exception_state.tp_clear();
 
     assert(already_in_err || !PyErr_Occurred());
@@ -2299,18 +2206,11 @@ static PyObject*
 green_getcontext(PyGreenlet* self, void* c)
 {
 #if GREENLET_PY37
-/* XXX: Should not be necessary, we don't access the current greenlet
-   other than to compare it to ourself and its fine if that's null.
- */
-/*
-    if (!STATE_OK) {
-        return NULL;
-    }
-*/
-    PyThreadState* tstate = PyThreadState_GET();
-    PyObject* result = NULL;
 
-    if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
+    PyThreadState* tstate = PyThreadState_GET();
+    OwnedObject result;
+
+    if (PyGreenlet_ACTIVE(self) && !self->python_state.has_top_frame()) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(self)) {
@@ -2325,13 +2225,13 @@ green_getcontext(PyGreenlet* self, void* c)
     }
     else {
         /* Greenlet is not running: just return context. */
-        result = self->context;
+        result = self->python_state.context();
     }
-    if (result == NULL) {
-        result = Py_None;
+    if (!result) {
+        result = OwnedObject::None();
     }
-    Py_INCREF(result);
-    return result;
+
+    return result.relinquish_ownership();
 #else
     PyErr_SetString(PyExc_AttributeError,
                     GREENLET_NO_CONTEXTVARS_REASON
@@ -2344,14 +2244,6 @@ static int
 green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 {
 #if GREENLET_PY37
-/* XXX: Should not be necessary, we don't access the current greenlet
-   other than to compare it to ourself and its fine if that's null.
- */
-/*
-    if (!STATE_OK) {
-        return -1;
-    }
-*/
     if (nctx == NULL) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
         return -1;
@@ -2368,13 +2260,12 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
     }
 
     PyThreadState* tstate = PyThreadState_GET();
-    PyObject* octx = NULL;
 
-    if (PyGreenlet_ACTIVE(self) && self->top_frame == NULL) {
+    if (PyGreenlet_ACTIVE(self) && !self->python_state.has_top_frame()) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(self)) {
-            octx = tstate->context;
+            OwnedObject octx = OwnedObject::consuming(tstate->context);
             tstate->context = nctx;
             tstate->context_ver++;
             Py_XINCREF(nctx);
@@ -2389,11 +2280,8 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
     else {
         /* Greenlet is not running: just set context. Note that the
            greenlet may be dead.*/
-        octx = self->context;
-        self->context = nctx;
-        Py_XINCREF(nctx);
+        self->python_state.context() = nctx;
     }
-    Py_XDECREF(octx);
     return 0;
 #else
     PyErr_SetString(PyExc_AttributeError,
@@ -2408,7 +2296,9 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 static PyObject*
 green_getframe(PyGreenlet* self, void* c)
 {
-    PyObject* result = self->top_frame ? (PyObject*)self->top_frame : Py_None;
+    PyObject* result = self->python_state.has_top_frame()
+        ? self->python_state.top_frame()
+        : Py_None;
     Py_INCREF(result);
     return result;
 }

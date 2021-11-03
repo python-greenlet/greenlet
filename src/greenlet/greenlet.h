@@ -17,12 +17,16 @@ extern "C" {
 #ifndef GREENLET_MODULE
 #define main_greenlet_ptr_t void*
 #define switching_state_ptr_t void*
-// TODO: This will become a member of this type, not a pointer.
+// TODO: These will become a member of the implementation type, not a pointer.
 #define exception_state_ptr_t void*
+#define python_state_t void*
 #endif
 
 typedef struct _greenlet {
     PyObject_HEAD
+    PyObject* weakreflist;
+    PyObject* dict;
+
     char* stack_start;
     char* stack_stop;
     char* stack_copy;
@@ -32,19 +36,13 @@ typedef struct _greenlet {
     /* strong reference, set when the greenlet begins to run. */
     /* Used to be called run_info */
     main_greenlet_ptr_t main_greenlet_s;
-    struct _frame* top_frame; /* weak reference (suspended) or NULL (running) */
-    int recursion_depth;
-    PyObject* weakreflist;
+
+
+
     // This is only temporary!
     exception_state_ptr_t exception_state;
+    python_state_t python_state;
 
-    PyObject* dict;
-#if PY_VERSION_HEX >= 0x030700A3
-    PyObject* context;
-#endif
-#if PY_VERSION_HEX >= 0x30A00B1
-    CFrame* cframe;
-#endif
     // XXX: Adding this field is a breaker, unless we can
     // get rid of the run_info field completely.
     // If we can get it down to just one pointer, we could
@@ -58,7 +56,7 @@ typedef struct _greenlet {
     switching_state_ptr_t switching_state;
 } PyGreenlet;
 
-#define PyGreenlet_Check(op) PyObject_TypeCheck(op, &PyGreenlet_Type)
+#define PyGreenlet_Check(op) (op && PyObject_TypeCheck(op, &PyGreenlet_Type))
 #define PyGreenlet_MAIN(op) (((PyGreenlet*)(op))->stack_stop == (char*)-1)
 #define PyGreenlet_STARTED(op) (((PyGreenlet*)(op))->stack_stop != NULL)
 #define PyGreenlet_ACTIVE(op) (((PyGreenlet*)(op))->stack_start != NULL)

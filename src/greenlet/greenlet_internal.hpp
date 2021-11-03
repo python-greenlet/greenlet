@@ -28,6 +28,7 @@ class SwitchingState;
 #define main_greenlet_ptr_t struct _PyMainGreenlet*
 #define switching_state_ptr_t SwitchingState*
 #define exception_state_ptr_t greenlet::ExceptionState
+#define python_state_t greenlet::PythonState
 
 
 #include "greenlet.h"

@@ -33,7 +33,10 @@ test_exception_switch_recurse(int depth, int left)
         return NULL;
 
     try {
-        PyGreenlet_Switch(self->parent, NULL, NULL);
+        if (PyGreenlet_Switch(self->parent, NULL, NULL) == NULL) {
+            Py_DECREF(self);
+            return NULL;
+        }
         p_test_exception_throw(depth);
         PyErr_SetString(PyExc_RuntimeError,
                         "throwing C++ exception didn't work");
