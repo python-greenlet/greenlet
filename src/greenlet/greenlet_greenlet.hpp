@@ -85,7 +85,9 @@ namespace greenlet
         // or bases, we get a trivial assignment operator generated
         // for us. However, that's not safe since we do manage memory.
         // So we declare an assignment operator that only works if we
-        // don't have any memory allocated.
+        // don't have any memory allocated. (We don't use
+        // std::shared_ptr for reference counting just to keep this
+        // object small)
     private:
         char* _stack_start;
         char* stack_stop;
@@ -123,9 +125,9 @@ namespace greenlet
 };
 
 template<typename T>
-void greenlet::operator<<(const PyThreadState *const tstate, T& exc)
+void greenlet::operator<<(const PyThreadState *const lhs, T& rhs)
 {
-    exc.operator<<(tstate);
+    rhs.operator<<(lhs);
 }
 
 using greenlet::ExceptionState;
@@ -432,7 +434,13 @@ StackState::StackState()
 }
 
 StackState::StackState(const StackState& other)
-    : StackState()
+// can't use a delegating constructor because of
+// MSVC for Python 2.7
+    : _stack_start(nullptr),
+      stack_stop(nullptr),
+      stack_copy(nullptr),
+      _stack_saved(0),
+      stack_prev(nullptr)
 {
     this->operator=(other);
 }

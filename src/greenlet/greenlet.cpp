@@ -273,7 +273,7 @@ public:
 
     inline bool PyExceptionMatches() const
     {
-        return PyErr_ExceptionMatches(this->p);
+        return PyErr_ExceptionMatches(this->p) > 0;
     }
 
 };
