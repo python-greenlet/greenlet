@@ -83,14 +83,18 @@ namespace greenlet
     {
         // By having only plain C (POD) members, no virtual functions
         // or bases, we get a trivial assignment operator generated
-        // for us.
+        // for us. However, that's not safe since we do manage memory.
+        // So we declare an assignment operator that only works if we
+        // don't have any memory allocated.
     private:
         char* _stack_start;
         char* stack_stop;
         char* stack_copy;
         intptr_t _stack_saved;
         StackState* stack_prev;
-        int copy_stack_to_heap_up_to(const char* const stop);
+        inline int copy_stack_to_heap_up_to(const char* const stop) G_NOEXCEPT;
+        inline void free_stack_copy() G_NOEXCEPT;
+
     public:
         /**
          * Creates a started, but inactive, state.
@@ -100,7 +104,9 @@ namespace greenlet
          * Creates an inactive, unstarted, state.
          */
         StackState();
-
+        ~StackState();
+        StackState(const StackState& other);
+        StackState& operator=(const StackState& other);
         inline void copy_heap_to_stack(const StackState& current) G_NOEXCEPT;
         inline int copy_stack_to_heap(char* const stackref, const StackState& current) G_NOEXCEPT;
         inline bool started() const G_NOEXCEPT;
@@ -111,7 +117,9 @@ namespace greenlet
         inline intptr_t stack_saved() const G_NOEXCEPT;
         inline char* stack_start() const G_NOEXCEPT;
         static inline StackState make_main() G_NOEXCEPT;
+        friend std::ostream& operator<<(std::ostream& os, const StackState& s);
     };
+    std::ostream& operator<<(std::ostream& os, const StackState& s);
 };
 
 template<typename T>
@@ -386,49 +394,100 @@ OwnedObject& PythonState::context()
 #endif
 
 using greenlet::StackState;
+#include <iostream>
+using std::cerr;
+using std::endl;
+
+std::ostream& greenlet::operator<<(std::ostream& os, const StackState& s)
+{
+    os << "StackState(stack_start=" << (void*)s._stack_start
+       << ", stack_stop=" << (void*)s.stack_stop
+       << ", stack_copy=" << (void*)s.stack_copy
+       << ", stack_saved=" << s._stack_saved
+       << ", stack_prev=" << s.stack_prev
+       << ", addr=" << &s
+       << ")";
+    return os;
+}
 
 StackState::StackState(void* mark, StackState& current)
     : _stack_start(nullptr),
       stack_stop((char*)mark),
       stack_copy(nullptr),
-      _stack_saved(0)
+      _stack_saved(0),
+      /* Skip a dying greenlet */
+      stack_prev(current._stack_start
+                 ? &current
+                 : current.stack_prev)
 {
-    if (!current._stack_start) {
-        /* ts_current is dying */
-        this->stack_prev = current.stack_prev;
-    }
-    else {
-        this->stack_prev = &current;
-    }
 }
 
 StackState::StackState()
     : _stack_start(nullptr),
       stack_stop(nullptr),
       stack_copy(nullptr),
-      _stack_saved(0)
-{}
+      _stack_saved(0),
+      stack_prev(nullptr)
+{
+}
+
+StackState::StackState(const StackState& other)
+    : StackState()
+{
+    this->operator=(other);
+}
+
+StackState& StackState::operator=(const StackState& other)
+{
+    if (&other == this) {
+        return *this;
+    }
+    if (other._stack_saved) {
+        throw std::runtime_error("Refusing to steal memory.");
+    }
+
+    //If we have memory allocated, dispose of it
+    this->free_stack_copy();
+
+    this->_stack_start = other._stack_start;
+    this->stack_stop = other.stack_stop;
+    this->stack_copy = other.stack_copy;
+    this->_stack_saved = other._stack_saved;
+    this->stack_prev = other.stack_prev;
+    return *this;
+}
+
+inline void StackState::free_stack_copy() G_NOEXCEPT
+{
+    PyMem_Free(this->stack_copy);
+    this->stack_copy = nullptr;
+    this->_stack_saved = 0;
+}
 
 inline void StackState::copy_heap_to_stack(const StackState& current) G_NOEXCEPT
 {
+    // cerr << "copy_heap_to_stack" << endl
+    //      << "\tFrom    : " << *this << endl
+    //      << "\tCurrent:" << current
+    //      << endl;
     /* Restore the heap copy back into the C stack */
     if (this->_stack_saved != 0) {
         memcpy(this->_stack_start, this->stack_copy, this->_stack_saved);
-        PyMem_Free(this->stack_copy);
-        this->stack_copy = nullptr;
-        this->_stack_saved = 0;
+        this->free_stack_copy();
     }
     StackState* owner = const_cast<StackState*>(&current);
-    if (owner->_stack_start == NULL) {
+    if (!owner->_stack_start) {
         owner = owner->stack_prev; /* greenlet is dying, skip it */
     }
     while (owner && owner->stack_stop <= this->stack_stop) {
+        // cerr << "\tOwner: " << owner << endl;
         owner = owner->stack_prev; /* find greenlet with more stack */
     }
     this->stack_prev = owner;
+    // cerr << "\tFinished with: " << *this << endl;
 }
 
-int StackState::copy_stack_to_heap_up_to(const char* const stop)
+inline int StackState::copy_stack_to_heap_up_to(const char* const stop) G_NOEXCEPT
 {
     /* Save more of g's stack into the heap -- at least up to 'stop'
        g->stack_stop |________|
@@ -442,7 +501,7 @@ int StackState::copy_stack_to_heap_up_to(const char* const stop)
      */
     intptr_t sz1 = this->_stack_saved;
     intptr_t sz2 = stop - this->_stack_start;
-    assert(this->_stack_start != NULL);
+    assert(this->_stack_start);
     if (sz2 > sz1) {
         char* c = (char*)PyMem_Realloc(this->stack_copy, sz2);
         if (!c) {
@@ -459,12 +518,18 @@ int StackState::copy_stack_to_heap_up_to(const char* const stop)
 inline int StackState::copy_stack_to_heap(char* const stackref,
                                           const StackState& current) G_NOEXCEPT
 {
+    // cerr << "copy_stack_to_heap: " << endl
+    //      << "\tstackref: " << (void*)stackref << endl
+    //      << "\tthis: " << *this << endl
+    //      << "\tcurrent: " << current
+    //      << endl;
     /* must free all the C stack up to target_stop */
     const char* const target_stop = this->stack_stop;
 
     StackState* owner = const_cast<StackState*>(&current);
     assert(owner->_stack_saved == 0); // everything is present on the stack
-    if (owner->_stack_start == nullptr) {
+    if (!owner->_stack_start) {
+        // cerr << "\tcurrent is dead; using: " << owner->stack_prev << endl;
         owner = owner->stack_prev; /* not saved if dying */
     }
     else {
@@ -472,6 +537,7 @@ inline int StackState::copy_stack_to_heap(char* const stackref,
     }
 
     while (owner->stack_stop < target_stop) {
+        // cerr << "\tCopying from " << *owner << endl;
         /* ts_current is entierely within the area to free */
         if (owner->copy_stack_to_heap_up_to(owner->stack_stop)) {
             return -1; /* XXX */
@@ -514,7 +580,15 @@ inline void StackState::set_inactive() G_NOEXCEPT
     // That case is actually triggered by
     // test_issue251_issue252_explicit_reference_not_collectable (greenlet.tests.test_leaks.TestLeaks)
     // and
-    // test_issue251_issue252_need_to_collect_in_background (greenlet.tests.test_leaks.TestLeaks)
+    // test_issue251_issue252_need_to_collect_in_background
+    // (greenlet.tests.test_leaks.TestLeaks)
+    //
+    // Those objects never get deallocated, so the destructor never
+    // runs.
+    // It *seems* safe to clean up the memory here?
+    if (this->_stack_saved) {
+        this->free_stack_copy();
+    }
 }
 
 inline intptr_t StackState::stack_saved() const G_NOEXCEPT
@@ -534,6 +608,13 @@ inline StackState StackState::make_main() G_NOEXCEPT
     s._stack_start = (char*)1;
     s.stack_stop = (char*)-1;
     return s;
+}
+
+StackState::~StackState()
+{
+    if (this->_stack_saved != 0) {
+        this->free_stack_copy();
+    }
 }
 
 

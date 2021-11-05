@@ -539,6 +539,8 @@ green_create_main(void)
         Py_FatalError("green_create_main failed to alloc");
         return NULL;
     }
+    // XXX: Temporarily manually calling C++ constructors.
+    new((void*)&gmain->super.python_state) PythonState;
     gmain->super.stack_state = StackState::make_main();
 
     // circular reference; the pending call will clean this up.
@@ -843,18 +845,14 @@ public:
 
     inline void slp_restore_state() G_NOEXCEPT
     {
-        const OwnedGreenlet& g(target);
-        PyGreenlet* owner(this->thread_state.borrow_current());
-
 #ifdef SLP_BEFORE_RESTORE_STATE
         SLP_BEFORE_RESTORE_STATE();
 #endif
-        // XXX: The correctness of this might actually depend on it
-        // being inlined?
-        g->stack_state.copy_heap_to_stack(owner->stack_state);
+        this->target->stack_state.copy_heap_to_stack(
+              this->thread_state.borrow_current()->stack_state);
     }
 
-    inline int slp_save_state(char* stackref) G_NOEXCEPT
+    inline int slp_save_state(char *const stackref) G_NOEXCEPT
     {
         // XXX: This used to happen in the middle, before saving, but
         // after finding the next owner. Does that matter? This is
@@ -1525,6 +1523,7 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
         // XXX: Temporary. Manually call the C++ constructors of
         // contained objects.
         new((void*)&o->python_state) PythonState;
+        new((void*)&o->stack_state) StackState;
     }
     return o;
 }
@@ -1817,8 +1816,11 @@ green_dealloc(PyGreenlet* self)
 
     // TODO: Express this in the reference object framework better.
     self->python_state.tp_clear(own_top_frame);
-
     self->exception_state.tp_clear();
+    // Run the destructor; this is temporary until we move the whole
+    // object to pointer-to-impl that we delete.
+    self->stack_state = StackState();
+
 
     assert(already_in_err || !PyErr_Occurred());
     Py_CLEAR(self->dict);

@@ -39,12 +39,16 @@ typedef unsigned int uint32_t;
     Cls& operator=(const Cls& other) = delete
 #    define G_NO_ASSIGNMENT_OF_CLS(Cls) public:  \
     Cls& operator=(const Cls& other) = delete
+#    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) public: \
+    Cls(const Cls& other) = delete;
 #else
 #    define G_NO_COPIES_OF_CLS(Cls) private: \
     Cls(const Cls& other); \
     Cls& operator=(const Cls& other)
 #    define G_NO_ASSIGNMENT_OF_CLS(Cls) private: \
         Cls& operator=(const Cls& other)
+#    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) private: \
+    Cls(const Cls& other);
 #endif
 
 // CAUTION: MSVC is stupidly picky:
