@@ -163,7 +163,6 @@ bool PyObjectPointer<T>::started() const
 
 #ifdef __clang__
 #    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wunused-parameter"
 #    pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #    pragma clang diagnostic ignored "-Wwritable-strings"
 #elif defined(__GNUC__)
@@ -298,7 +297,7 @@ public:
     Mutex* const thread_states_to_destroy_lock;
     greenlet::cleanup_queue_t thread_states_to_destroy;
 
-    GreenletGlobals(const int dummy) :
+    GreenletGlobals(const int UNUSED(dummy)) :
         event_switch(0),
         event_throw(0),
         PyExc_GreenletError(0),
@@ -446,7 +445,7 @@ struct ThreadState_DestroyNoGIL
     }
 
     static int
-    DestroyQueueWithGIL(void* arg)
+    DestroyQueueWithGIL(void* UNUSED(arg))
     {
         // We're holding the GIL here, so no Python code should be able to
         // run to call ``os.fork()``.
@@ -601,7 +600,7 @@ g_calltrace(const OwnedObject& tracefunc,
             const BorrowedGreenlet& target);
 
 static OwnedObject
-g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead);
+g_handle_exit(const OwnedObject& greenlet_result);
 
 
 
@@ -802,10 +801,8 @@ private:
 
 public:
 
-    static void* operator new(size_t count)
+    static void* operator new(size_t UNUSED(count))
     {
-        UNUSED(count);
-        assert(count == sizeof(SwitchingState));
         return allocator.allocate(1);
     }
 
@@ -1184,7 +1181,7 @@ private:
         }
         this->release_args();
 
-        result = g_handle_exit(result, this->target.borrow());
+        result = g_handle_exit(result);
         assert(this->thread_state.borrow_current() == this->target);
         /* jump back to parent */
         self->stack_state.set_inactive(); /* dead */
@@ -1483,7 +1480,7 @@ g_calltrace(const OwnedObject& tracefunc,
 
 
 static OwnedObject
-g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead)
+g_handle_exit(const OwnedObject& greenlet_result)
 {
     if (!greenlet_result && mod_globs.PyExc_GreenletExit.PyExceptionMatches()) {
         /* catch and ignore GreenletExit */
@@ -1511,10 +1508,8 @@ g_handle_exit(const OwnedObject& greenlet_result, PyGreenlet* dead)
 /***********************************************************/
 
 static PyGreenlet*
-green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
+green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
 {
-    UNUSED(args);
-    UNUSED(kwds);
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o != NULL) {
@@ -1852,7 +1847,7 @@ throw_greenlet(PyGreenlet* self, PyErrPieces& err_pieces)
     assert(PyErr_Occurred());
     if (PyGreenlet_STARTED(self) && !PyGreenlet_ACTIVE(self)) {
         /* dead greenlet: turn GreenletExit into a regular return */
-        result = g_handle_exit(OwnedObject(), self).relinquish_ownership();
+        result = g_handle_exit(OwnedObject()).relinquish_ownership();
     }
     if (!self->switching_state) {
         self->switching_state = new SwitchingState(self);
@@ -1989,7 +1984,7 @@ green_bool(PyGreenlet* self)
 }
 
 static PyObject*
-green_getdict(PyGreenlet* self, void* c)
+green_getdict(PyGreenlet* self, void* UNUSED(context))
 {
     if (self->dict == NULL) {
         self->dict = PyDict_New();
@@ -2002,7 +1997,7 @@ green_getdict(PyGreenlet* self, void* c)
 }
 
 static int
-green_setdict(PyGreenlet* self, PyObject* val, void* c)
+green_setdict(PyGreenlet* self, PyObject* val, void* UNUSED(context))
 {
     PyObject* tmp;
 
@@ -2029,7 +2024,7 @@ _green_not_dead(PyGreenlet* self)
 
 
 static PyObject*
-green_getdead(PyGreenlet* self, void* c)
+green_getdead(PyGreenlet* self, void* UNUSED(context))
 {
     if (_green_not_dead(self)) {
         Py_RETURN_FALSE;
@@ -2040,13 +2035,13 @@ green_getdead(PyGreenlet* self, void* c)
 }
 
 static PyObject*
-green_get_stack_saved(PyGreenlet* self, void* c)
+green_get_stack_saved(PyGreenlet* self, void* UNUSED(context))
 {
     return PyLong_FromSsize_t(self->stack_state.stack_saved());
 }
 
 static PyObject*
-green_getrun(PyGreenlet* self, void* c)
+green_getrun(PyGreenlet* self, void* UNUSED(context))
 {
     if (PyGreenlet_STARTED(self) || self->run_callable == NULL) {
         PyErr_SetString(PyExc_AttributeError, "run");
@@ -2057,7 +2052,7 @@ green_getrun(PyGreenlet* self, void* c)
 }
 
 static int
-green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* c)
+green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* UNUSED(context))
 {
     if (PyGreenlet_STARTED(self)) {
         PyErr_SetString(PyExc_AttributeError,
@@ -2078,7 +2073,7 @@ green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* c)
 }
 
 static PyObject*
-green_getparent(PyGreenlet* self, void* c)
+green_getparent(PyGreenlet* self, void* UNUSED(context))
 {
     PyObject* result = self->parent ? (PyObject*)self->parent : Py_None;
     Py_INCREF(result);
@@ -2087,7 +2082,7 @@ green_getparent(PyGreenlet* self, void* c)
 
 
 static int
-green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c)
+green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(context))
 {
     PyGreenlet* run_info = NULL;
     if (!nparent) {
@@ -2133,7 +2128,7 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c)
 #endif
 
 static PyObject*
-green_getcontext(PyGreenlet* self, void* c)
+green_getcontext(PyGreenlet* self, void* UNUSED(context))
 {
 #if GREENLET_PY37
 
@@ -2171,7 +2166,7 @@ green_getcontext(PyGreenlet* self, void* c)
 }
 
 static int
-green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
+green_setcontext(PyGreenlet* self, PyObject* nctx, void* UNUSED(context))
 {
 #if GREENLET_PY37
     if (nctx == NULL) {
@@ -2224,7 +2219,7 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* c)
 #undef GREENLET_NO_CONTEXTVARS_REASON
 
 static PyObject*
-green_getframe(PyGreenlet* self, void* c)
+green_getframe(PyGreenlet* self, void* UNUSED(context))
 {
     PyObject* result = self->python_state.has_top_frame()
         ? self->python_state.top_frame()
@@ -2539,7 +2534,7 @@ PyDoc_STRVAR(mod_getcurrent_doc,
              "function).\n");
 
 static PyObject*
-mod_getcurrent(PyObject* self)
+mod_getcurrent(PyObject* UNUSED(module))
 {
     return GET_THREAD_STATE().state().get_current().relinquish_ownership_o();
 }
@@ -2549,7 +2544,7 @@ PyDoc_STRVAR(mod_settrace_doc,
              "\n"
              "Sets a new tracing function and returns the previous one.\n");
 static PyObject*
-mod_settrace(PyObject* self, PyObject* args)
+mod_settrace(PyObject* UNUSED(module), PyObject* args)
 {
     PyArgParseParam tracefunc;
     if (!PyArg_ParseTuple(args, "O", &tracefunc)) {
@@ -2572,7 +2567,7 @@ PyDoc_STRVAR(mod_gettrace_doc,
              "Returns the currently set tracing function, or None.\n");
 
 static PyObject*
-mod_gettrace(PyObject* self)
+mod_gettrace(PyObject* UNUSED(module))
 {
     OwnedObject tracefunc = GET_THREAD_STATE().state().get_tracefunc();
     if (!tracefunc) {
@@ -2587,7 +2582,7 @@ PyDoc_STRVAR(mod_set_thread_local_doc,
              "Set a value in the current thread-local dictionary. Debbuging only.\n");
 
 static PyObject*
-mod_set_thread_local(PyObject* mod, PyObject* args)
+mod_set_thread_local(PyObject* UNUSED(module), PyObject* args)
 {
     PyArgParseParam key;
     PyArgParseParam value;
@@ -2613,7 +2608,7 @@ PyDoc_STRVAR(mod_get_pending_cleanup_count_doc,
 
 
 static PyObject*
-mod_get_pending_cleanup_count(PyObject* mod)
+mod_get_pending_cleanup_count(PyObject* UNUSED(module))
 {
     LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
     return PyLong_FromSize_t(mod_globs.thread_states_to_destroy.size());
@@ -2625,7 +2620,7 @@ PyDoc_STRVAR(mod_get_total_main_greenlets_doc,
              "Quickly return the number of main greenlets that exist. Testing only.\n");
 
 static PyObject*
-mod_get_total_main_greenlets(PyObject* mod)
+mod_get_total_main_greenlets(PyObject* UNUSED(module))
 {
     return PyLong_FromSize_t(total_main_greenlets);
 }

@@ -83,10 +83,9 @@ namespace greenlet
     template <class T>
     struct PythonAllocator : public std::allocator<T> {
 
-        PythonAllocator(const PythonAllocator& other)
+        PythonAllocator(const PythonAllocator& UNUSED(other))
             : std::allocator<T>()
         {
-            UNUSED(other);
         }
 
         PythonAllocator(const std::allocator<T> other)
@@ -101,9 +100,8 @@ namespace greenlet
 
         PythonAllocator() : std::allocator<T>() {}
 
-        T* allocate(size_t number_objects, const void* hint=0)
+        T* allocate(size_t number_objects, const void* UNUSED(hint)=0)
         {
-            UNUSED(hint);
             void* p;
             if (number_objects == 1)
                 p = PyObject_Malloc(sizeof(T));

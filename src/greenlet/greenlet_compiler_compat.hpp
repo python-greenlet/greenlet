@@ -7,7 +7,7 @@
  *
  */
 
-#define UNUSED(expr) do { (void)(expr); } while (0)
+
 /* The compiler used for Python 2.7 on Windows doesn't include
    either stdint.h or cstdint.h. Nor does it understand nullptr or have
    std::shared_ptr. = delete, etc Sigh. */
@@ -68,11 +68,13 @@ typedef unsigned int uint32_t;
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __attribute__((noinline)) name
 #    define GREENLET_NOINLINE_P(rtype, name) rtype __attribute__((noinline)) name
+#    define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
 #elif defined(_MSC_VER)
 /* We used to check for  && (_MSC_VER >= 1300) but that's also out of date. */
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __declspec(noinline) name
 #    define GREENLET_NOINLINE_P(rtype, name) __declspec(noinline) rtype name
+#    define UNUSED(x) UNUSED_ ## x
 #endif
 
 

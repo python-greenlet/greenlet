@@ -119,10 +119,8 @@ private:
     G_NO_COPIES_OF_CLS(ThreadState);
 
 public:
-    static void* operator new(size_t count)
+    static void* operator new(size_t UNUSED(count))
     {
-        UNUSED(count);
-        assert(count == sizeof(ThreadState));
         return ThreadState::allocator.allocate(1);
     }
 

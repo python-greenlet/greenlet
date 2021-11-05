@@ -62,9 +62,8 @@ test_exception_switch_recurse(int depth, int left)
  * - verifies depth matches (exceptions shouldn't be caught in other greenlets)
  */
 static PyObject*
-test_exception_switch(PyObject* self, PyObject* args)
+test_exception_switch(PyObject* UNUSED(self), PyObject* args)
 {
-    UNUSED(self);
     int depth;
     if (!PyArg_ParseTuple(args, "i", &depth))
         return NULL;
