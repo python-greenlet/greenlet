@@ -93,6 +93,17 @@ inline greenlet::refs::_OwnedGreenlet<PyMainGreenlet>::operator greenlet::Greenl
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
 
+template <typename T>
+inline Greenlet* greenlet::refs::_OwnedGreenlet<T>::operator->() const G_NOEXCEPT
+{
+    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
+}
+
+template <typename T>
+inline Greenlet* greenlet::refs::_BorrowedGreenlet<T>::operator->() const G_NOEXCEPT
+{
+    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
+}
 
 #include <memory>
 #include <stdexcept>

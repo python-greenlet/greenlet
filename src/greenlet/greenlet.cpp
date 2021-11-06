@@ -148,18 +148,6 @@ greenlet::refs::_BorrowedGreenlet<T>& greenlet::refs::_BorrowedGreenlet<T>::oper
 }
 
 template <typename T>
-inline Greenlet* greenlet::refs::_OwnedGreenlet<T>::operator->() const G_NOEXCEPT
-{
-    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
-}
-
-template <typename T>
-inline Greenlet* greenlet::refs::_BorrowedGreenlet<T>::operator->() const G_NOEXCEPT
-{
-    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
-}
-
-template <typename T>
 inline greenlet::refs::_BorrowedGreenlet<T>::operator Greenlet*() const G_NOEXCEPT
 {
     if (!this->p) {
@@ -1910,6 +1898,7 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(cont
 #    define GREENLET_NO_CONTEXTVARS_REASON "This Python interpreter"
 #endif
 
+
 static PyObject*
 green_getcontext(BorrowedGreenlet self, void* UNUSED(context))
 {
@@ -1918,7 +1907,7 @@ green_getcontext(BorrowedGreenlet self, void* UNUSED(context))
     PyThreadState* tstate = PyThreadState_GET();
     OwnedObject result;
 
-    if (PyGreenlet_ACTIVE(self) && !self->python_state.has_top_frame()) {
+    if (self->is_currently_running_in_some_thread()) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(self)) {
@@ -1969,7 +1958,7 @@ green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 
     PyThreadState* tstate = PyThreadState_GET();
 
-    if (PyGreenlet_ACTIVE(self) && !self->python_state.has_top_frame()) {
+    if (self->is_currently_running_in_some_thread()) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(self)) {
@@ -2004,11 +1993,8 @@ green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 static PyObject*
 green_getframe(BorrowedGreenlet self, void* UNUSED(context))
 {
-    PyObject* result = self->python_state.has_top_frame()
-        ? self->python_state.top_frame()
-        : Py_None;
-    Py_INCREF(result);
-    return result;
+    const PythonState::OwnedFrame& top_frame = self->python_state.top_frame();
+    return top_frame.acquire_or_None();
 }
 
 static PyObject*
@@ -2017,7 +2003,7 @@ green_getstate(PyGreenlet* self)
     PyErr_Format(PyExc_TypeError,
                  "cannot serialize '%s' object",
                  Py_TYPE(self)->tp_name);
-    return NULL;
+    return nullptr;
 }
 
 static PyObject*

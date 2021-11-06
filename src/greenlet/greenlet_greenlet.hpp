@@ -52,10 +52,13 @@ namespace greenlet
     {
     private:
         G_NO_COPIES_OF_CLS(PythonState);
-        /* weak reference (suspended) or NULL (running) */
-        // TODO: Change this to a BorrowedReference object.
-        struct _frame* _top_frame;
-
+        typedef greenlet::refs::OwnedReference<struct _frame> OwnedFrame;
+        // We own this if we're suspended (although currently we don't
+        // tp_traverse into it; that's a TODO). If we're running, it's
+        // empty. If we get deallocated and *still* have a frame, it
+        // won't be reachable from the place that normally decref's
+        // it, so we need to do it (hence owning it).
+        OwnedFrame _top_frame;
 #if GREENLET_PY37
         OwnedObject _context;
 #endif
@@ -67,8 +70,9 @@ namespace greenlet
 
     public:
         PythonState();
-        bool has_top_frame() const G_NOEXCEPT;
-        PyObject* top_frame() const G_NOEXCEPT;
+        // You can use this for testing whether we have a frame
+        // or not. It returns const so they can't modify it.
+        const OwnedFrame& top_frame() const G_NOEXCEPT;
 #if GREENLET_PY37
         OwnedObject& context();
 #endif
@@ -105,7 +109,8 @@ namespace greenlet
 
     public:
         /**
-         * Creates a started, but inactive, state.
+         * Creates a started, but inactive, state, using *current*
+         * as the previous.
          */
         StackState(void* mark, StackState& current);
         /**
@@ -246,8 +251,11 @@ namespace greenlet
 
         OwnedObject kill();
         OwnedObject g_switch();
+        // TODO: Figure out how to make these non-public.
         inline void slp_restore_state() G_NOEXCEPT;
         inline int slp_save_state(char *const stackref) G_NOEXCEPT;
+
+        inline bool is_currently_running_in_some_thread();
 
         int tp_traverse(visitproc visit, void* arg);
         int tp_clear();
@@ -453,7 +461,7 @@ void ExceptionState::tp_clear() G_NOEXCEPT
 using greenlet::PythonState;
 
 PythonState::PythonState()
-    : _top_frame(nullptr)
+    : _top_frame()
 #if GREENLET_PY37
     ,_context()
 #endif
@@ -520,7 +528,7 @@ PythonState::PythonState()
 void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 {
     this->recursion_depth = tstate->recursion_depth;
-    this->_top_frame = tstate->frame;
+    this->_top_frame.steal(tstate->frame);
 #if GREENLET_PY37
     this->_context.steal(tstate->context);
 #endif
@@ -543,12 +551,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 {
     tstate->recursion_depth = this->recursion_depth;
-    tstate->frame = this->_top_frame;
-    this->_top_frame = nullptr;
-
+    tstate->frame = this->_top_frame.relinquish_ownership();
 #if GREENLET_PY37
     tstate->context = this->_context.relinquish_ownership();
-    this->_context = nullptr;
     /* Incrementing this value invalidates the contextvars cache,
        which would otherwise remain valid across switches */
     tstate->context_ver++;
@@ -588,7 +593,7 @@ int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) G_N
     Py_VISIT(this->_context.borrow());
 #endif
     if (own_top_frame) {
-        Py_VISIT(this->_top_frame);
+        Py_VISIT(this->_top_frame.borrow());
     }
     return 0;
 }
@@ -602,7 +607,7 @@ void PythonState::tp_clear(bool own_top_frame) G_NOEXCEPT
     // we got dealloc'd without being finished. We may or may not be
     // in the same thread.
     if (own_top_frame) {
-        Py_CLEAR(this->_top_frame);
+        this->_top_frame.CLEAR();
     }
 }
 
@@ -620,14 +625,10 @@ void PythonState::set_new_cframe(CFrame& frame) G_NOEXCEPT
 }
 #endif
 
-bool PythonState::has_top_frame() const G_NOEXCEPT
-{
-    return this->_top_frame != nullptr;
-}
 
-PyObject* PythonState::top_frame() const G_NOEXCEPT
+const PythonState::OwnedFrame& PythonState::top_frame() const G_NOEXCEPT
 {
-    return reinterpret_cast<PyObject*>(this->_top_frame);
+    return this->_top_frame;
 }
 
 #if GREENLET_PY37
@@ -867,6 +868,12 @@ StackState::~StackState()
     }
 }
 
+using greenlet::Greenlet;
+
+bool Greenlet::is_currently_running_in_some_thread()
+{
+    return this->stack_state.active() && !this->python_state.top_frame();
+}
 
 
 #endif

@@ -242,7 +242,7 @@ private:
                     to_del->pimpl->main_greenlet.CLEAR();
 
                     if (PyGreenlet_ACTIVE(to_del)) {
-                        assert(to_del->pimpl->python_state.has_top_frame());
+                        assert(!to_del->pimpl->is_currently_running_in_some_thread());
                         to_del->pimpl->stack_state.set_inactive();
                         assert(!PyGreenlet_ACTIVE(to_del));
 
@@ -340,7 +340,7 @@ public:
         // on the stack, somewhere uncollectable. Try to detect that.
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
             assert(PyGreenlet_MAIN(this->main_greenlet));
-            assert(!this->current_greenlet->python_state.has_top_frame());
+            assert(this->current_greenlet->is_currently_running_in_some_thread());
             assert(this->main_greenlet->main_greenlet == this->main_greenlet.borrow());
             // Break a cycle we know about, the self reference
             // the main greenlet keeps.
@@ -414,7 +414,7 @@ public:
         // deleteme list.
         if (this->current_greenlet) {
             OwnedGreenlet& g = this->current_greenlet;
-            assert(!g->python_state.has_top_frame());
+            assert(!g->is_currently_running_in_some_thread());
             g->main_greenlet.CLEAR();
 
             // XXX: This could now put us in an invalid state, with

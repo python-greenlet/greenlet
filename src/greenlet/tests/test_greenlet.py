@@ -776,7 +776,7 @@ class TestGreenlet(TestCase):
         # Let any other thread run; it will crash the interpreter
         # if not fixed (or silently corrupt memory and we possibly crash
         # later).
-        time.sleep(1)
+        self.wait_for_pending_cleanups()
         self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
 
     def test_falling_off_end_switches_to_unstarted_parent_raises_error(self):
