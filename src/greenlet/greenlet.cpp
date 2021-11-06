@@ -621,13 +621,6 @@ g_handle_exit(const OwnedObject& greenlet_result);
 
 
 
-template<typename T>
-std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
-{
-    os << s.as_str();
-    return os;
-}
-
 
 
 /**
@@ -1091,7 +1084,7 @@ Greenlet::switchstack_result_t Greenlet::g_switchstack(void)
 
     if (err < 0) { /* error */
         // XXX: This code path is not tested.
-        BorrowedGreenlet current(GET_THREAD_STATE().borrow_current());
+        BorrowedGreenlet current(GET_THREAD_STATE().state().borrow_current());
         //current->top_frame = NULL; // This probably leaks?
         current->exception_state.clear();
 
@@ -1168,7 +1161,7 @@ inline void Greenlet::check_switch_allowed() const
 OwnedObject Greenlet::g_switch_finish(const switchstack_result_t& err)
 {
 
-    const ThreadState& state = *TS(this);
+    ThreadState& state = *TS(this);
     try {
         // Our only caller handles the bad error case
         assert(err.status >= 0);
@@ -1327,7 +1320,8 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o) {
         Greenlet* g = new Greenlet(o);
-        g->parent = GET_THREAD_STATE().state().get_current().relinquish_ownership();
+        g->parent = GET_THREAD_STATE().state().borrow_current();
+        assert(Py_REFCNT(o) == 1);
     }
     return o;
 }

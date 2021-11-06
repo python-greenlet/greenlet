@@ -13,6 +13,11 @@ struct _PyMainGreenlet;
 typedef struct _greenlet PyGreenlet;
 typedef struct _PyMainGreenlet PyMainGreenlet;
 
+#ifndef NDEBUG
+#include <iostream>
+using std::cerr;
+using std::endl;
+#endif
 
 
 namespace greenlet {
@@ -130,7 +135,7 @@ namespace greenlet {
         }
 
         inline OwnedObject PyStr() const G_NOEXCEPT;
-        inline const char* as_str() const G_NOEXCEPT;
+        inline const std::string as_str() const G_NOEXCEPT;
         inline OwnedObject PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT;
         inline OwnedObject PyRequireAttr(const char* const name) const;
         inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
@@ -154,6 +159,20 @@ namespace greenlet {
         }
     };
 
+#ifndef NDEBUG
+        template<typename T>
+        std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
+        {
+            const std::type_info& t = typeid(s);
+            os << t.name()
+               << "(addr=" << s.borrow()
+               << ", refcnt=" << s.REFCNT()
+               << ", value=" << s.as_str()
+               << ")";
+
+            return os;
+        }
+#endif
 
     template<typename T>
     inline bool operator==(const PyObjectPointer<T>& lhs, const void* const rhs) G_NOEXCEPT
@@ -565,10 +584,13 @@ namespace greenlet {
     }
 
     template<typename T>
-    inline const char* PyObjectPointer<T>::as_str() const G_NOEXCEPT
+    inline const std::string PyObjectPointer<T>::as_str() const G_NOEXCEPT
     {
         // NOTE: This is not Python exception safe.
         if (this->p) {
+            // The Python APIs return a cached char* value that's only valid
+            // as long as the original object stays around, and we're
+            // about to (probably) toss it. Hence the copy to std::string.
             OwnedObject py_str = this->PyStr();
 #if PY_MAJOR_VERSION >= 3
             return PyUnicode_AsUTF8(py_str.borrow());

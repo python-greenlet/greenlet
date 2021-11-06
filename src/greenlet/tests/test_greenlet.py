@@ -118,8 +118,10 @@ class TestGreenlet(TestCase):
             lst.append('c')
 
         g = greenlet(g)
+        self.assertEqual(sys.getrefcount(g), 2)
         g.switch()
         self.assertEqual(lst, ['a', 'b', 'c'])
+        # Just the one in this frame, plus the one on the stack we pass to the function
         self.assertEqual(sys.getrefcount(g), 2)
 
     def test_threads(self):
@@ -229,14 +231,15 @@ class TestGreenlet(TestCase):
             someref.append(g1)
             del g1
             gc.collect()
+
             bg_glet_created_running_and_no_longer_ref_in_bg.set()
             fg_ref_released.wait(3)
-            #print("Triggering")
+
             greenlet()   # trigger release
             bg_should_be_clear.set()
             ok_to_exit_bg_thread.wait(3)
             greenlet() # One more time
-            #print("Exiting")
+
         t = threading.Thread(target=f)
         t.start()
         bg_glet_created_running_and_no_longer_ref_in_bg.wait(10)
@@ -249,11 +252,13 @@ class TestGreenlet(TestCase):
         self.assertEqual(seen, [])
         fg_ref_released.set()
         bg_should_be_clear.wait(3)
-        self.assertEqual(seen, [greenlet.GreenletExit])
-        ok_to_exit_bg_thread.set()
-        t.join(10)
-        del seen[:]
-        del someref[:]
+        try:
+            self.assertEqual(seen, [greenlet.GreenletExit])
+        finally:
+            ok_to_exit_bg_thread.set()
+            t.join(10)
+            del seen[:]
+            del someref[:]
 
     def test_frame(self):
         def f1():

@@ -131,10 +131,9 @@ public:
     }
 
     ThreadState()
+        : main_greenlet(OwnedMainGreenlet::consuming(green_create_main())),
+          current_greenlet(main_greenlet)
     {
-        this->main_greenlet = OwnedMainGreenlet::consuming(green_create_main());
-        this->current_greenlet = main_greenlet;
-
         if(!this->main_greenlet) {
             // We failed to create the main greenlet. That's bad.
             Py_FatalError("Failed to create main greenlet");
@@ -178,11 +177,6 @@ public:
         return this->main_greenlet;
     }
 
-    inline BorrowedGreenlet borrow_current() const
-    {
-        return this->current_greenlet;
-    }
-
     /**
      * In addition to returning a new reference to the currunt
      * greenlet, this perfroms any maintenance needed.
@@ -197,10 +191,14 @@ public:
         return this->current_greenlet;
     };
 
-    // inline bool is_current(const void* obj) const
-    // {
-    //     return this->current_greenlet.borrow() == obj;
-    // }
+    /**
+     * As for get_current();
+     */
+    inline BorrowedGreenlet borrow_current()
+    {
+        this->clear_deleteme_list();
+        return this->current_greenlet;
+    }
 
     template<typename T>
     inline bool is_current(const refs::PyObjectPointer<T>& obj) const
@@ -497,23 +495,6 @@ public:
         return this->state();
     }
 
-    // shadow API to make this easier to use.
-    // inline PyGreenlet* borrow_target()
-    // {
-    //     return this->state().borrow_target();
-    // };
-    inline PyGreenlet* borrow_current()
-    {
-        return this->state().borrow_current().borrow();
-    };
-    // inline PyGreenlet* borrow_origin()
-    // {
-    //     return this->state().borrow_origin().borrow();
-    // };
-    inline PyMainGreenlet* borrow_main_greenlet()
-    {
-        return this->state().borrow_main_greenlet().borrow();
-    };
 
 };
 
