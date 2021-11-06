@@ -19,6 +19,8 @@
 #include "greenlet_greenlet.hpp"
 #include "greenlet_allocator.hpp"
 
+#include <vector>
+
 #define GREENLET_MODULE
 struct _greenlet;
 typedef struct _greenlet PyGreenlet;
