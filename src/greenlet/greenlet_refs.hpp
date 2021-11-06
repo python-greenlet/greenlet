@@ -15,7 +15,9 @@ typedef struct _PyMainGreenlet PyMainGreenlet;
 
 
 
-namespace greenlet { namespace refs {
+namespace greenlet {
+    class Greenlet;
+    namespace refs {
     // A set of classes to make reference counting rules in python
     // code explicit.
     //
@@ -105,6 +107,13 @@ namespace greenlet { namespace refs {
             return this->p == Py_None;
         }
 
+        inline PyObject* acquire_or_None() const G_NOEXCEPT
+        {
+            PyObject* result = this->p ? reinterpret_cast<PyObject*>(this->p) : Py_None;
+            Py_INCREF(result);
+            return result;
+        }
+
         G_EXPLICIT_OP operator bool() const G_NOEXCEPT
         {
             return p != nullptr;
@@ -119,12 +128,6 @@ namespace greenlet { namespace refs {
         {
             return p ? Py_TYPE(p) : nullptr;
         }
-
-        // TODO: These two methods only make sense for greenlet
-        // objects, but there's not a good spot in the inheritance
-        // tree to put them without introducing VTable pointers
-        bool active() const;
-        bool started() const;
 
         inline OwnedObject PyStr() const G_NOEXCEPT;
         inline const char* as_str() const G_NOEXCEPT;
@@ -398,8 +401,8 @@ namespace greenlet { namespace refs {
             return reinterpret_cast<PyObject*>(relinquish_ownership());
         }
 
-
-
+        inline Greenlet* operator->() const G_NOEXCEPT;
+        inline operator Greenlet*() const G_NOEXCEPT;
     };
 
 
@@ -462,6 +465,8 @@ namespace greenlet { namespace refs {
         {
             return reinterpret_cast<PyObject*>(this->p);
         }
+        inline Greenlet* operator->() const G_NOEXCEPT;
+        inline operator Greenlet*() const G_NOEXCEPT;
     };
 
     typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
@@ -484,7 +489,7 @@ namespace greenlet { namespace refs {
         BorrowedMainGreenlet(const OwnedMainGreenlet& it) :
             _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
         {}
-        BorrowedMainGreenlet(PyMainGreenlet* it) : _BorrowedGreenlet<PyMainGreenlet>(it)
+        BorrowedMainGreenlet(PyMainGreenlet* it=nullptr) : _BorrowedGreenlet<PyMainGreenlet>(it)
         {}
     };
 

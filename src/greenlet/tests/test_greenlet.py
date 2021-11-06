@@ -108,17 +108,18 @@ class TestGreenlet(TestCase):
         lst = []
 
         def f():
-            lst.append(1)
+            lst.append('b')
             greenlet.getcurrent().parent.switch()
 
         def g():
-            lst.append(1)
+            lst.append('a')
             g = greenlet(f)
             g.switch()
-            lst.append(1)
+            lst.append('c')
+
         g = greenlet(g)
         g.switch()
-        self.assertEqual(len(lst), 3)
+        self.assertEqual(lst, ['a', 'b', 'c'])
         self.assertEqual(sys.getrefcount(g), 2)
 
     def test_threads(self):

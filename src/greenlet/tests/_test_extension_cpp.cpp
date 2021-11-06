@@ -33,7 +33,7 @@ test_exception_switch_recurse(int depth, int left)
         return NULL;
 
     try {
-        if (PyGreenlet_Switch(self->parent, NULL, NULL) == NULL) {
+        if (PyGreenlet_Switch(PyGreenlet_GET_PARENT(self), NULL, NULL) == NULL) {
             Py_DECREF(self);
             return NULL;
         }

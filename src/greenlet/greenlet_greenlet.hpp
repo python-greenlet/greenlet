@@ -9,8 +9,12 @@
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_refs.hpp"
 #include "greenlet_cpython_compat.hpp"
+#include "greenlet_allocator.hpp"
 
 using greenlet::refs::OwnedObject;
+using greenlet::refs::OwnedGreenlet;
+using greenlet::refs::OwnedMainGreenlet;
+using greenlet::refs::BorrowedGreenlet;
 
 namespace greenlet
 {
@@ -49,6 +53,7 @@ namespace greenlet
     private:
         G_NO_COPIES_OF_CLS(PythonState);
         /* weak reference (suspended) or NULL (running) */
+        // TODO: Change this to a BorrowedReference object.
         struct _frame* _top_frame;
 
 #if GREENLET_PY37
@@ -59,6 +64,7 @@ namespace greenlet
         int use_tracing;
 #endif
         int recursion_depth;
+
     public:
         PythonState();
         bool has_top_frame() const G_NOEXCEPT;
@@ -122,6 +128,233 @@ namespace greenlet
         friend std::ostream& operator<<(std::ostream& os, const StackState& s);
     };
     std::ostream& operator<<(std::ostream& os, const StackState& s);
+
+    class SwitchingArgs
+    {
+    private:
+        G_NO_ASSIGNMENT_OF_CLS(SwitchingArgs);
+        // If args and kwargs are both false (NULL), this is a *throw*, not a
+        // switch. PyErr_... must have been called already.
+        OwnedObject _args;
+        OwnedObject _kwargs;
+    public:
+
+        SwitchingArgs()
+        {}
+
+        SwitchingArgs(const OwnedObject& args, const OwnedObject& kwargs)
+            : _args(args),
+              _kwargs(kwargs)
+        {}
+
+        SwitchingArgs(const SwitchingArgs& other)
+            : _args(other._args),
+              _kwargs(other._kwargs)
+        {}
+
+        OwnedObject& args()
+        {
+            return this->_args;
+        }
+
+        OwnedObject& kwargs()
+        {
+            return this->_kwargs;
+        }
+
+        /**
+         * Moves ownership from the argument to this object.
+         */
+        SwitchingArgs& operator<<=(SwitchingArgs& other)
+        {
+            if (this != &other) {
+                this->_args = other._args;
+                this->_kwargs = other._kwargs;
+                other.CLEAR();
+            }
+            return *this;
+        }
+
+        /**
+         * Acquires ownership of the argument (consumes the reference).
+         */
+        SwitchingArgs& operator<<=(PyObject* args)
+        {
+            this->_args = OwnedObject::consuming(args);
+            this->_kwargs.CLEAR();
+            return *this;
+        }
+
+        /**
+         * Acquires ownership of the argument.
+         *
+         * Sets the args to be the given value; clears the kwargs.
+         */
+        SwitchingArgs& operator<<=(OwnedObject& args)
+        {
+            assert(&args != &this->_args);
+            this->_args = args;
+            this->_kwargs.CLEAR();
+            args.CLEAR();
+
+            return *this;
+        }
+
+        G_EXPLICIT_OP operator bool() const G_NOEXCEPT
+        {
+            return this->_args || this->_kwargs;
+        }
+
+        inline void CLEAR()
+        {
+            this->_args.CLEAR();
+            this->_kwargs.CLEAR();
+        }
+    };
+
+    class ThreadState;
+
+    class Greenlet
+    {
+    private:
+        G_NO_COPIES_OF_CLS(Greenlet);
+        BorrowedGreenlet self;
+    public:
+        class GreenletStartedWhileInPython : public std::runtime_error
+        {
+        public:
+            GreenletStartedWhileInPython() : std::runtime_error("")
+            {}
+        };
+
+        ExceptionState exception_state;
+        PythonState python_state;
+        StackState stack_state;
+        SwitchingArgs switch_args;
+
+        OwnedGreenlet parent;
+        OwnedMainGreenlet main_greenlet;
+        OwnedObject run_callable;
+
+        Greenlet(PyGreenlet*);
+        virtual ~Greenlet();
+
+        inline SwitchingArgs& args()
+        {
+            return this->switch_args;
+        }
+
+        OwnedObject kill();
+        OwnedObject g_switch();
+        inline void slp_restore_state() G_NOEXCEPT;
+        inline int slp_save_state(char *const stackref) G_NOEXCEPT;
+
+        int tp_traverse(visitproc visit, void* arg);
+        int tp_clear();
+
+        static void* operator new(size_t UNUSED(count));
+        static void operator delete(void* ptr);
+
+    protected:
+        // The functions that must not be inlined are declared virtual.
+        // We also mark them as protected, not private, so that the
+        // compiler is forced to call them through a function pointer.
+        // (A sufficiently smart compiler could directly call a private
+        // virtual function since it can never be overridden in a
+        // subclass).
+
+        // Also TODO: Switch away from integer error codes and to enums,
+        // or throw exceptions when possible.
+        struct switchstack_result_t
+        {
+            int status;
+            Greenlet* the_state_that_switched;
+            OwnedGreenlet origin_greenlet;
+
+            switchstack_result_t()
+                : status(0),
+                  the_state_that_switched(nullptr)
+            {}
+
+            switchstack_result_t(int err)
+                : status(err),
+                  the_state_that_switched(nullptr)
+            {}
+
+            switchstack_result_t(int err, Greenlet* state, OwnedGreenlet& origin)
+                : status(err),
+                  the_state_that_switched(state),
+                  origin_greenlet(origin)
+            {
+            }
+
+            switchstack_result_t(int err, Greenlet* state, const BorrowedGreenlet& origin)
+                : status(err),
+                  the_state_that_switched(state),
+                  origin_greenlet(origin)
+            {
+            }
+
+            switchstack_result_t& operator=(const switchstack_result_t& other)
+            {
+                this->status = other.status;
+                this->the_state_that_switched = other.the_state_that_switched;
+                this->origin_greenlet = other.origin_greenlet;
+                return *this;
+            }
+        };
+
+        // Returns the previous greenlet we just switched away from.
+        virtual OwnedGreenlet g_switchstack_success() G_NOEXCEPT;
+
+        virtual switchstack_result_t g_initialstub(void* mark);
+
+    private:
+        void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT;
+        /**
+           Perform a stack switch into this greenlet.
+
+           This temporarily sets the global variable
+           ``switching_thread_state`` to this greenlet; as soon as the
+           call to ``slp_switch`` completes, this is reset to NULL.
+           Consequently, this depends on the GIL.
+
+           TODO: Adopt the stackman model and pass ``slp_switch`` a
+           callback function and context pointer; this eliminates the
+           need for global variables altogether.
+
+           Because the stack switch happens in this function, this
+           function can't use its own stack (local) variables, set
+           before the switch, and then accessed after the switch.
+
+           Further, you con't even access ``g_thread_state_global``
+           before and after the switch from the global variable.
+           Because it is thread local some compilers cache it in a
+           register/on the stack, notably new versions of MSVC; this
+           breaks with strange crashes sometime later, because writing
+           to anything in ``g_thread_state_global`` after the switch
+           is actually writing to random memory. For this reason, we
+           call a non-inlined function to finish the operation. (XXX:
+           The ``/GT`` MSVC compiler argument probably fixes that.)
+
+           It is very important that stack switch is 'atomic', i.e. no
+           calls into other Python code allowed (except very few that
+           are safe), because global variables are very fragile. (This
+           should no longer be the case with thread-local variables.)
+
+        */
+        switchstack_result_t g_switchstack(void);
+        OwnedObject g_switch_finish(const switchstack_result_t& err);
+        // Check the preconditions for switching to this greenlet; if they
+        // aren't met, throws PyErrOccurred. Most callers will want to
+        // catch this and clear the arguments
+        inline void check_switch_allowed() const;
+        inline void release_args();
+        static greenlet::PythonAllocator<Greenlet> allocator;
+
+    };
+
+
 };
 
 template<typename T>
@@ -220,6 +453,15 @@ void ExceptionState::tp_clear() G_NOEXCEPT
 using greenlet::PythonState;
 
 PythonState::PythonState()
+    : _top_frame(nullptr)
+#if GREENLET_PY37
+    ,_context()
+#endif
+#if GREENLET_USE_CFRAME
+    ,cframe(nullptr)
+    ,use_tracing(0)
+#endif
+    ,recursion_depth(0)
 {
 #if GREENLET_USE_CFRAME
     /*

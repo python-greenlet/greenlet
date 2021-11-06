@@ -36,7 +36,10 @@
 // running this code, the thread isn't exiting. This also nets us a
 // 10-12% speed improvement.
 class SwitchingState;
-static PyGreenlet* volatile switching_thread_state = nullptr;
+namespace greenlet {
+    class Greenlet;
+};
+static greenlet::Greenlet* volatile switching_thread_state = nullptr;
 
 
 #ifdef GREENLET_NOINLINE_SUPPORTED
