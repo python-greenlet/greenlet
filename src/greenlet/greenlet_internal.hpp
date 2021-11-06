@@ -32,7 +32,6 @@ namespace greenlet {
 
 };
 struct _PyMainGreenlet;
-class SwitchingState;
 
 #define implementation_ptr_t greenlet::Greenlet*
 
@@ -86,7 +85,7 @@ static inline bool PyGreenlet_ACTIVE(const PyGreenlet* g)
 }
 
 template<>
-inline greenlet::refs::_OwnedGreenlet<PyMainGreenlet>::operator Greenlet*() const G_NOEXCEPT
+inline greenlet::refs::_OwnedGreenlet<PyMainGreenlet>::operator greenlet::Greenlet*() const G_NOEXCEPT
 {
     if (!this->p) {
         return nullptr;
@@ -94,7 +93,7 @@ inline greenlet::refs::_OwnedGreenlet<PyMainGreenlet>::operator Greenlet*() cons
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
 
-#include <vector>
+
 #include <memory>
 #include <stdexcept>
 

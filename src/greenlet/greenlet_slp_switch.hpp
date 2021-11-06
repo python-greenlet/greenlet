@@ -35,7 +35,7 @@
 // This is safe beacuse we're protected by the GIL, and if we're
 // running this code, the thread isn't exiting. This also nets us a
 // 10-12% speed improvement.
-class SwitchingState;
+
 namespace greenlet {
     class Greenlet;
 };
