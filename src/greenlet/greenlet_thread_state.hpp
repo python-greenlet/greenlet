@@ -165,7 +165,7 @@ public:
         return !!this->main_greenlet;
     }
 
-    inline BorrowedMainGreenlet borrow_main_greenlet()
+    inline BorrowedMainGreenlet borrow_main_greenlet() const
     {
         assert(this->main_greenlet);
         assert(this->main_greenlet.REFCNT() >= 2);
@@ -186,13 +186,13 @@ public:
         /* green_dealloc() cannot delete greenlets from other threads, so
            it stores them in the thread dict; delete them now. */
         this->clear_deleteme_list();
-        assert(this->current_greenlet->main_greenlet == this->main_greenlet);
-        assert(this->main_greenlet->main_greenlet == this->main_greenlet);
+        //assert(this->current_greenlet->main_greenlet == this->main_greenlet);
+        //assert(this->main_greenlet->main_greenlet == this->main_greenlet);
         return this->current_greenlet;
-    };
+    }
 
     /**
-     * As for get_current();
+     * As for non-const get_current();
      */
     inline BorrowedGreenlet borrow_current()
     {
@@ -200,8 +200,16 @@ public:
         return this->current_greenlet;
     }
 
-    template<typename T>
-    inline bool is_current(const refs::PyObjectPointer<T>& obj) const
+    /**
+     * Does no maintenance.
+     */
+    inline OwnedGreenlet get_current() const
+    {
+        return this->current_greenlet;
+    }
+
+    template<typename T, refs::TypeChecker TC>
+    inline bool is_current(const refs::PyObjectPointer<T, TC>& obj) const
     {
         return this->current_greenlet.borrow_o() == obj.borrow_o();
     }
@@ -238,26 +246,7 @@ private:
                 if (murder) {
                     // Force each greenlet to appear dead; we can't raise an
                     // exception into it anymore anyway.
-                    // XXX: If they have saved stack, it leaks!
-                    to_del->pimpl->main_greenlet.CLEAR();
-
-                    if (PyGreenlet_ACTIVE(to_del)) {
-                        assert(!to_del->pimpl->is_currently_running_in_some_thread());
-                        to_del->pimpl->stack_state.set_inactive();
-                        assert(!PyGreenlet_ACTIVE(to_del));
-
-                        // We're holding a borrowed reference to the last
-                        // frame we executed. Since we borrowed it, the
-                        // normal traversal, clear, and dealloc functions
-                        // ignore it, meaning it leaks. (The thread state
-                        // object can't find it to clear it when that's
-                        // deallocated either, because by definition if we
-                        // got an object on this list, it wasn't
-                        // running and the thread state doesn't have
-                        // this frame.)
-                        // So here, we *do* clear it.
-                        to_del->pimpl->python_state.tp_clear(true);
-                    }
+                    to_del->pimpl->murder_in_place();
                 }
 
                 // The only reference to these greenlets should be in
@@ -341,7 +330,7 @@ public:
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
             assert(PyGreenlet_MAIN(this->main_greenlet));
             assert(this->current_greenlet->is_currently_running_in_some_thread());
-            assert(this->main_greenlet->main_greenlet == this->main_greenlet.borrow());
+            assert(this->main_greenlet->main_greenlet == this->main_greenlet);
             // Break a cycle we know about, the self reference
             // the main greenlet keeps.
             this->main_greenlet->main_greenlet.CLEAR();
@@ -413,13 +402,8 @@ public:
         // exception in it (the thread is dead) and put it back in our
         // deleteme list.
         if (this->current_greenlet) {
-            OwnedGreenlet& g = this->current_greenlet;
-            assert(!g->is_currently_running_in_some_thread());
-            g->main_greenlet.CLEAR();
-
-            // XXX: This could now put us in an invalid state, with
-            // this->current_greenlet not being valid anymore.
-            Py_DECREF(this->current_greenlet.borrow());
+            this->current_greenlet->murder_in_place();
+            this->current_greenlet.CLEAR();
         }
 
         if (this->main_greenlet) {

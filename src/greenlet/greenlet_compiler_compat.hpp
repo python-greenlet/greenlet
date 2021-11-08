@@ -34,19 +34,23 @@ typedef unsigned int uint32_t;
 #endif
 
 #if G_HAS_METHOD_DELETE == 1
-#    define G_NO_COPIES_OF_CLS(Cls) public:     \
+#    define G_NO_COPIES_OF_CLS(Cls) private:     \
     Cls(const Cls& other) = delete; \
     Cls& operator=(const Cls& other) = delete
-#    define G_NO_ASSIGNMENT_OF_CLS(Cls) public:  \
+
+#    define G_NO_ASSIGNMENT_OF_CLS(Cls) private:  \
     Cls& operator=(const Cls& other) = delete
-#    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) public: \
+
+#    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) private: \
     Cls(const Cls& other) = delete;
 #else
 #    define G_NO_COPIES_OF_CLS(Cls) private: \
     Cls(const Cls& other); \
     Cls& operator=(const Cls& other)
+
 #    define G_NO_ASSIGNMENT_OF_CLS(Cls) private: \
         Cls& operator=(const Cls& other)
+
 #    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) private: \
     Cls(const Cls& other);
 #endif

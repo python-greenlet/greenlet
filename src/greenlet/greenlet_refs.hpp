@@ -12,6 +12,8 @@ struct _PyMainGreenlet;
 
 typedef struct _greenlet PyGreenlet;
 typedef struct _PyMainGreenlet PyMainGreenlet;
+extern PyTypeObject PyGreenlet_Type;
+extern PyTypeObject PyMainGreenlet_Type;
 
 #ifndef NDEBUG
 #include <iostream>
@@ -19,9 +21,108 @@ using std::cerr;
 using std::endl;
 #endif
 
+namespace greenlet
+{
+    class Greenlet;
+
+    namespace refs
+    {
+        // Type checkers throw a TypeError if the argument is not
+        // null, and isn't of the required Python type.
+        // (We can't use most of the defined type checkers
+        // like PyList_Check, etc, directly, because they are
+        // implemented as macros.)
+        typedef void (*TypeChecker)(void*);
+
+        static inline void
+        NoOpChecker(void*)
+        {
+            return;
+        }
+
+        static inline void
+        GreenletChecker(void *p)
+        {
+            if (!p) {
+                return;
+            }
+
+            PyTypeObject* typ = Py_TYPE(p);
+            // fast, common path. (PyObject_TypeCheck is a macro or
+            // static inline function, and it also does a
+            // direct comparison of the type pointers, but its fast
+            // path only handles one type)
+            if (typ == &PyGreenlet_Type || typ == &PyMainGreenlet_Type) {
+                return;
+            }
+
+            if (!PyObject_TypeCheck(p, &PyGreenlet_Type)) {
+                throw TypeError("Expected a greenlet");
+            }
+        }
+
+        static inline void
+        MainGreenletExactChecker(void *p)
+        {
+            if (!p) {
+                return;
+            }
+            // This isn't allowed to be subclassed, so we can
+            // go the fast way.
+            if (Py_TYPE(p) != &PyMainGreenlet_Type) {
+                throw TypeError("Expected a main greenlet");
+            }
+        }
+
+
+        template <typename T, TypeChecker>
+        class PyObjectPointer;
+
+        template<typename T, TypeChecker>
+        class OwnedReference;
+
+
+        template<typename T, TypeChecker>
+        class BorrowedReference;
+
+        typedef BorrowedReference<PyObject, NoOpChecker> BorrowedObject;
+        typedef OwnedReference<PyObject, NoOpChecker> OwnedObject;
+
+        class ImmortalObject;
+
+        template<typename T, TypeChecker TC>
+        class _OwnedGreenlet;
+
+        typedef _OwnedGreenlet<PyGreenlet, GreenletChecker> OwnedGreenlet;
+        typedef _OwnedGreenlet<PyMainGreenlet, MainGreenletExactChecker> OwnedMainGreenlet;
+
+        template<typename T, TypeChecker TC>
+        class _BorrowedGreenlet;
+
+        typedef _BorrowedGreenlet<PyGreenlet, GreenletChecker> BorrowedGreenlet;
+
+        static inline void
+        ContextExactChecker(void *p)
+        {
+            if (!p) {
+                return;
+            }
+#if GREENLET_PY37
+            if (!PyContext_CheckExact(p)) {
+                throw TypeError(
+                    "greenlet context must be a contextvars.Context or None"
+                );
+            }
+#endif
+        }
+
+        typedef OwnedReference<PyObject, ContextExactChecker> OwnedContext;
+    }
+}
 
 namespace greenlet {
-    class Greenlet;
+
+
     namespace refs {
     // A set of classes to make reference counting rules in python
     // code explicit.
@@ -57,29 +158,23 @@ namespace greenlet {
     // single pointer. Only subclasses with trivial constructors that
     // do nothing but set the single pointer member are safe to use
     // that way.
-    template<typename T>
-    class OwnedReference;
 
-    template<typename T>
-    class BorrowedReference;
-
-    typedef BorrowedReference<PyObject> BorrowedObject;
-    typedef OwnedReference<PyObject> OwnedObject;
-
-    class ImmortalObject;
 
     // This is the base class for thnigs that can be done with a
     // PyObject pointer. It assumes nothing about memory management.
     // NOTE: Nothing is virtual, so subclasses shouldn't add new
     // storage fields or try to override these methods.
-    template <typename T=PyObject>
+    template <typename T=PyObject, TypeChecker TC=NoOpChecker>
     class PyObjectPointer
     {
+    public:
+        typedef T PyType;
     protected:
         T* p;
     public:
         explicit PyObjectPointer(T* it=nullptr) : p(it)
         {
+            TC(p);
         }
 
         // We don't allow automatic casting to PyObject* at this
@@ -151,6 +246,7 @@ namespace greenlet {
     protected:
         void _set_raw_pointer(void* t)
         {
+            TC(t);
             p = reinterpret_cast<T*>(t);
         }
         void* _get_raw_pointer() const
@@ -160,8 +256,8 @@ namespace greenlet {
     };
 
 #ifndef NDEBUG
-        template<typename T>
-        std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T>& s)
+        template<typename T, TypeChecker TC>
+        std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T, TC>& s)
         {
             const std::type_info& t = typeid(s);
             os << t.name()
@@ -174,32 +270,33 @@ namespace greenlet {
         }
 #endif
 
-    template<typename T>
-    inline bool operator==(const PyObjectPointer<T>& lhs, const void* const rhs) G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const void* const rhs) G_NOEXCEPT
     {
         return lhs.borrow_o() == rhs;
     }
 
-    template<typename T, typename X>
-    inline bool operator==(const PyObjectPointer<T>& lhs, const PyObjectPointer<X>& rhs) G_NOEXCEPT
+    template<typename T, TypeChecker TC, typename X, TypeChecker XC>
+    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const PyObjectPointer<X, XC>& rhs) G_NOEXCEPT
     {
         return lhs.borrow_o() == rhs.borrow_o();
     }
 
-    template<typename T, typename X>
-    inline bool operator!=(const PyObjectPointer<T>& lhs, const PyObjectPointer<X>& rhs) G_NOEXCEPT
+    template<typename T, TypeChecker TC, typename X, TypeChecker XC>
+    inline bool operator!=(const PyObjectPointer<T, TC>& lhs,
+                           const PyObjectPointer<X, XC>& rhs) G_NOEXCEPT
     {
         return lhs.borrow_o() != rhs.borrow_o();
     }
 
-    template<typename T=PyObject>
-    class OwnedReference : public PyObjectPointer<T>
+    template<typename T=PyObject, TypeChecker TC=NoOpChecker>
+    class OwnedReference : public PyObjectPointer<T, TC>
     {
     private:
         friend class OwnedList;
 
     protected:
-        explicit OwnedReference(T* it) : PyObjectPointer<T>(it)
+        explicit OwnedReference(T* it) : PyObjectPointer<T, TC>(it)
         {
         }
 
@@ -207,23 +304,26 @@ namespace greenlet {
 
         // Constructors
 
-        static OwnedReference<T> consuming(PyObject* p)
+        static OwnedReference<T, TC> consuming(PyObject* p)
         {
-            return OwnedReference<T>(reinterpret_cast<T*>(p));
+            return OwnedReference<T, TC>(reinterpret_cast<T*>(p));
         }
 
-        static OwnedReference<T> owning(T* p)
+        static OwnedReference<T, TC> owning(T* p)
         {
-            OwnedReference<T> result(p);
+            OwnedReference<T, TC> result(p);
             Py_XINCREF(result.p);
             return result;
         }
 
-        OwnedReference() : PyObjectPointer<T>(nullptr)
+        OwnedReference() : PyObjectPointer<T, TC>(nullptr)
         {}
 
-        explicit OwnedReference(const PyObjectPointer<>& other) : PyObjectPointer<T>(nullptr)
+        explicit OwnedReference(const PyObjectPointer<>& other)
+            : PyObjectPointer<T, TC>(nullptr)
         {
+            T* op = other.borrow();
+            TC(op);
             this->p = other.borrow();
             Py_XINCREF(this->p);
         }
@@ -233,22 +333,20 @@ namespace greenlet {
         // pointer should be a move operation.
         // In the common case of ``OwnedObject x = Py_SomeFunction()``,
         // the call to the copy constructor will be elided completely.
-        OwnedReference(const OwnedReference<T>& other) : PyObjectPointer<T>(other.p)
+        OwnedReference(const OwnedReference<T, TC>& other)
+            : PyObjectPointer<T, TC>(other.p)
         {
             Py_XINCREF(this->p);
         }
 
-        static OwnedReference<T> None()
+        static OwnedReference<PyObject> None()
         {
             Py_INCREF(Py_None);
-            return OwnedReference<T>(Py_None);
+            return OwnedReference<PyObject>(Py_None);
         }
 
-        // XXX: I'd prefer to do things like this with
-        // a call to std::move or std::swap, but I'm having issues
-        // making that work...
-
-        OwnedReference<T>& operator=(const OwnedReference<T>& other)
+        // We can assign from exactly our type without any extra checking
+        OwnedReference<T, TC>& operator=(const OwnedReference<T, TC>& other)
         {
             Py_XINCREF(other.p);
             const T* tmp = this->p;
@@ -257,8 +355,14 @@ namespace greenlet {
             return *this;
         }
 
-        OwnedReference<T>& operator=(T* const other)
+        OwnedReference<T, TC>& operator=(const BorrowedReference<T, TC> other)
         {
+            return this->operator=(other.borrow());
+        }
+
+        OwnedReference<T, TC>& operator=(T* const other)
+        {
+            TC(other);
             Py_XINCREF(other);
             T* tmp = this->p;
             this->p = other;
@@ -266,14 +370,20 @@ namespace greenlet {
             return *this;
         }
 
-        OwnedReference<T>& operator=(const BorrowedReference<T> other)
+        // We can assign from an arbitrary reference type
+        // if it passes our check.
+        template<typename X, TypeChecker XC>
+        OwnedReference<T, TC>& operator=(const OwnedReference<X, XC>& other)
         {
-            return this->operator=(other.borrow());
+            X* op = other.borrow();
+            TC(op);
+            return this->operator=(reinterpret_cast<T*>(op));
         }
 
         inline void steal(T* other)
         {
             assert(this->p == nullptr);
+            TC(other);
             this->p = other;
         }
 
@@ -347,54 +457,44 @@ namespace greenlet {
         }
     };
 
-    template<typename T>
-    class _OwnedGreenlet;
-
-    typedef _OwnedGreenlet<PyGreenlet> OwnedGreenlet;
-    typedef _OwnedGreenlet<PyMainGreenlet> OwnedMainGreenlet;
-
-    template<typename T>
-    class _BorrowedGreenlet;
-    typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
-
-
-    template<typename T=PyGreenlet>
-    class _OwnedGreenlet: public OwnedReference<T>
+    template<typename T=PyGreenlet, TypeChecker TC=GreenletChecker>
+    class _OwnedGreenlet: public OwnedReference<T, TC>
     {
     private:
     protected:
-        _OwnedGreenlet<T>(T* it) : OwnedReference<T>(it)
-        {}
-    public:
-        _OwnedGreenlet() : OwnedReference<T>()
+        _OwnedGreenlet(T* it) : OwnedReference<T, TC>(it)
         {}
 
-        _OwnedGreenlet(const _OwnedGreenlet<T>& other) : OwnedReference<T>(other)
+    public:
+        _OwnedGreenlet() : OwnedReference<T, TC>()
+        {}
+
+        _OwnedGreenlet(const _OwnedGreenlet<T, TC>& other) : OwnedReference<T, TC>(other)
         {
         }
         _OwnedGreenlet(OwnedMainGreenlet& other) :
-            OwnedReference<T>(reinterpret_cast<T*>(other.acquire()))
+            OwnedReference<T, TC>(reinterpret_cast<T*>(other.acquire()))
         {
         }
         _OwnedGreenlet(const BorrowedGreenlet& other);
         // Steals a reference.
-        static _OwnedGreenlet<T> consuming(PyGreenlet* it)
+        static _OwnedGreenlet<T, TC> consuming(PyGreenlet* it)
         {
-            return _OwnedGreenlet<T>(reinterpret_cast<T*>(it));
+            return _OwnedGreenlet<T, TC>(reinterpret_cast<T*>(it));
         }
-        static _OwnedGreenlet<T> consuming(PyMainGreenlet* it)
+        static _OwnedGreenlet<T, TC> consuming(PyMainGreenlet* it)
         {
-            return _OwnedGreenlet<T>(reinterpret_cast<T*>(it));
+            return _OwnedGreenlet<T, TC>(reinterpret_cast<T*>(it));
         }
 
-        inline _OwnedGreenlet<T>& operator=(const OwnedGreenlet& other)
+        inline _OwnedGreenlet<T, TC>& operator=(const OwnedGreenlet& other)
         {
             return this->operator=(other.borrow());
         }
 
-        inline _OwnedGreenlet<T>& operator=(const BorrowedGreenlet& other);
+        inline _OwnedGreenlet<T, TC>& operator=(const BorrowedGreenlet& other);
 
-        _OwnedGreenlet<T>& operator=(const OwnedMainGreenlet& other)
+        _OwnedGreenlet<T, TC>& operator=(const OwnedMainGreenlet& other)
         {
             PyMainGreenlet* owned = other.acquire();
             Py_XDECREF(this->p);
@@ -402,9 +502,9 @@ namespace greenlet {
             return *this;
         }
 
-        _OwnedGreenlet<T>& operator=(T* const other)
+        _OwnedGreenlet<T, TC>& operator=(T* const other)
         {
-            OwnedReference<T>::operator=(other);
+            OwnedReference<T, TC>::operator=(other);
             return *this;
         }
 
@@ -424,22 +524,21 @@ namespace greenlet {
         inline operator Greenlet*() const G_NOEXCEPT;
     };
 
-
-    template <typename T=PyObject>
-    class BorrowedReference : public PyObjectPointer<T>
+    template <typename T=PyObject, TypeChecker TC=NoOpChecker>
+    class BorrowedReference : public PyObjectPointer<T, TC>
     {
     public:
         // Allow implicit creation from PyObject* pointers as we
         // transition to using these classes. Also allow automatic
         // conversion to PyObject* for passing to C API calls and even
         // for Py_INCREF/DECREF, because we ourselves do no memory management.
-        BorrowedReference(T* it) : PyObjectPointer<T>(it)
+        BorrowedReference(T* it) : PyObjectPointer<T, TC>(it)
         {}
 
-        BorrowedReference(const PyObjectPointer<T>& ref) : PyObjectPointer<T>(ref.borrow())
+        BorrowedReference(const PyObjectPointer<T>& ref) : PyObjectPointer<T, TC>(ref.borrow())
         {}
 
-        BorrowedReference() : PyObjectPointer<T>(nullptr)
+        BorrowedReference() : PyObjectPointer<T, TC>(nullptr)
         {}
 
         operator T*() const
@@ -451,32 +550,25 @@ namespace greenlet {
     typedef BorrowedReference<PyObject> BorrowedObject;
     //typedef BorrowedReference<PyGreenlet> BorrowedGreenlet;
 
-    template<typename T=PyGreenlet>
-    class _BorrowedGreenlet : public BorrowedReference<T>
+    template<typename T=PyGreenlet, TypeChecker TC=GreenletChecker>
+    class _BorrowedGreenlet : public BorrowedReference<T, TC>
     {
     public:
         _BorrowedGreenlet() :
-            BorrowedReference<T>(nullptr)
+            BorrowedReference<T, TC>(nullptr)
         {}
 
         _BorrowedGreenlet(T* it) :
-            BorrowedReference<T>(it)
+            BorrowedReference<T, TC>(it)
         {}
 
-        //_BorrowedGreenlet(const BorrowedObject& it);
-        //     BorrowedReference<T>(nullptr)
-        // {
-        //     if (!PyGreenlet_Check(it)) {
-        //         throw TypeError("Expected a greenlet");
-        //     }
-        //     this->_set_raw_pointer(static_cast<PyObject*>(it));
-        // }
+        _BorrowedGreenlet(const BorrowedObject& it);
 
         _BorrowedGreenlet(const OwnedGreenlet& it) :
-            BorrowedReference<T>(it.borrow())
+            BorrowedReference<T, TC>(it.borrow())
         {}
 
-        _BorrowedGreenlet<T>& operator=(const BorrowedObject& other);
+        _BorrowedGreenlet<T, TC>& operator=(const BorrowedObject& other);
 
         // We get one of these for PyGreenlet, but one for PyObject
         // is handy as well
@@ -490,9 +582,9 @@ namespace greenlet {
 
     typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
 
-    template<typename T>
-    _OwnedGreenlet<T>::_OwnedGreenlet(const BorrowedGreenlet& other)
-        : OwnedReference<T>(reinterpret_cast<T*>(other.borrow()))
+    template<typename T, TypeChecker TC>
+    _OwnedGreenlet<T, TC>::_OwnedGreenlet(const BorrowedGreenlet& other)
+        : OwnedReference<T, TC>(reinterpret_cast<T*>(other.borrow()))
     {
         Py_XINCREF(this->p);
     }
@@ -502,18 +594,20 @@ namespace greenlet {
     //     OwnedReference<T>(other.acquire())
     // {}
 
-    class BorrowedMainGreenlet : public _BorrowedGreenlet<PyMainGreenlet>
+        class BorrowedMainGreenlet
+            : public _BorrowedGreenlet<PyMainGreenlet, MainGreenletExactChecker>
     {
     public:
         BorrowedMainGreenlet(const OwnedMainGreenlet& it) :
-            _BorrowedGreenlet<PyMainGreenlet>(it.borrow())
+            _BorrowedGreenlet<PyMainGreenlet, MainGreenletExactChecker>(it.borrow())
         {}
-        BorrowedMainGreenlet(PyMainGreenlet* it=nullptr) : _BorrowedGreenlet<PyMainGreenlet>(it)
+        BorrowedMainGreenlet(PyMainGreenlet* it=nullptr)
+            : _BorrowedGreenlet<PyMainGreenlet, MainGreenletExactChecker>(it)
         {}
     };
 
-    template<typename T>
-    _OwnedGreenlet<T>& _OwnedGreenlet<T>::operator=(const BorrowedGreenlet& other)
+    template<typename T, TypeChecker TC>
+    _OwnedGreenlet<T, TC>& _OwnedGreenlet<T, TC>::operator=(const BorrowedGreenlet& other)
     {
         return this->operator=(other.borrow());
     }
@@ -576,15 +670,15 @@ namespace greenlet {
 
     };
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyStr() const G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyStr() const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_Str(reinterpret_cast<PyObject*>(this->p)));
     }
 
-    template<typename T>
-    inline const std::string PyObjectPointer<T>::as_str() const G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline const std::string PyObjectPointer<T, TC>::as_str() const G_NOEXCEPT
     {
         // NOTE: This is not Python exception safe.
         if (this->p) {
@@ -601,22 +695,22 @@ namespace greenlet {
         return "(nil)";
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_GetAttr(reinterpret_cast<PyObject*>(this->p), name));
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyRequireAttr(const char* const name) const
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyRequireAttr(const char* const name) const
     {
         assert(this->p);
         return OwnedObject::consuming(Require(PyObject_GetAttrString(this->p, name)));
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyRequireAttr(const ImmortalObject& name) const
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyRequireAttr(const ImmortalObject& name) const
     {
         assert(this->p);
         return OwnedObject::consuming(Require(
@@ -624,57 +718,61 @@ namespace greenlet {
                                     name)));
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject& arg) const G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const BorrowedObject& arg) const G_NOEXCEPT
     {
         return this->PyCall(arg.borrow());
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(PyMainGreenlet* arg) const G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyMainGreenlet* arg) const G_NOEXCEPT
     {
         return this->PyCall(reinterpret_cast<const PyObject*>(arg));
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const PyObject* arg) const G_NOEXCEPT
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const PyObject* arg) const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const BorrowedObject args,
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const BorrowedObject args,
                                                   const BorrowedObject kwargs) const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_Call(this->p, args, kwargs));
     }
 
-    template<typename T>
-    inline OwnedObject PyObjectPointer<T>::PyCall(const OwnedObject& args,
+    template<typename T, TypeChecker TC>
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const OwnedObject& args,
                                                   const OwnedObject& kwargs) const G_NOEXCEPT
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_Call(this->p, args.borrow(), kwargs.borrow()));
     }
 
-    class OwnedList : public OwnedObject
+    static inline void
+    ListChecker(void * p)
+    {
+        if (!p) {
+            return;
+        }
+        if (!PyList_Check(p)) {
+            throw TypeError("Expected a list");
+        }
+    }
+
+    class OwnedList : public OwnedReference<PyObject, ListChecker>
     {
     private:
         G_NO_ASSIGNMENT_OF_CLS(OwnedList);
     public:
         // TODO: Would like to use move.
-        explicit OwnedList(const OwnedObject& other) : OwnedObject(other)
+        explicit OwnedList(const OwnedObject& other)
+            : OwnedReference<PyObject, ListChecker>(other)
         {
-            // At this point, we own a reference to the object,
-            // or its null.
-            // Should this raise type error?
-            if (p && !PyList_Check(p)) {
-                // Drat, not a list, drop the reference.
-                Py_DECREF(p);
-                p = nullptr;
-            }
         }
 
         OwnedList& operator=(const OwnedObject& other)

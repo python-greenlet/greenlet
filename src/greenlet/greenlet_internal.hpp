@@ -41,7 +41,7 @@ struct _PyMainGreenlet;
 
 static inline bool PyGreenlet_STARTED(const greenlet::Greenlet* g)
 {
-    return g->stack_state.started();
+    return g->started();
 }
 
 static inline bool PyGreenlet_STARTED(const greenlet::refs::PyObjectPointer<PyGreenlet>& g)
@@ -56,7 +56,7 @@ static inline bool PyGreenlet_STARTED(const PyGreenlet* g)
 
 static inline bool PyGreenlet_MAIN(const greenlet::Greenlet* g)
 {
-    return g->stack_state.main();
+    return g->main();
 }
 
 static inline bool PyGreenlet_MAIN(const greenlet::refs::PyObjectPointer<PyGreenlet>& g)
@@ -71,7 +71,7 @@ static inline bool PyGreenlet_MAIN(const PyGreenlet* g)
 
 static inline bool PyGreenlet_ACTIVE(const greenlet::Greenlet* g)
 {
-    return g->stack_state.active();
+    return g->active();
 }
 
 static inline bool PyGreenlet_ACTIVE(const greenlet::refs::PyObjectPointer<PyGreenlet>& g)
@@ -93,14 +93,14 @@ inline greenlet::refs::_OwnedGreenlet<PyMainGreenlet>::operator greenlet::Greenl
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
 
-template <typename T>
-inline Greenlet* greenlet::refs::_OwnedGreenlet<T>::operator->() const G_NOEXCEPT
+template <typename T, greenlet::refs::TypeChecker TC>
+inline greenlet::Greenlet* greenlet::refs::_OwnedGreenlet<T, TC>::operator->() const G_NOEXCEPT
 {
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
 
-template <typename T>
-inline Greenlet* greenlet::refs::_BorrowedGreenlet<T>::operator->() const G_NOEXCEPT
+template <typename T, greenlet::refs::TypeChecker TC>
+inline greenlet::Greenlet* greenlet::refs::_BorrowedGreenlet<T, TC>::operator->() const G_NOEXCEPT
 {
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
@@ -126,7 +126,7 @@ typedef struct _PyMainGreenlet
 // initializers; recent MSVC requires ``/std=c++20`` to use
 // designated initializer, and doesn't permit mixing. And then older
 // MSVC doesn't support any of it.
-static PyTypeObject PyMainGreenlet_Type = {
+PyTypeObject PyMainGreenlet_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "greenlet.main_greenlet", // tp_name
     sizeof(PyMainGreenlet)

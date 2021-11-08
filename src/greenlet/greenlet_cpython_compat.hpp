@@ -8,11 +8,34 @@
 
 #include "Python.h"
 
+// These enable writing template functions or classes specialized
+// based on the Python version. Write both versions of the function,
+// one with the WHEN version, one with the WHEN_NOT version.
+// Instantiate the template using the G_IS_PY37 macro.
+// NOTE: The compiler still sees (and type checks) both versions, apparently, even when
+// not instantiated? I didn't think that was how expansion worked, if
+// one template is never needed.
+struct GREENLET_WHEN_PY37
+{
+    typedef GREENLET_WHEN_PY37* Yes;
+    using IsIt = Yes;
+};
+
+struct GREENLET_WHEN_NOT_PY37
+{
+    typedef GREENLET_WHEN_NOT_PY37* No;
+    using IsIt = No;
+};
+
+
 #if PY_VERSION_HEX >= 0x030700A3
 #    define GREENLET_PY37 1
+typedef GREENLET_WHEN_PY37 G_IS_PY37;
 #else
 #    define GREENLET_PY37 0
+typedef GREENLET_WHEN_NOT_PY37 G_IS_PY37;
 #endif
+
 
 #if PY_VERSION_HEX >= 0x30A00B1
 /*

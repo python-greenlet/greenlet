@@ -36,9 +36,6 @@
 // running this code, the thread isn't exiting. This also nets us a
 // 10-12% speed improvement.
 
-namespace greenlet {
-    class Greenlet;
-};
 static greenlet::Greenlet* volatile switching_thread_state = nullptr;
 
 
@@ -72,7 +69,7 @@ do {                                                    \
     stackref += STACK_MAGIC;                 \
     if (slp_save_state_trampoline((char*)stackref))    \
         return -1;                                     \
-    if (!switching_thread_state->stack_state.active()) \
+    if (!switching_thread_state->active()) \
         return 1;                                      \
     stsizediff = switching_thread_state->stack_state.stack_start() - (char*)stackref; \
 } while (0)

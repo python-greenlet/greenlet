@@ -48,20 +48,79 @@ namespace greenlet
     template<typename T>
     void operator<<(const PyThreadState *const tstate, T& exc);
 
-    class PythonState
+    template<typename IsPy37>
+    class PythonStateContext
+    {};
+
+    template<>
+    class PythonStateContext<GREENLET_WHEN_PY37>
     {
+    protected:
+        greenlet::refs::OwnedContext _context;
+    public:
+        inline const greenlet::refs::OwnedContext& context() const
+        {
+            return this->_context;
+        }
+        inline greenlet::refs::OwnedContext& context()
+        {
+            return this->_context;
+        }
+
+        template<typename T>
+        inline static PyObject* context(T* tstate)
+        {
+            return tstate->context;
+        }
+
+        template<typename T>
+        inline static void context(T* tstate, PyObject* new_context)
+        {
+            tstate->context = new_context;
+            tstate->context_ver++;
+        }
+    };
+
+
+    template<>
+    class PythonStateContext<GREENLET_WHEN_NOT_PY37>
+    {
+    public:
+        inline const greenlet::refs::OwnedContext& context() const
+        {
+            throw AttributeError("no context");
+        }
+
+        inline greenlet::refs::OwnedContext& context()
+        {
+            throw AttributeError("no context");
+        }
+
+        template<typename T>
+        inline static PyObject* context(T* UNUSED(tstate))
+        {
+            throw PyFatalError("This should never be called.");
+        }
+
+        template<typename T>
+        inline static void context(T* UNUSED(tstate), PyObject* UNUSED(new_context))
+        {
+            throw PyFatalError("This should never be called.");
+        }
+    };
+
+    class PythonState : public PythonStateContext<G_IS_PY37>
+    {
+    public:
+        typedef greenlet::refs::OwnedReference<struct _frame> OwnedFrame;
     private:
         G_NO_COPIES_OF_CLS(PythonState);
-        typedef greenlet::refs::OwnedReference<struct _frame> OwnedFrame;
         // We own this if we're suspended (although currently we don't
         // tp_traverse into it; that's a TODO). If we're running, it's
         // empty. If we get deallocated and *still* have a frame, it
         // won't be reachable from the place that normally decref's
         // it, so we need to do it (hence owning it).
         OwnedFrame _top_frame;
-#if GREENLET_PY37
-        OwnedObject _context;
-#endif
 #if  GREENLET_USE_CFRAME
         CFrame* cframe;
         int use_tracing;
@@ -73,9 +132,8 @@ namespace greenlet
         // You can use this for testing whether we have a frame
         // or not. It returns const so they can't modify it.
         const OwnedFrame& top_frame() const G_NOEXCEPT;
-#if GREENLET_PY37
-        OwnedObject& context();
-#endif
+
+
         void operator<<(const PyThreadState *const tstate) G_NOEXCEPT;
         void operator>>(PyThreadState* tstate) G_NOEXCEPT;
         void clear() G_NOEXCEPT;
@@ -222,46 +280,105 @@ namespace greenlet
     class Greenlet
     {
     private:
+        static greenlet::PythonAllocator<Greenlet> allocator;
         G_NO_COPIES_OF_CLS(Greenlet);
+    private:
+        friend class ThreadState; // XXX: Work to remove this.
+        friend int slp_switch(void);
+
         BorrowedGreenlet self;
+        ExceptionState exception_state;
+        SwitchingArgs switch_args;
     public:
-        class GreenletStartedWhileInPython : public std::runtime_error
+        PythonState python_state;
+        OwnedObject run_callable;
+        OwnedGreenlet parent;
+
+    public: // protected
+        StackState stack_state;
+        OwnedMainGreenlet main_greenlet;
+    public:
+        static void* operator new(size_t UNUSED(count));
+        static void operator delete(void* ptr);
+
+        Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent);
+        virtual ~Greenlet();
+
+        template <typename IsPy37> // maybe we can use a value here?
+        const OwnedObject context(const typename IsPy37::IsIt=nullptr) const;
+
+        template<typename IsPy37>
+        class ContextSetter
         {
-        public:
-            GreenletStartedWhileInPython() : std::runtime_error("")
+        private:
+            friend class Greenlet;
+            Greenlet* p;
+            ContextSetter(Greenlet* it) : p(it)
             {}
+
+            G_NO_ASSIGNMENT_OF_CLS(ContextSetter);
+        public:
+            void operator=(refs::BorrowedObject new_context);
         };
 
-        ExceptionState exception_state;
-        PythonState python_state;
-        StackState stack_state;
-        SwitchingArgs switch_args;
-
-        OwnedGreenlet parent;
-        OwnedMainGreenlet main_greenlet;
-        OwnedObject run_callable;
-
-        Greenlet(PyGreenlet*);
-        virtual ~Greenlet();
+        template <typename IsPy37>
+        inline ContextSetter<IsPy37> context(bool, typename IsPy37::IsIt=nullptr)
+        {
+            return ContextSetter<IsPy37>(this);
+        }
 
         inline SwitchingArgs& args()
         {
             return this->switch_args;
         }
 
-        OwnedObject kill();
+        OwnedObject throw_GreenletExit();
         OwnedObject g_switch();
+        /**
+         * Force the greenlet to appear dead. Used when it's not
+         * possible to throw an exception into a greenlet anymore.
+         *
+         * This loses access to the thread state and the main greenlet.
+         */
+        void murder_in_place();
+
+        void deallocing_greenlet_in_thread(const ThreadState& state);
+
         // TODO: Figure out how to make these non-public.
         inline void slp_restore_state() G_NOEXCEPT;
         inline int slp_save_state(char *const stackref) G_NOEXCEPT;
 
-        inline bool is_currently_running_in_some_thread();
+        inline bool is_currently_running_in_some_thread() const;
+        inline bool belongs_to_thread(const ThreadState& state) const;
+        inline bool started() const
+        {
+            return this->stack_state.started();
+        }
+        inline bool active() const
+        {
+            return this->stack_state.active();
+        }
+        inline bool main() const
+        {
+            return this->stack_state.main();
+        }
+        virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
+
+        inline void set_parent(refs::BorrowedObject& new_parent);
 
         int tp_traverse(visitproc visit, void* arg);
         int tp_clear();
 
-        static void* operator new(size_t UNUSED(count));
-        static void operator delete(void* ptr);
+        class ParentIsCurrentGuard
+        {
+        private:
+            OwnedGreenlet oldparent;
+            Greenlet* greenlet;
+            G_NO_COPIES_OF_CLS(ParentIsCurrentGuard);
+        public:
+            ParentIsCurrentGuard(Greenlet* p, const ThreadState& thread_state);
+            ~ParentIsCurrentGuard();
+        };
 
     protected:
         // The functions that must not be inlined are declared virtual.
@@ -318,6 +435,7 @@ namespace greenlet
         virtual switchstack_result_t g_initialstub(void* mark);
 
     private:
+        inline ThreadState* thread_state() G_NOEXCEPT;
         void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT;
         /**
            Perform a stack switch into this greenlet.
@@ -358,10 +476,26 @@ namespace greenlet
         // catch this and clear the arguments
         inline void check_switch_allowed() const;
         inline void release_args();
-        static greenlet::PythonAllocator<Greenlet> allocator;
 
+        class GreenletStartedWhileInPython : public std::runtime_error
+        {
+        public:
+            GreenletStartedWhileInPython() : std::runtime_error("")
+            {}
+        };
     };
 
+
+
+    class MainGreenlet : public Greenlet
+    {
+    public:
+        MainGreenlet(refs::BorrowedMainGreenlet::PyType*);
+        virtual ~MainGreenlet()
+        {}
+
+        virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
+    };
 
 };
 
@@ -462,9 +596,6 @@ using greenlet::PythonState;
 
 PythonState::PythonState()
     : _top_frame()
-#if GREENLET_PY37
-    ,_context()
-#endif
 #if GREENLET_USE_CFRAME
     ,cframe(nullptr)
     ,use_tracing(0)
@@ -631,12 +762,6 @@ const PythonState::OwnedFrame& PythonState::top_frame() const G_NOEXCEPT
     return this->_top_frame;
 }
 
-#if GREENLET_PY37
-OwnedObject& PythonState::context()
-{
-    return this->_context;
-}
-#endif
 
 using greenlet::StackState;
 #include <iostream>
@@ -870,10 +995,11 @@ StackState::~StackState()
 
 using greenlet::Greenlet;
 
-bool Greenlet::is_currently_running_in_some_thread()
+bool Greenlet::is_currently_running_in_some_thread() const
 {
     return this->stack_state.active() && !this->python_state.top_frame();
 }
+
 
 
 #endif

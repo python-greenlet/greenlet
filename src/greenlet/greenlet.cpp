@@ -137,18 +137,15 @@ using greenlet::refs::PyErrPieces;
 using greenlet::refs::PyObjectPointer;
 
 // ******* Implementation of things from included files
-template<typename T>
-greenlet::refs::_BorrowedGreenlet<T>& greenlet::refs::_BorrowedGreenlet<T>::operator=(const greenlet::refs::BorrowedObject& other)
+template<typename T, greenlet::refs::TypeChecker TC>
+greenlet::refs::_BorrowedGreenlet<T, TC>& greenlet::refs::_BorrowedGreenlet<T, TC>::operator=(const greenlet::refs::BorrowedObject& other)
 {
-    if (!PyGreenlet_Check(other)) {
-        throw TypeError("Expected a greenlet");
-    }
     this->_set_raw_pointer(static_cast<PyObject*>(other));
     return *this;
 }
 
-template <typename T>
-inline greenlet::refs::_BorrowedGreenlet<T>::operator Greenlet*() const G_NOEXCEPT
+template <typename T, greenlet::refs::TypeChecker TC>
+inline greenlet::refs::_BorrowedGreenlet<T, TC>::operator Greenlet*() const G_NOEXCEPT
 {
     if (!this->p) {
         return nullptr;
@@ -156,8 +153,16 @@ inline greenlet::refs::_BorrowedGreenlet<T>::operator Greenlet*() const G_NOEXCE
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
 
-template <typename T>
-inline greenlet::refs::_OwnedGreenlet<T>::operator Greenlet*() const G_NOEXCEPT
+template<typename T, greenlet::refs::TypeChecker TC>
+greenlet::refs::_BorrowedGreenlet<T, TC>::_BorrowedGreenlet(const BorrowedObject& p)
+    : BorrowedReference<T, TC>(nullptr)
+{
+
+    this->_set_raw_pointer(p.borrow());
+}
+
+template <typename T, greenlet::refs::TypeChecker TC>
+inline greenlet::refs::_OwnedGreenlet<T, TC>::operator Greenlet*() const G_NOEXCEPT
 {
     if (!this->p) {
         return nullptr;
@@ -532,6 +537,25 @@ static ThreadStateCreator& GET_THREAD_STATE()
 }
 #endif
 
+using greenlet::Greenlet;
+
+Greenlet::Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
+    : self(p),
+      parent(the_parent)
+{
+    p ->pimpl = this;
+}
+
+
+using greenlet::MainGreenlet;
+
+MainGreenlet::MainGreenlet(PyMainGreenlet* p)
+    : Greenlet(reinterpret_cast<PyGreenlet*>(p), nullptr)
+{
+    this->stack_state = StackState::make_main();
+    // circular reference; the pending call will clean this up.
+    this->main_greenlet = p;
+}
 
 static PyMainGreenlet*
 green_create_main(void)
@@ -544,11 +568,7 @@ green_create_main(void)
         Py_FatalError("green_create_main failed to alloc");
         return NULL;
     }
-    Greenlet* g = new Greenlet(reinterpret_cast<PyGreenlet*>(gmain));
-    g->stack_state = StackState::make_main();
-
-    // circular reference; the pending call will clean this up.
-    g->main_greenlet = gmain;
+    new MainGreenlet(gmain);
 
     assert(Py_REFCNT(gmain) == 2);
     total_main_greenlets++;
@@ -556,22 +576,28 @@ green_create_main(void)
 }
 
 
-static BorrowedMainGreenlet
-find_and_borrow_main_greenlet_in_lineage(const PyObjectPointer<PyGreenlet>& start)
+BorrowedMainGreenlet
+Greenlet::find_main_greenlet_in_lineage() const
 {
-    PyGreenlet* g(start.borrow());
-    while (!PyGreenlet_STARTED(g)) {
-        g = g->pimpl->parent.borrow();
-        if (g == NULL) {
+    const Greenlet* g = this;
+    while (!g->started()) {
+        g = g->self.borrow()->pimpl;
+        if (!g || !g->parent) {
             /* garbage collected greenlet in chain */
             // XXX: WHAT?
             return BorrowedMainGreenlet(nullptr);
         }
+        g = g->parent;
     }
-    // XXX: What about the actual main greenlet?
-    // This is never actually called with a main greenlet, so it
-    // doesn't matter.
-    return BorrowedMainGreenlet(g->pimpl->main_greenlet);
+
+    return BorrowedMainGreenlet(g->main_greenlet);
+}
+
+
+BorrowedMainGreenlet
+MainGreenlet::find_main_greenlet_in_lineage() const
+{
+    return BorrowedMainGreenlet(this->main_greenlet);
 }
 
 /***********************************************************/
@@ -650,11 +676,7 @@ OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) G_NOEXC
     return lhs;
 }
 
-Greenlet::Greenlet(PyGreenlet* p)
-    : self(p)
-{
-    p ->pimpl = this;
-}
+
 
 void Greenlet::release_args()
 {
@@ -667,6 +689,7 @@ void* Greenlet::operator new(size_t UNUSED(count))
     return allocator.allocate(1);
 }
 
+
 void Greenlet::operator delete(void* ptr)
 {
     return allocator.deallocate(static_cast<Greenlet*>(ptr),
@@ -674,7 +697,8 @@ void Greenlet::operator delete(void* ptr)
 }
 
 
-OwnedObject Greenlet::kill()
+OwnedObject
+Greenlet::throw_GreenletExit()
 {
     // If we're killed because we lost all references in the
     // middle of a switch, that's ok. Don't reset the args/kwargs,
@@ -685,21 +709,27 @@ OwnedObject Greenlet::kill()
     return this->g_switch();
 }
 
-inline ThreadState* TS(const Greenlet* const g) G_NOEXCEPT
+
+inline ThreadState*
+Greenlet::thread_state() G_NOEXCEPT
 {
-    return g->main_greenlet.borrow()->thread_state;
+    return this->main_greenlet.borrow()->thread_state;
 }
 
-inline void Greenlet::slp_restore_state() G_NOEXCEPT
+
+inline void
+Greenlet::slp_restore_state() G_NOEXCEPT
 {
 #ifdef SLP_BEFORE_RESTORE_STATE
     SLP_BEFORE_RESTORE_STATE();
 #endif
     this->stack_state.copy_heap_to_stack(
-              TS(this)->borrow_current()->stack_state);
+           this->thread_state()->borrow_current()->stack_state);
 }
 
-inline int Greenlet::slp_save_state(char *const stackref) G_NOEXCEPT
+
+inline int
+Greenlet::slp_save_state(char *const stackref) G_NOEXCEPT
 {
     // XXX: This used to happen in the middle, before saving, but
     // after finding the next owner. Does that matter? This is
@@ -709,10 +739,12 @@ inline int Greenlet::slp_save_state(char *const stackref) G_NOEXCEPT
     SLP_BEFORE_SAVE_STATE();
 #endif
     return this->stack_state.copy_stack_to_heap(stackref,
-                                                TS(this)->borrow_current()->stack_state);
+                                                this->thread_state()->borrow_current()->stack_state);
 }
 
-OwnedObject Greenlet::g_switch()
+
+OwnedObject
+Greenlet::g_switch()
 {
     try {
         this->check_switch_allowed();
@@ -741,7 +773,7 @@ OwnedObject Greenlet::g_switch()
     bool target_was_me = true;
     while (target) {
 
-        if (PyGreenlet_ACTIVE(target)) {
+        if (target->active()) {
             if (!target_was_me) {
                 target->switch_args <<= this->switch_args;
                 assert(!this->switch_args);
@@ -749,7 +781,7 @@ OwnedObject Greenlet::g_switch()
             err = target->g_switchstack();
             break;
         }
-        if (!PyGreenlet_STARTED(target)) {
+        if (!target->started()) {
             void* dummymarker;
             if (!target_was_me) {
                 target->switch_args <<= this->switch_args;
@@ -800,7 +832,8 @@ OwnedObject Greenlet::g_switch()
 
 
 
-OwnedGreenlet Greenlet::g_switchstack_success() G_NOEXCEPT
+OwnedGreenlet
+Greenlet::g_switchstack_success() G_NOEXCEPT
 {
     PyThreadState* tstate = PyThreadState_GET();
     // restore the saved state
@@ -808,14 +841,16 @@ OwnedGreenlet Greenlet::g_switchstack_success() G_NOEXCEPT
     this->exception_state >> tstate;
 
     // The thread state hasn't been changed yet.
-    ThreadState* thread_state = TS(this);
+    ThreadState* thread_state = this->thread_state();
     OwnedGreenlet result(thread_state->get_current());
     thread_state->set_current(this->self);
     assert(thread_state->borrow_current().borrow() == this->self);
     return result;
 }
 
-Greenlet::switchstack_result_t Greenlet::g_initialstub(void* mark)
+
+typename Greenlet::switchstack_result_t
+Greenlet::g_initialstub(void* mark)
 {
     OwnedObject run;
 
@@ -923,14 +958,15 @@ Greenlet::switchstack_result_t Greenlet::g_initialstub(void* mark)
 }
 
 
-void Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT
+void
+Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT
 {
     // The arguments here would be another great place for move.
     // As it is, we take them as a reference so that when we clear
     // them we clear what's on the stack above us.
 
     /* in the new greenlet */
-    assert(TS(this)->borrow_current() == this->self);
+    assert(this->thread_state()->borrow_current() == this->self);
     // C++ exceptions cannot propagate to the parent greenlet from
     // here. (TODO: Do we need a catch(...) clause, perhaps on the
     // function itself? ALl we could do is terminate the program.)
@@ -939,7 +975,7 @@ void Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
     // the depth of the SEH list. The call to restore it MUST NOT
     // add a new SEH handler to the list, or we'll restore it to
     // the wrong thing.
-    TS(this)->restore_exception_state();
+    this->thread_state()->restore_exception_state();
     /* stack variables from above are no good and also will not unwind! */
     // EXCEPT: That can't be true, we access run, among others, here.
 
@@ -962,7 +998,7 @@ void Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
     // function here instead of in g_switch_finish, because we
     // never return there.
 
-    if (OwnedObject tracefunc = TS(this)->get_tracefunc()) {
+    if (OwnedObject tracefunc = this->thread_state()->get_tracefunc()) {
         try {
             g_calltrace(tracefunc,
                         args ? mod_globs.event_switch : mod_globs.event_throw,
@@ -1008,7 +1044,7 @@ void Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
     this->release_args();
 
     result = g_handle_exit(result);
-    assert(TS(this)->borrow_current() == this->self);
+    assert(this->thread_state()->borrow_current() == this->self);
     /* jump back to parent */
     this->stack_state.set_inactive(); /* dead */
 
@@ -1048,10 +1084,11 @@ void Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
 }
 
 
-Greenlet::switchstack_result_t Greenlet::g_switchstack(void)
+typename Greenlet::switchstack_result_t
+Greenlet::g_switchstack(void)
 {
     { /* save state */
-        BorrowedGreenlet current(TS(this)->borrow_current());
+        BorrowedGreenlet current(this->thread_state()->borrow_current());
         if (current == this->self) {
             // Hmm, nothing to do.
             // TODO: Does this bypass trace events that are
@@ -1097,7 +1134,9 @@ Greenlet::switchstack_result_t Greenlet::g_switchstack(void)
     return switchstack_result_t(err, after_switch, origin);
 }
 
-inline void Greenlet::check_switch_allowed() const
+
+inline void
+Greenlet::check_switch_allowed() const
 {
     // TODO: Make this take a parameter of the current greenlet,
     // or current main greenlet, to make the check for
@@ -1116,7 +1155,7 @@ inline void Greenlet::check_switch_allowed() const
     // TODO: Give the objects an API to determine if they belong
     // to a dead thread.
 
-    const BorrowedMainGreenlet main_greenlet = find_and_borrow_main_greenlet_in_lineage(this->self);
+    const BorrowedMainGreenlet main_greenlet = this->find_main_greenlet_in_lineage();
 
     if (!main_greenlet) {
         throw PyErrOccurred(mod_globs.PyExc_GreenletError,
@@ -1146,10 +1185,12 @@ inline void Greenlet::check_switch_allowed() const
     }
 }
 
-OwnedObject Greenlet::g_switch_finish(const switchstack_result_t& err)
+
+OwnedObject
+Greenlet::g_switch_finish(const switchstack_result_t& err)
 {
 
-    ThreadState& state = *TS(this);
+    ThreadState& state = *this->thread_state();
     try {
         // Our only caller handles the bad error case
         assert(err.status >= 0);
@@ -1307,8 +1348,7 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o) {
-        Greenlet* g = new Greenlet(o);
-        g->parent = GET_THREAD_STATE().state().borrow_current();
+        new Greenlet(o, GET_THREAD_STATE().state().borrow_current());
         assert(Py_REFCNT(o) == 1);
     }
     return o;
@@ -1349,38 +1389,66 @@ green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
 
 namespace greenlet
 {
-    class ParentIsCurrentGuard
-    {
-    private:
-        OwnedGreenlet oldparent;
-        Greenlet* greenlet;
-        G_NO_COPIES_OF_CLS(ParentIsCurrentGuard);
-    public:
-        ParentIsCurrentGuard(Greenlet* p, ThreadState& thread_state)
-            : oldparent(p->parent),
-              greenlet(p)
-        {
-            p->parent = thread_state.get_current();
-        }
-        ~ParentIsCurrentGuard()
-        {
-            this->greenlet->parent = oldparent;
-            oldparent.CLEAR();
-        }
-    };
+
+}
+Greenlet::ParentIsCurrentGuard::ParentIsCurrentGuard(Greenlet* p,
+                                                         const ThreadState& thread_state)
+    : oldparent(p->parent),
+      greenlet(p)
+{
+    p->parent = thread_state.get_current();
 }
 
-static void
-kill_greenlet(BorrowedGreenlet& self)
+Greenlet::ParentIsCurrentGuard::~ParentIsCurrentGuard()
+{
+    this->greenlet->parent = oldparent;
+    oldparent.CLEAR();
+}
+
+
+void
+Greenlet::murder_in_place()
+{
+    this->main_greenlet.CLEAR();
+
+    if (this->active()) {
+        assert(!this->is_currently_running_in_some_thread());
+        this->stack_state.set_inactive();
+        assert(!this->active());
+
+        // We're holding a borrowed reference to the last
+        // frame we executed. Since we borrowed it, the
+        // normal traversal, clear, and dealloc functions
+        // ignore it, meaning it leaks. (The thread state
+        // object can't find it to clear it when that's
+        // deallocated either, because by definition if we
+        // got an object on this list, it wasn't
+        // running and the thread state doesn't have
+        // this frame.)
+        // So here, we *do* clear it.
+        this->python_state.tp_clear(true);
+    }
+}
+
+bool
+Greenlet::belongs_to_thread(const ThreadState& thread_state) const
+{
+    if (!this->main_greenlet || !this->main_greenlet.borrow()->thread_state) {
+        return false;
+    }
+    return this->main_greenlet == thread_state.borrow_main_greenlet();
+}
+
+void
+Greenlet::deallocing_greenlet_in_thread(const ThreadState& thread_state)
 {
     /* Cannot raise an exception to kill the greenlet if
        it is not running in the same thread! */
-    ThreadState& thread_state = GET_THREAD_STATE().state();
-    if (self->main_greenlet == thread_state.borrow_main_greenlet()) {
+    if (this->belongs_to_thread(thread_state)) {
         /* The dying greenlet cannot be a parent of ts_current
            because the 'parent' field chain would hold a
            reference */
-        greenlet::ParentIsCurrentGuard with_current_parent(self, thread_state);
+        Greenlet::ParentIsCurrentGuard with_current_parent(this, thread_state);
         // To get here it had to have run before
         /* Send the greenlet a GreenletExit exception. */
 
@@ -1388,7 +1456,7 @@ kill_greenlet(BorrowedGreenlet& self)
         // exception happened. Whether or not an exception happens,
         // we need to restore the parent in case the greenlet gets
         // resurrected.
-        self->kill();
+        self->throw_GreenletExit();
         return;
     }
 
@@ -1399,22 +1467,26 @@ kill_greenlet(BorrowedGreenlet& self)
     // be able to raise an exception.
     // That's mostly OK! Since we can't add it to a list, our refcount
     // won't increase, and we'll go ahead with the DECREFs later.
-    if (self->main_greenlet.borrow()->thread_state) {
-        self->main_greenlet.borrow()->thread_state->delete_when_thread_running(self);
+    // XXX: Are we sure the main greenlet still exists?
+    if (this->main_greenlet && this->main_greenlet.borrow()->thread_state) {
+        this->main_greenlet.borrow()->thread_state->delete_when_thread_running(self);
     }
     else {
         // The thread is dead, we can't raise an exception.
         // We need to make it look non-active, though, so that dealloc
         // finishes killing it.
-        self->stack_state = StackState(); // XXX: This was only
+        // XXX: Very similar to murder_in_place(), except that
+        // we don't lose the main greenlet.
+        this->stack_state = StackState(); // XXX: This was only
                                           // defining stack_start,
                                           // yes? Do we need any of
                                           // the other variables?
-        assert(!self->stack_state.active());
-        self->python_state.tp_clear(true);
+        assert(!this->stack_state.active());
+        this->python_state.tp_clear(true);
     }
     return;
 }
+
 
 int
 Greenlet::tp_traverse(visitproc visit, void* arg)
@@ -1428,7 +1500,7 @@ Greenlet::tp_traverse(visitproc visit, void* arg)
     }
     //XXX: This is ugly. But so is handling everything having to do
     //with the top frame.
-    bool visit_top_frame = (!this->main_greenlet || !TS(this));
+    bool visit_top_frame = (!this->main_greenlet || !this->thread_state());
     // When true, the thread is dead. Our implicit weak reference to the
     // frame is now all that's left; we consider ourselves to
     // strongly own it now.
@@ -1472,7 +1544,7 @@ green_is_gc(BorrowedGreenlet self)
        Active greenlets --- including those that are suspended ---
        cannot be garbage collected, however.
     */
-    if (PyGreenlet_MAIN(self) || !PyGreenlet_ACTIVE(self)) {
+    if (self->main() || !self->active()) {
         result = 1;
     }
     // The main greenlet pointer will eventually go away after the thread dies.
@@ -1492,6 +1564,7 @@ green_is_gc(BorrowedGreenlet self)
     }
     return result;
 }
+
 
 int
 Greenlet::tp_clear()
@@ -1533,7 +1606,7 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     /* Save the current exception, if any. */
     PyErrPieces saved_err;
     try {
-        kill_greenlet(self);
+        self->deallocing_greenlet_in_thread(GET_THREAD_STATE().state());
     }
     catch (const PyErrOccurred&) {
         PyErr_WriteUnraisable(self.borrow_o());
@@ -1543,7 +1616,7 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
      * our internal reference, otherwise PyFile_WriteObject
      * causes recursion if using Py_INCREF/Py_DECREF
      */
-    if (self.REFCNT() == 1 && self->stack_state.active()) {
+    if (self.REFCNT() == 1 && self->active()) {
         /* Not resurrected, but still not dead!
            XXX what else should we do? we complain. */
         PyObject* f = PySys_GetObject("stderr");
@@ -1594,6 +1667,7 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     return 1;
 }
 
+
 Greenlet::~Greenlet()
 {
     this->tp_clear();
@@ -1603,11 +1677,11 @@ static void
 green_dealloc(PyGreenlet* self)
 {
     PyObject_GC_UnTrack(self);
-
-    if (PyGreenlet_ACTIVE(self)
-        && self->pimpl->main_greenlet // means started
-        && !PyGreenlet_MAIN(self)) {
-        if (!_green_dealloc_kill_started_non_main_greenlet(self)) {
+    BorrowedGreenlet me(self);
+    if (me->active()
+        && me->started()
+        && !me->main()) {
+        if (!_green_dealloc_kill_started_non_main_greenlet(me)) {
             return;
         }
     }
@@ -1836,7 +1910,7 @@ green_getrun(PyGreenlet* self, void* UNUSED(context))
 static int
 green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* UNUSED(context))
 {
-    if (PyGreenlet_STARTED(self)) {
+    if (self->started()) {
         PyErr_SetString(PyExc_AttributeError,
                         "run cannot be set "
                         "after the start of the greenlet");
@@ -1852,43 +1926,45 @@ green_getparent(BorrowedGreenlet self, void* UNUSED(context))
     return self->parent.acquire_or_None();
 }
 
+using greenlet::AttributeError;
+
+void
+Greenlet::set_parent(BorrowedObject& raw_new_parent)
+{
+    if (!raw_new_parent) {
+        throw AttributeError("can't delete attribute");
+    }
+
+    BorrowedMainGreenlet main_greenlet_of_new_parent;
+    BorrowedGreenlet new_parent(raw_new_parent.borrow()); // could throw TypeError!
+    for (BorrowedGreenlet p = new_parent; p; p = p->parent) {
+        if (p == self) {
+            throw ValueError("cyclic parent chain");
+        }
+        main_greenlet_of_new_parent = p->main_greenlet;
+    }
+
+    if (!main_greenlet_of_new_parent) {
+        throw ValueError("parent must not be garbage collected");
+    }
+
+    if (this->started()
+        && self->main_greenlet != main_greenlet_of_new_parent) {
+        throw ValueError("parent cannot be on a different thread");
+    }
+
+    self->parent = new_parent;
+}
 
 static int
 green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(context))
 {
-    if (!nparent) {
-        PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
-        return -1;
-    }
-
-    BorrowedMainGreenlet main_greenlet_of_new_parent;
-    BorrowedGreenlet new_parent;
     try {
-        new_parent = nparent;
-        for (BorrowedGreenlet p = new_parent; p; p = p->parent) {
-            if (p == self) {
-                PyErr_SetString(PyExc_ValueError, "cyclic parent chain");
-                return -1;
-            }
-            main_greenlet_of_new_parent = p->main_greenlet;
-        }
+        self->set_parent(nparent);
     }
-    catch (const greenlet::TypeError&) {
+    catch(const PyErrOccurred&) {
         return -1;
     }
-    if (!main_greenlet_of_new_parent) {
-        PyErr_SetString(PyExc_ValueError,
-                        "parent must not be garbage collected");
-        return -1;
-    }
-    if (PyGreenlet_STARTED(self)
-        && self->main_greenlet != main_greenlet_of_new_parent) {
-        PyErr_SetString(PyExc_ValueError,
-                        "parent cannot be on a different thread");
-        return -1;
-    }
-
-    self->parent = new_parent;
     return 0;
 }
 
@@ -1898,94 +1974,112 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(cont
 #    define GREENLET_NO_CONTEXTVARS_REASON "This Python interpreter"
 #endif
 
-
-static PyObject*
-green_getcontext(BorrowedGreenlet self, void* UNUSED(context))
+template<>
+const OwnedObject
+Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
 {
-#if GREENLET_PY37
-
-    PyThreadState* tstate = PyThreadState_GET();
+    using greenlet::PythonStateContext;
     OwnedObject result;
 
-    if (self->is_currently_running_in_some_thread()) {
+    if (this->is_currently_running_in_some_thread()) {
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(self)) {
-            result = tstate->context;
+            result = PythonStateContext<G_IS_PY37>::context(PyThreadState_GET());
         }
         else {
-            PyErr_SetString(PyExc_ValueError,
+            throw ValueError(
                             "cannot get context of a "
                             "greenlet that is running in a different thread");
-            return nullptr;
         }
     }
     else {
         /* Greenlet is not running: just return context. */
-        result = self->python_state.context();
+        result = this->python_state.context();
     }
     if (!result) {
         result = OwnedObject::None();
     }
+    return result;
+}
 
-    return result.relinquish_ownership();
-#else
-    PyErr_SetString(PyExc_AttributeError,
-                    GREENLET_NO_CONTEXTVARS_REASON
-                    " does not support context variables");
-    return nullptr;
-#endif
+template<>
+const OwnedObject
+Greenlet::context<GREENLET_WHEN_NOT_PY37>(GREENLET_WHEN_NOT_PY37::No) const
+{
+    throw AttributeError(
+                         GREENLET_NO_CONTEXTVARS_REASON
+                         "does not support context variables"
+    );
+}
+
+static PyObject*
+green_getcontext(const PyGreenlet* self, void* UNUSED(context))
+{
+    const Greenlet *const g = self->pimpl;
+    try {
+        OwnedObject result(g->context<G_IS_PY37>());
+        return result.relinquish_ownership();
+    }
+    catch(const PyErrOccurred&) {
+        return nullptr;
+    }
+}
+
+template<>
+void Greenlet::ContextSetter<GREENLET_WHEN_PY37>::operator=(BorrowedObject given)
+{
+    using greenlet::PythonStateContext;
+    if (!given) {
+        throw AttributeError("can't delete context attribute");
+    }
+    if (given.is_None()) {
+        /* "Empty context" is stored as NULL, not None. */
+        given = nullptr;
+    }
+
+    //checks type, incrs refcnt
+    greenlet::refs::OwnedContext context(given);
+    PyThreadState* tstate = PyThreadState_GET();
+    Greenlet* self = this->p;
+    if (self->is_currently_running_in_some_thread()) {
+        if (!GET_THREAD_STATE().state().is_current(self->self)) {
+            throw ValueError("cannot set context of a greenlet"
+                             " that is running in a different thread");
+        }
+
+        /* Currently running greenlet: context is stored in the thread state,
+           not the greenlet object. */
+        OwnedObject octx = OwnedObject::consuming(PythonStateContext<G_IS_PY37>::context(tstate));
+        PythonStateContext<G_IS_PY37>::context(tstate, context.relinquish_ownership());
+    }
+    else {
+        /* Greenlet is not running: just set context. Note that the
+           greenlet may be dead.*/
+        self->python_state.context() = context;
+    }
+}
+
+template<>
+void
+Greenlet::ContextSetter<GREENLET_WHEN_NOT_PY37>::operator=(BorrowedObject UNUSED(given))
+{
+    throw AttributeError(
+                         GREENLET_NO_CONTEXTVARS_REASON
+                         "does not support context variables"
+    );
 }
 
 static int
 green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 {
-#if GREENLET_PY37
-    if (nctx == NULL) {
-        PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
+    try {
+        self->context<G_IS_PY37>(true) = nctx;
+        return 0;
+    }
+    catch(const PyErrOccurred&) {
         return -1;
     }
-    if (nctx == Py_None) {
-        /* "Empty context" is stored as NULL, not None. */
-        nctx = NULL;
-    }
-    else if (!PyContext_CheckExact(nctx)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "greenlet context must be a "
-                        "contextvars.Context or None");
-        return -1;
-    }
-
-    PyThreadState* tstate = PyThreadState_GET();
-
-    if (self->is_currently_running_in_some_thread()) {
-        /* Currently running greenlet: context is stored in the thread state,
-           not the greenlet object. */
-        if (GET_THREAD_STATE().state().is_current(self)) {
-            OwnedObject octx = OwnedObject::consuming(tstate->context);
-            tstate->context = nctx;
-            tstate->context_ver++;
-            Py_XINCREF(nctx);
-        }
-        else {
-            PyErr_SetString(PyExc_ValueError,
-                            "cannot set context of a "
-                            "greenlet that is running in a different thread");
-            return -1;
-        }
-    }
-    else {
-        /* Greenlet is not running: just set context. Note that the
-           greenlet may be dead.*/
-        self->python_state.context() = nctx;
-    }
-    return 0;
-#else
-    PyErr_SetString(PyExc_AttributeError,
-                    GREENLET_NO_CONTEXTVARS_REASON
-                    " does not support context variables");
-    return -1;
-#endif
 }
 
 #undef GREENLET_NO_CONTEXTVARS_REASON
@@ -2018,7 +2112,7 @@ green_repr(BorrowedGreenlet self)
       generally should make sense to users as well.
      */
     PyObject* result;
-    int never_started = !PyGreenlet_STARTED(self) && !PyGreenlet_ACTIVE(self);
+    int never_started = !self->started() && !self->active();
 
     // XXX: Should not need this, and it has side effects.
     /*
@@ -2049,10 +2143,10 @@ green_repr(BorrowedGreenlet self)
             self->main_greenlet.borrow_o(),
             GET_THREAD_STATE().state().is_current(self)
                 ? " current"
-                : (PyGreenlet_STARTED(self) ? " suspended" : ""),
-            PyGreenlet_ACTIVE(self) ? " active" : "",
+                : (self->started() ? " suspended" : ""),
+            self->active() ? " active" : "",
             never_started ? " pending" : " started",
-            PyGreenlet_MAIN(self) ? " main" : ""
+            self->main() ? " main" : ""
         );
     }
     else {
@@ -2073,7 +2167,7 @@ green_repr(BorrowedGreenlet self)
  *
  * These are exported using the CObject API
  */
-
+extern "C" {
 static PyGreenlet*
 PyGreenlet_GetCurrent(void)
 {
@@ -2198,7 +2292,7 @@ Extern_PyGreenlet_GET_PARENT(PyGreenlet* self)
     }
     return self->pimpl->parent.acquire();
 }
-
+} // extern C.
 /** End C API ****************************************************************/
 
 static PyMethodDef green_methods[] = {

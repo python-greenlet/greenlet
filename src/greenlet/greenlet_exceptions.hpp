@@ -11,17 +11,6 @@
 
 namespace greenlet {
 
-    class TypeError : public std::runtime_error
-    {
-    public:
-        TypeError(const char* const what) : std::runtime_error(what)
-        {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_TypeError, what);
-            }
-        }
-    };
-
     class PyErrOccurred : public std::runtime_error
     {
     public:
@@ -34,6 +23,33 @@ namespace greenlet {
             : std::runtime_error(msg)
         {
             PyErr_SetString(exc_kind, msg);
+        }
+    };
+
+    class TypeError : public PyErrOccurred
+    {
+    public:
+        TypeError(const char* const what)
+            : PyErrOccurred(PyExc_TypeError, what)
+        {
+        }
+    };
+
+    class ValueError : public PyErrOccurred
+    {
+    public:
+        ValueError(const char* const what)
+            : PyErrOccurred(PyExc_ValueError, what)
+        {
+        }
+    };
+
+    class AttributeError : public PyErrOccurred
+    {
+    public:
+        AttributeError(const char* const what)
+            : PyErrOccurred(PyExc_AttributeError, what)
+        {
         }
     };
 
