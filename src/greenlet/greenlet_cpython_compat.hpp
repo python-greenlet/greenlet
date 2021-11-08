@@ -18,13 +18,15 @@
 struct GREENLET_WHEN_PY37
 {
     typedef GREENLET_WHEN_PY37* Yes;
-    using IsIt = Yes;
+    // We really just want an alias, `using Yes = IsIt`,
+    // but old MSVC for Py27 doesn't support that.
+    typedef GREENLET_WHEN_PY37* IsIt;
 };
 
 struct GREENLET_WHEN_NOT_PY37
 {
     typedef GREENLET_WHEN_NOT_PY37* No;
-    using IsIt = No;
+    typedef GREENLET_WHEN_NOT_PY37* IsIt;
 };
 
 

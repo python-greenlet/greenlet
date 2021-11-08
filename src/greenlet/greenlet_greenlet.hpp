@@ -284,7 +284,6 @@ namespace greenlet
         G_NO_COPIES_OF_CLS(Greenlet);
     private:
         friend class ThreadState; // XXX: Work to remove this.
-        friend int slp_switch(void);
 
         BorrowedGreenlet self;
         ExceptionState exception_state;
