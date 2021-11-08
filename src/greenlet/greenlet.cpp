@@ -2090,7 +2090,7 @@ green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 static PyObject*
 green_getframe(BorrowedGreenlet self, void* UNUSED(context))
 {
-    const PythonState::OwnedFrame& top_frame = self->python_state.top_frame();
+    const PythonState::OwnedFrame& top_frame = self->top_frame();
     return top_frame.acquire_or_None();
 }
 

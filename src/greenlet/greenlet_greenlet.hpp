@@ -289,8 +289,9 @@ namespace greenlet
         ExceptionState exception_state;
         SwitchingArgs switch_args;
         OwnedGreenlet _parent;
-    public:
         PythonState python_state;
+    public:
+
         OwnedObject run_callable;
 
 
@@ -353,6 +354,11 @@ namespace greenlet
         }
 
         inline void parent(const refs::BorrowedObject new_parent);
+
+        inline const PythonState::OwnedFrame& top_frame()
+        {
+            return this->python_state.top_frame();
+        }
 
         int tp_traverse(visitproc visit, void* arg);
         int tp_clear();
