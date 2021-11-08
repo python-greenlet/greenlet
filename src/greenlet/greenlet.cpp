@@ -985,7 +985,7 @@ Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NO
     // XXX: We could clear this much earlier, right?
     // Or would that introduce the possibility of running Python
     // code when we don't want to?
-    this->run_callable.CLEAR();
+    this->_run_callable.CLEAR();
 
 
     // We're about to possibly run Python code again, which
@@ -1494,7 +1494,7 @@ Greenlet::tp_traverse(visitproc visit, void* arg)
 {
     Py_VISIT(this->_parent.borrow_o());
     Py_VISIT(this->main_greenlet.borrow_o());
-    Py_VISIT(this->run_callable.borrow_o());
+    Py_VISIT(this->_run_callable.borrow_o());
     int result;
     if ((result = this->exception_state.tp_traverse(visit, arg)) != 0) {
         return result;
@@ -1573,7 +1573,7 @@ Greenlet::tp_clear()
     bool own_top_frame = (!this->main_greenlet || !this->main_greenlet.borrow()->thread_state);
     this->_parent.CLEAR();
     this->main_greenlet.CLEAR();
-    this->run_callable.CLEAR();
+    this->_run_callable.CLEAR();
 
 
     self->python_state.tp_clear(own_top_frame);
@@ -1898,27 +1898,40 @@ green_get_stack_saved(PyGreenlet* self, void* UNUSED(context))
     return PyLong_FromSsize_t(self->pimpl->stack_state.stack_saved());
 }
 
+
 static PyObject*
-green_getrun(PyGreenlet* self, void* UNUSED(context))
+green_getrun(BorrowedGreenlet self, void* UNUSED(context))
 {
-    if (PyGreenlet_STARTED(self) || !self->pimpl->run_callable) {
-        PyErr_SetString(PyExc_AttributeError, "run");
+    try {
+        OwnedObject result(self->run());
+        return result.relinquish_ownership();
+    }
+    catch(const PyErrOccurred&) {
         return nullptr;
     }
-    return self->pimpl->run_callable.acquire();
+}
+
+void
+Greenlet::run(const BorrowedObject nrun)
+{
+    if (this->started()) {
+        throw AttributeError(
+                        "run cannot be set "
+                        "after the start of the greenlet");
+    }
+    this->_run_callable = nrun;
 }
 
 static int
 green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* UNUSED(context))
 {
-    if (self->started()) {
-        PyErr_SetString(PyExc_AttributeError,
-                        "run cannot be set "
-                        "after the start of the greenlet");
+    try {
+        self->run(nrun);
+        return 0;
+    }
+    catch(const PyErrOccurred&) {
         return -1;
     }
-    self->run_callable = nrun;
-    return 0;
 }
 
 static PyObject*

@@ -290,10 +290,7 @@ namespace greenlet
         SwitchingArgs switch_args;
         OwnedGreenlet _parent;
         PythonState python_state;
-    public:
-
-        OwnedObject run_callable;
-
+        OwnedObject _run_callable;
 
     public: // protected
         StackState stack_state;
@@ -359,6 +356,16 @@ namespace greenlet
         {
             return this->python_state.top_frame();
         }
+
+        inline const OwnedObject& run() const
+        {
+            if (this->started() || !this->_run_callable) {
+                throw AttributeError("run");
+            }
+            return this->_run_callable;
+        }
+
+        inline void run(const refs::BorrowedObject nrun);
 
         int tp_traverse(visitproc visit, void* arg);
         int tp_clear();

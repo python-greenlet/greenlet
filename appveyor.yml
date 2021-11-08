@@ -74,16 +74,6 @@ environment:
       PYTHON_VERSION: "3.5.x"
       PYTHON_EXE: python
 
-    - PYTHON: "C:\\Python36"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.6.x"
-      PYTHON_EXE: python
-
-    - PYTHON: "C:\\Python36-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.6.x"
-      PYTHON_EXE: python
-
     - PYTHON: "C:\\Python37"
       PYTHON_ARCH: "32"
       PYTHON_VERSION: "3.7.x"
@@ -104,6 +94,15 @@ environment:
       PYTHON_VERSION: "3.8.x"
       PYTHON_EXE: python
 
+    - PYTHON: "C:\\Python36"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_EXE: python
+
+    - PYTHON: "C:\\Python36-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_EXE: python
 
 cache:
   - "%TMP%\\py\\"
