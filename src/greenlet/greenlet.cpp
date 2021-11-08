@@ -849,7 +849,7 @@ Greenlet::g_switchstack_success() G_NOEXCEPT
 }
 
 
-typename Greenlet::switchstack_result_t
+Greenlet::switchstack_result_t
 Greenlet::g_initialstub(void* mark)
 {
     OwnedObject run;
@@ -1084,7 +1084,7 @@ Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NO
 }
 
 
-typename Greenlet::switchstack_result_t
+Greenlet::switchstack_result_t
 Greenlet::g_switchstack(void)
 {
     { /* save state */

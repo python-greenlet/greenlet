@@ -35,7 +35,14 @@ typedef unsigned int uint32_t;
 #define G_HAS_METHOD_DELETE 1
 #define G_EXPLICIT_OP explicit
 #define G_NOEXCEPT noexcept
-#define G_FP_TMPL_STATIC static
+# if defined(__clang__)
+#  define G_FP_TMPL_STATIC static
+# else
+// GCC has no problem allowing static function pointers, but emits
+// tons of warnings about "whose type uses the anonymous namespace [-Wsubobject-linkage]"
+#  define G_FP_TMPL_STATIC
+# endif
+
 #endif
 
 #if G_HAS_METHOD_DELETE == 1

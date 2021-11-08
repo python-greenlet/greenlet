@@ -753,7 +753,7 @@ namespace greenlet {
         return OwnedObject::consuming(PyObject_Call(this->p, args.borrow(), kwargs.borrow()));
     }
 
-    static inline void
+    G_FP_TMPL_STATIC inline void
     ListChecker(void * p)
     {
         if (!p) {
