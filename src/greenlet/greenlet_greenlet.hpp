@@ -288,10 +288,11 @@ namespace greenlet
         BorrowedGreenlet self;
         ExceptionState exception_state;
         SwitchingArgs switch_args;
+        OwnedGreenlet _parent;
     public:
         PythonState python_state;
         OwnedObject run_callable;
-        OwnedGreenlet parent;
+
 
     public: // protected
         StackState stack_state;
@@ -306,25 +307,8 @@ namespace greenlet
         template <typename IsPy37> // maybe we can use a value here?
         const OwnedObject context(const typename IsPy37::IsIt=nullptr) const;
 
-        template<typename IsPy37>
-        class ContextSetter
-        {
-        private:
-            friend class Greenlet;
-            Greenlet* p;
-            ContextSetter(Greenlet* it) : p(it)
-            {}
-
-            G_NO_ASSIGNMENT_OF_CLS(ContextSetter);
-        public:
-            void operator=(refs::BorrowedObject new_context);
-        };
-
         template <typename IsPy37>
-        inline ContextSetter<IsPy37> context(bool, typename IsPy37::IsIt=nullptr)
-        {
-            return ContextSetter<IsPy37>(this);
-        }
+        inline void context(refs::BorrowedObject new_context, typename IsPy37::IsIt=nullptr);
 
         inline SwitchingArgs& args()
         {
@@ -363,7 +347,12 @@ namespace greenlet
         }
         virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
 
-        inline void set_parent(refs::BorrowedObject& new_parent);
+        inline const OwnedGreenlet parent() const
+        {
+            return this->_parent;
+        }
+
+        inline void parent(const refs::BorrowedObject new_parent);
 
         int tp_traverse(visitproc visit, void* arg);
         int tp_clear();

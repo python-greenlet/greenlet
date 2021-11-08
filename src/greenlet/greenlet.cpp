@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <exception>
 
+
 #include <Python.h>
 #include "structmember.h" // PyMemberDef
 
@@ -541,7 +542,7 @@ using greenlet::Greenlet;
 
 Greenlet::Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
     : self(p),
-      parent(the_parent)
+      _parent(the_parent)
 {
     p ->pimpl = this;
 }
@@ -582,12 +583,12 @@ Greenlet::find_main_greenlet_in_lineage() const
     const Greenlet* g = this;
     while (!g->started()) {
         g = g->self.borrow()->pimpl;
-        if (!g || !g->parent) {
+        if (!g || !g->_parent) {
             /* garbage collected greenlet in chain */
             // XXX: WHAT?
             return BorrowedMainGreenlet(nullptr);
         }
-        g = g->parent;
+        g = g->_parent;
     }
 
     return BorrowedMainGreenlet(g->main_greenlet);
@@ -810,7 +811,7 @@ Greenlet::g_switch()
             break;
         }
 
-        target = target->parent;
+        target = target->_parent;
         target_was_me = false;
     }
     // The this pointer and all other stack or register based
@@ -1050,9 +1051,9 @@ Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NO
 
     // TODO: Can we decref some things here? Release our main greenlet
     // and maybe parent?
-    for (Greenlet* parent = this->parent;
+    for (Greenlet* parent = this->_parent;
          parent;
-         parent = parent->parent ) {
+         parent = parent->_parent ) {
         // We need to somewhere consume a reference to
         // the result; in most cases we'll never have control
         // back in this stack frame again. Calling
@@ -1393,15 +1394,15 @@ namespace greenlet
 }
 Greenlet::ParentIsCurrentGuard::ParentIsCurrentGuard(Greenlet* p,
                                                          const ThreadState& thread_state)
-    : oldparent(p->parent),
+    : oldparent(p->_parent),
       greenlet(p)
 {
-    p->parent = thread_state.get_current();
+    p->_parent = thread_state.get_current();
 }
 
 Greenlet::ParentIsCurrentGuard::~ParentIsCurrentGuard()
 {
-    this->greenlet->parent = oldparent;
+    this->greenlet->_parent = oldparent;
     oldparent.CLEAR();
 }
 
@@ -1491,7 +1492,7 @@ Greenlet::deallocing_greenlet_in_thread(const ThreadState& thread_state)
 int
 Greenlet::tp_traverse(visitproc visit, void* arg)
 {
-    Py_VISIT(this->parent.borrow_o());
+    Py_VISIT(this->_parent.borrow_o());
     Py_VISIT(this->main_greenlet.borrow_o());
     Py_VISIT(this->run_callable.borrow_o());
     int result;
@@ -1570,7 +1571,7 @@ int
 Greenlet::tp_clear()
 {
     bool own_top_frame = (!this->main_greenlet || !this->main_greenlet.borrow()->thread_state);
-    this->parent.CLEAR();
+    this->_parent.CLEAR();
     this->main_greenlet.CLEAR();
     this->run_callable.CLEAR();
 
@@ -1923,22 +1924,24 @@ green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* UNUSED(context))
 static PyObject*
 green_getparent(BorrowedGreenlet self, void* UNUSED(context))
 {
-    return self->parent.acquire_or_None();
+    return self->parent().acquire_or_None();
 }
 
 using greenlet::AttributeError;
 
 void
-Greenlet::set_parent(BorrowedObject& raw_new_parent)
+Greenlet::parent(const BorrowedObject raw_new_parent)
 {
     if (!raw_new_parent) {
         throw AttributeError("can't delete attribute");
     }
 
     BorrowedMainGreenlet main_greenlet_of_new_parent;
-    BorrowedGreenlet new_parent(raw_new_parent.borrow()); // could throw TypeError!
-    for (BorrowedGreenlet p = new_parent; p; p = p->parent) {
-        if (p == self) {
+    BorrowedGreenlet new_parent(raw_new_parent.borrow()); // could
+                                                          // throw
+                                                          // TypeError!
+    for (BorrowedGreenlet p = new_parent; p; p = p->_parent) {
+        if (p == this->self) {
             throw ValueError("cyclic parent chain");
         }
         main_greenlet_of_new_parent = p->main_greenlet;
@@ -1949,18 +1952,18 @@ Greenlet::set_parent(BorrowedObject& raw_new_parent)
     }
 
     if (this->started()
-        && self->main_greenlet != main_greenlet_of_new_parent) {
+        && this->main_greenlet != main_greenlet_of_new_parent) {
         throw ValueError("parent cannot be on a different thread");
     }
 
-    self->parent = new_parent;
+    this->_parent = new_parent;
 }
 
 static int
 green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(context))
 {
     try {
-        self->set_parent(nparent);
+        self->parent(nparent);
     }
     catch(const PyErrOccurred&) {
         return -1;
@@ -2027,7 +2030,7 @@ green_getcontext(const PyGreenlet* self, void* UNUSED(context))
 }
 
 template<>
-void Greenlet::ContextSetter<GREENLET_WHEN_PY37>::operator=(BorrowedObject given)
+void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_PY37::Yes)
 {
     using greenlet::PythonStateContext;
     if (!given) {
@@ -2041,9 +2044,9 @@ void Greenlet::ContextSetter<GREENLET_WHEN_PY37>::operator=(BorrowedObject given
     //checks type, incrs refcnt
     greenlet::refs::OwnedContext context(given);
     PyThreadState* tstate = PyThreadState_GET();
-    Greenlet* self = this->p;
-    if (self->is_currently_running_in_some_thread()) {
-        if (!GET_THREAD_STATE().state().is_current(self->self)) {
+
+    if (this->is_currently_running_in_some_thread()) {
+        if (!GET_THREAD_STATE().state().is_current(this->self)) {
             throw ValueError("cannot set context of a greenlet"
                              " that is running in a different thread");
         }
@@ -2056,13 +2059,13 @@ void Greenlet::ContextSetter<GREENLET_WHEN_PY37>::operator=(BorrowedObject given
     else {
         /* Greenlet is not running: just set context. Note that the
            greenlet may be dead.*/
-        self->python_state.context() = context;
+        this->python_state.context() = context;
     }
 }
 
 template<>
 void
-Greenlet::ContextSetter<GREENLET_WHEN_NOT_PY37>::operator=(BorrowedObject UNUSED(given))
+Greenlet::context<GREENLET_WHEN_NOT_PY37>(BorrowedObject UNUSED(given), GREENLET_WHEN_NOT_PY37::No)
 {
     throw AttributeError(
                          GREENLET_NO_CONTEXTVARS_REASON
@@ -2074,7 +2077,7 @@ static int
 green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 {
     try {
-        self->context<G_IS_PY37>(true) = nctx;
+        self->context<G_IS_PY37>(nctx, G_IS_PY37::IsIt());
         return 0;
     }
     catch(const PyErrOccurred&) {
@@ -2177,11 +2180,6 @@ PyGreenlet_GetCurrent(void)
 static int
 PyGreenlet_SetParent(PyGreenlet* g, PyGreenlet* nparent)
 {
-    if (!PyGreenlet_Check(g)) {
-        PyErr_SetString(PyExc_TypeError, "parent must be a greenlet");
-        return -1;
-    }
-
     return green_setparent((PyGreenlet*)g, (PyObject*)nparent, NULL);
 }
 
@@ -2290,7 +2288,8 @@ Extern_PyGreenlet_GET_PARENT(PyGreenlet* self)
         PyErr_BadArgument();
         return NULL;
     }
-    return self->pimpl->parent.acquire();
+    // This can return NULL even if there is no exception
+    return self->pimpl->parent().acquire();
 }
 } // extern C.
 /** End C API ****************************************************************/

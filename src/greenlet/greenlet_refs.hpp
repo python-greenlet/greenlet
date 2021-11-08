@@ -841,19 +841,8 @@ namespace greenlet {
         // or allocated, we're responsible for the decref.
         void PyAddObject(const char* name, const long new_bool)
         {
-            // TODO: Debugging cruft that can go away
-            Py_ssize_t cnt;
-            PyObject* raw;
-            {
             OwnedObject p = OwnedObject::consuming(Require(PyBool_FromLong(new_bool)));
-            cnt = p.REFCNT();
-            raw = p.borrow();
             this->PyAddObject(name, p);
-            }
-            // No way that raw is now invalid, even though we decref'd
-            // once,
-            // the module is keeping it alive
-            assert(Py_REFCNT(raw) == cnt);
         }
 
         void PyAddObject(const char* name, const OwnedObject& new_object)
