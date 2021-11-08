@@ -34,13 +34,13 @@ namespace greenlet
         // implemented as macros.)
         typedef void (*TypeChecker)(void*);
 
-        static inline void
+        G_FP_TMPL_STATIC inline void
         NoOpChecker(void*)
         {
             return;
         }
 
-        static inline void
+        G_FP_TMPL_STATIC inline void
         GreenletChecker(void *p)
         {
             if (!p) {
@@ -61,7 +61,7 @@ namespace greenlet
             }
         }
 
-        static inline void
+        G_FP_TMPL_STATIC inline void
         MainGreenletExactChecker(void *p)
         {
             if (!p) {
@@ -101,7 +101,7 @@ namespace greenlet
 
         typedef _BorrowedGreenlet<PyGreenlet, GreenletChecker> BorrowedGreenlet;
 
-        static inline void
+        G_FP_TMPL_STATIC inline void
         ContextExactChecker(void *p)
         {
             if (!p) {

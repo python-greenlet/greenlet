@@ -25,12 +25,17 @@ typedef unsigned int uint32_t;
 // methods.
 #define G_EXPLICIT_OP
 #define G_NOEXCEPT throw()
+// This version doesn't support "objects with internal linkage"
+// in non-type template arguments. Translation: function pointer
+// template arguments cannot be for static functions.
+#define G_FP_TMPL_STATIC
 #else
 // Newer, reasonable compilers implementing C++11 or so.
 #include <cstdint>
 #define G_HAS_METHOD_DELETE 1
 #define G_EXPLICIT_OP explicit
 #define G_NOEXCEPT noexcept
+#define G_FP_TMPL_STATIC static
 #endif
 
 #if G_HAS_METHOD_DELETE == 1
