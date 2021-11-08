@@ -980,7 +980,7 @@ Greenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NO
     /* stack variables from above are no good and also will not unwind! */
     // EXCEPT: That can't be true, we access run, among others, here.
 
-    self->stack_state.set_active(); /* running */
+    this->stack_state.set_active(); /* running */
 
     // XXX: We could clear this much earlier, right?
     // Or would that introduce the possibility of running Python
@@ -1350,6 +1350,7 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o) {
         new Greenlet(o, GET_THREAD_STATE().state().borrow_current());
+        //cerr << "For PyGreenlet at " << o << " allocted Greenlet at " << p << endl;
         assert(Py_REFCNT(o) == 1);
     }
     return o;
@@ -1457,7 +1458,7 @@ Greenlet::deallocing_greenlet_in_thread(const ThreadState& thread_state)
         // exception happened. Whether or not an exception happens,
         // we need to restore the parent in case the greenlet gets
         // resurrected.
-        self->throw_GreenletExit();
+        this->throw_GreenletExit();
         return;
     }
 
@@ -1533,6 +1534,13 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
     //    greenlet, solves several leaks for us.
 
     Py_VISIT(self->dict);
+    if (!self->pimpl) {
+        cerr << "ERROR: For PyGreenlet at " << self
+             << " Traversing into deleted Greenlet!"
+             << endl;
+        return 0;
+    }
+
     return self->pimpl->tp_traverse(visit, arg);
 }
 
@@ -1576,8 +1584,8 @@ Greenlet::tp_clear()
     this->_run_callable.CLEAR();
 
 
-    self->python_state.tp_clear(own_top_frame);
-    self->exception_state.tp_clear();
+    this->python_state.tp_clear(own_top_frame);
+    this->exception_state.tp_clear();
     return 0;
 }
 
@@ -1693,8 +1701,14 @@ green_dealloc(PyGreenlet* self)
     Py_CLEAR(self->dict);
 
     if (self->pimpl) {
-        delete self->pimpl;
+        //cerr << "For PyGreenlet at " << self << " deallocating
+        //Greenlet at " << self->pimpl << endl;
+        // In case deleting this, which frees some memory,
+        // somewhow winds up calling back into us. That's usually a
+        //bug in our code.
+        Greenlet* p = self->pimpl;
         self->pimpl = nullptr;
+        delete p;
     }
     // and finally we're done. self is now invalid.
     Py_TYPE(self)->tp_free((PyObject*)self);

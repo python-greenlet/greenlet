@@ -67,6 +67,11 @@ namespace greenlet
             return this->_context;
         }
 
+        inline void tp_clear()
+        {
+            this->_context.CLEAR();
+        }
+
         template<typename T>
         inline static PyObject* context(T* tstate)
         {
@@ -95,6 +100,8 @@ namespace greenlet
         {
             throw AttributeError("no context");
         }
+
+        inline void tp_clear(){};
 
         template<typename T>
         inline static PyObject* context(T* UNUSED(tstate))
@@ -732,9 +739,7 @@ int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) G_N
 
 void PythonState::tp_clear(bool own_top_frame) G_NOEXCEPT
 {
-#if GREENLET_PY37
-    this->_context.CLEAR();
-#endif
+    PythonStateContext::tp_clear();
     // If we get here owning a frame,
     // we got dealloc'd without being finished. We may or may not be
     // in the same thread.

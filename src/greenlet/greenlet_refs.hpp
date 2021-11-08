@@ -413,6 +413,7 @@ namespace greenlet {
         void CLEAR()
         {
             Py_CLEAR(this->p);
+            assert(this->p == nullptr);
         }
     };
 

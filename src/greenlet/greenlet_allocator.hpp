@@ -4,7 +4,7 @@
 #include <Python.h>
 #include <memory>
 #include "greenlet_compiler_compat.hpp"
-
+// #include <iostream>
 
 namespace greenlet
 {
@@ -33,6 +33,13 @@ namespace greenlet
 
         T* allocate(size_t number_objects, const void* UNUSED(hint)=0)
         {
+            // using std::cerr;
+            // using std::endl;
+
+            // cerr << "Allocating " << number_objects
+            //      << " at " << UNUSED_hint
+            //      << " from " << typeid(this).name()
+            //      << endl;
             void* p;
             if (number_objects == 1)
                 p = PyObject_Malloc(sizeof(T));
@@ -43,6 +50,13 @@ namespace greenlet
 
         void deallocate(T* t, size_t n)
         {
+            // using std::cerr;
+            // using std::endl;
+            // cerr << "Deallocating " << n
+            //      << " at " << t
+            //      << " of " << typeid(t).name()
+            //      << " from " << typeid(this).name()
+            //      << endl;
             void* p = t;
             if (n == 1) {
                 PyObject_Free(p);
