@@ -33,6 +33,37 @@ import unittest
 
 import objgraph
 
+# graphviz 0.18 (Nov 7 2021), available only on Python 3.6 and newer,
+# has added type hints (sigh). It wants to use ``typing.Literal`` for
+# some stuff, but that's only available on Python 3.9+. If that's not
+# found, it creates a ``unittest.mock.MagicMock`` object and annotates
+# with that. These are GC'able objects, and doing almost *anything*
+# with them results in an explosion of objects. For example, trying to
+# compare them for equality creates new objects. This causes our
+# leakchecks to fail, with reports like:
+#
+# greenlet.tests.leakcheck.LeakCheckError: refcount increased by [337, 1333, 343, 430, 530, 643, 769]
+# _Call          1820      +546
+# dict           4094       +76
+# MagicProxy      585       +73
+# tuple          2693       +66
+# _CallList        24        +3
+# weakref        1441        +1
+# function       5996        +1
+# type            736        +1
+# cell            592        +1
+# MagicMock         8        +1
+#
+# To avoid this, we *could* filter this type of object out early. In
+# principle it could leak, but we don't use mocks in greenlet, so it
+# doesn't leak from us. However, a further issue is that ``MagicMock``
+# objects have subobjects that are also GC'able, like ``_Call``, and
+# those create new mocks of their own too. So we'd have to filter them
+# as well, and they're not public. That's OK, we can workaround the
+# problem by being very careful to never compare by equality or other
+# user-defined operators, only using object identity or other builtin
+# functions.
+
 RUNNING_ON_GITHUB_ACTIONS = os.environ.get('GITHUB_ACTIONS')
 RUNNING_ON_TRAVIS = os.environ.get('TRAVIS') or RUNNING_ON_GITHUB_ACTIONS
 RUNNING_ON_APPVEYOR = os.environ.get('APPVEYOR')
@@ -116,21 +147,46 @@ class _RefCountChecker(object):
         # self.setUp() by the test runner, so we don't need to do it again.
         self.needs_setUp = False
 
-    def _ignore_object_p(self, obj):
-        if (
-                obj is self
-                or obj in self.__dict__.values()
-                or obj == self._ignore_object_p # pylint:disable=comparison-with-callable
-        ):
+    def _include_object_p(self, obj):
+        # pylint:disable=too-many-return-statements
+        #
+        # See the comment block at the top. We must be careful to
+        # avoid invoking user-defined operations.
+        if obj is self:
             return False
         kind = type(obj)
+        # ``self._include_object_p == obj`` returns NotImplemented
+        # for non-function objects, which causes the interpreter
+        # to try to reverse the order of arguments...which leads
+        # to the explosion of mock objects. We don't want that, so we implement
+        # the check manually.
+        if kind == type(self._include_object_p):
+            try:
+                # pylint:disable=not-callable
+                exact_method_equals = self._include_object_p.__eq__(obj)
+            except AttributeError:
+                # Python 2.7 methods may only have __cmp__, and that raises a
+                # TypeError for non-method arguments
+                # pylint:disable=no-member
+                exact_method_equals = self._include_object_p.__cmp__(obj) == 0
+
+            if exact_method_equals is not NotImplemented and exact_method_equals:
+                return False
+
+        # Similarly, we need to check identity in our __dict__ to avoid mock explosions.
+        for x in self.__dict__.values():
+            if obj is x:
+                return False
+
+
         if kind in self.ignored_types or kind in self.IGNORED_TYPES:
             return False
 
         return True
 
     def _growth(self):
-        return objgraph.growth(limit=None, peak_stats=self.peak_stats, filter=self._ignore_object_p)
+        return objgraph.growth(limit=None, peak_stats=self.peak_stats,
+                               filter=self._include_object_p)
 
     def _report_diff(self, growth):
         if not growth:
