@@ -1042,12 +1042,23 @@ class TestRepr(TestCase):
 
         self.assertEndsWith(t.original_main, ' suspended active started main>')
         self.assertEndsWith(t.thread_main, ' current active started main>')
+        # give the machinery time to notice the death of the thread,
+        # and clean it up. Note that we don't use
+        # ``expect_greenlet_leak`` or wait_for_pending_cleanups,
+        # because at this point we know we have an extra greenlet
+        # still reachable.
+        for _ in range(3):
+            time.sleep(0.001)
 
-        r = repr(t.main_glet)
-        # main greenlets, even from dead threads, never really appear dead
-        # but we can distinguish that the thread is dead
-        assert not t.main_glet.dead
-        self.assertEndsWith(r, ' (thread exited) active started main>')
+        # In the past, main greenlets, even from dead threads, never
+        # really appear dead. We have fixed that, and we also report
+        # that the thread is dead in the repr. (Do this multiple times
+        # to make sure that we don't self-modify and forget our state
+        # in the C++ code).
+        for _ in range(3):
+            self.assertTrue(t.main_glet.dead)
+            r = repr(t.main_glet)
+            self.assertEndsWith(r, ' (thread exited) dead>')
 
     def test_dead(self):
         g = greenlet(lambda: None)

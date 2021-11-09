@@ -541,8 +541,8 @@ static ThreadStateCreator& GET_THREAD_STATE()
 using greenlet::Greenlet;
 
 Greenlet::Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
-    : self(p),
-      _parent(the_parent)
+    : _parent(the_parent),
+      self(p)
 {
     p ->pimpl = this;
 }
@@ -724,6 +724,21 @@ Greenlet::thread_state() const G_NOEXCEPT
     return this->main_greenlet.borrow()->thread_state;
 }
 
+bool
+Greenlet::was_running_in_dead_thread() const G_NOEXCEPT
+{
+    return this->main_greenlet && !this->thread_state();
+}
+
+bool
+MainGreenlet::was_running_in_dead_thread() const G_NOEXCEPT
+{
+    // XXX: The fact that we have a self that's not a
+    // BorrowedMainGreenlet, and a OwnedMainGreenlet main_greenlet
+    // that is us suggests that we have our inheritance messed
+    // up. We probably need a separate base class.
+    return !reinterpret_cast<PyMainGreenlet*>(this->self.borrow())->thread_state;
+}
 
 inline void
 Greenlet::slp_restore_state() G_NOEXCEPT
@@ -1424,21 +1439,31 @@ Greenlet::murder_in_place()
 
     if (this->active()) {
         assert(!this->is_currently_running_in_some_thread());
-        this->stack_state.set_inactive();
-        assert(!this->active());
-
-        // We're holding a borrowed reference to the last
-        // frame we executed. Since we borrowed it, the
-        // normal traversal, clear, and dealloc functions
-        // ignore it, meaning it leaks. (The thread state
-        // object can't find it to clear it when that's
-        // deallocated either, because by definition if we
-        // got an object on this list, it wasn't
-        // running and the thread state doesn't have
-        // this frame.)
-        // So here, we *do* clear it.
-        this->python_state.tp_clear(true);
+        this->deactivate_and_free();
     }
+}
+
+inline void
+Greenlet::deactivate_and_free()
+{
+    if (!this->active()) {
+        return;
+    }
+    // Throw away any saved stack.
+    this->stack_state = StackState();
+    assert(!this->stack_state.active());
+    // Throw away any Python references.
+    // We're holding a borrowed reference to the last
+    // frame we executed. Since we borrowed it, the
+    // normal traversal, clear, and dealloc functions
+    // ignore it, meaning it leaks. (The thread state
+    // object can't find it to clear it when that's
+    // deallocated either, because by definition if we
+    // got an object on this list, it wasn't
+    // running and the thread state doesn't have
+    // this frame.)
+    // So here, we *do* clear it.
+    this->python_state.tp_clear(true);
 }
 
 bool
@@ -1453,16 +1478,16 @@ Greenlet::belongs_to_thread(const ThreadState* thread_state) const
 }
 
 void
-Greenlet::deallocing_greenlet_in_thread(const ThreadState* thread_state)
+Greenlet::deallocing_greenlet_in_thread(const ThreadState* current_thread_state)
 {
     /* Cannot raise an exception to kill the greenlet if
        it is not running in the same thread! */
-    if (this->belongs_to_thread(thread_state)) {
-        assert(thread_state);
+    if (this->belongs_to_thread(current_thread_state)) {
+        assert(current_thread_state);
         /* The dying greenlet cannot be a parent of ts_current
            because the 'parent' field chain would hold a
            reference */
-        Greenlet::ParentIsCurrentGuard with_current_parent(this, *thread_state);
+        Greenlet::ParentIsCurrentGuard with_current_parent(this, *current_thread_state);
         // To get here it had to have run before
         /* Send the greenlet a GreenletExit exception. */
 
@@ -1481,22 +1506,15 @@ Greenlet::deallocing_greenlet_in_thread(const ThreadState* thread_state)
     // be able to raise an exception.
     // That's mostly OK! Since we can't add it to a list, our refcount
     // won't increase, and we'll go ahead with the DECREFs later.
-    // XXX: Are we sure the main greenlet still exists?
-    if (this->main_greenlet && this->main_greenlet.borrow()->thread_state) {
-        this->main_greenlet.borrow()->thread_state->delete_when_thread_running(self);
+    ThreadState *const  thread_state = this->thread_state();
+    if (thread_state) {
+        thread_state->delete_when_thread_running(self);
     }
     else {
         // The thread is dead, we can't raise an exception.
         // We need to make it look non-active, though, so that dealloc
         // finishes killing it.
-        // XXX: Very similar to murder_in_place(), except that
-        // we don't lose the main greenlet.
-        this->stack_state = StackState(); // XXX: This was only
-                                          // defining stack_start,
-                                          // yes? Do we need any of
-                                          // the other variables?
-        assert(!this->stack_state.active());
-        this->python_state.tp_clear(true);
+        this->deactivate_and_free();
     }
     return;
 }
@@ -1547,9 +1565,10 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
 
     Py_VISIT(self->dict);
     if (!self->pimpl) {
-        cerr << "ERROR: For PyGreenlet at " << self
-             << " Traversing into deleted Greenlet!"
-             << endl;
+        // Hmm. I have seen this at interpreter shutdown time,
+        // I think. That's very odd because this doesn't go away until
+        // we're ``green_dealloc()``, at which point we shouldn't be
+        // traversed anymore.
         return 0;
     }
 
@@ -1722,8 +1741,6 @@ green_dealloc(PyGreenlet* self)
     Py_CLEAR(self->dict);
 
     if (self->pimpl) {
-        //cerr << "For PyGreenlet at " << self << " deallocating
-        //Greenlet at " << self->pimpl << endl;
         // In case deleting this, which frees some memory,
         // somewhow winds up calling back into us. That's usually a
         //bug in our code.
@@ -1909,15 +1926,21 @@ green_setdict(PyGreenlet* self, PyObject* val, void* UNUSED(context))
     return 0;
 }
 
-static int
-_green_not_dead(PyGreenlet* self)
+static bool
+_green_not_dead(BorrowedGreenlet self)
 {
-    return PyGreenlet_ACTIVE(self) || !PyGreenlet_STARTED(self);
+    // XXX: Where else should we do this?
+    // Probably on entry to most Python-facing functions?
+    if (self->was_running_in_dead_thread()) {
+        self->deactivate_and_free();
+        return false;
+    }
+    return self->active() || !self->started();
 }
 
 
 static PyObject*
-green_getdead(PyGreenlet* self, void* UNUSED(context))
+green_getdead(BorrowedGreenlet self, void* UNUSED(context))
 {
     if (_green_not_dead(self)) {
         Py_RETURN_FALSE;
@@ -2215,10 +2238,13 @@ green_repr(BorrowedGreenlet self)
     else {
         /* main greenlets never really appear dead. */
         result = GNative_FromFormat(
-            "<%s object at %p (otid=%p) dead>",
+            "<%s object at %p (otid=%p) %sdead>",
             tp_name,
             self.borrow_o(),
-            self->main_greenlet.borrow_o()
+            self->main_greenlet.borrow_o(),
+            self->was_running_in_dead_thread()
+            ? "(thread exited) "
+            : ""
             );
     }
 

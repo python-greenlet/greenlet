@@ -291,14 +291,13 @@ namespace greenlet
         G_NO_COPIES_OF_CLS(Greenlet);
     private:
         friend class ThreadState; // XXX: Work to remove this.
-
-        BorrowedGreenlet self;
         ExceptionState exception_state;
         SwitchingArgs switch_args;
         OwnedGreenlet _parent;
         PythonState python_state;
         OwnedObject _run_callable;
-
+    protected:
+        BorrowedGreenlet self;
     public: // protected
         StackState stack_state;
         OwnedMainGreenlet main_greenlet;
@@ -329,6 +328,16 @@ namespace greenlet
          * This loses access to the thread state and the main greenlet.
          */
         void murder_in_place();
+
+        /**
+         * Called when somebody notices we were running in a dead
+         * thread to allow cleaning up resources (because we can't
+         * raise GreenletExit into it anymore).
+         * This is very similar to ``murder_in_place()``, except that
+         * it DOES NOT lose the main greenlet or thread state.
+         */
+        inline void deactivate_and_free();
+
 
         // Called when some thread wants to deallocate a greenlet
         // object.
@@ -397,6 +406,11 @@ namespace greenlet
         // null if the greenlet is not running or the thread is known
         // to have exited.
         inline ThreadState* thread_state() const G_NOEXCEPT;
+
+        // Return true if the greenlet is known to have been running
+        // (active) in a thread that has now exited.
+        virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
+
     protected:
         // The functions that must not be inlined are declared virtual.
         // We also mark them as protected, not private, so that the
@@ -512,6 +526,7 @@ namespace greenlet
         {}
 
         virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
+        virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
     };
 
 };

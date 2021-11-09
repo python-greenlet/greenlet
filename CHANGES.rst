@@ -33,6 +33,8 @@
   greenlet object was running in a thread that has exited, the repr
   now indicates that.
 
+- Main greenlets from threads that have exited are now marked as dead.
+
 1.1.2 (2021-09-29)
 ==================
 
