@@ -1596,7 +1596,7 @@ green_is_gc(BorrowedGreenlet self)
         result = 1;
     }
     // The main greenlet pointer will eventually go away after the thread dies.
-    if (self->main_greenlet && !self->main_greenlet.borrow()->thread_state) {
+    if (self->was_running_in_dead_thread()) {
         // Our thread is dead! We can never run again. Might as well
         // GC us. Note that if a tuple containing only us and other
         // immutable objects had been scanned before this, when we
@@ -2219,7 +2219,7 @@ green_repr(BorrowedGreenlet self)
          As it stands, its only useful for identifying greenlets from the same thread.
         */
         const char* state_in_thread;
-        if (!self->thread_state()) {
+        if (self->was_running_in_dead_thread()) {
             // The thread it was running in is dead!
             // This can happen, especialy at interpreter shut down.
             // It complicates debugging output becasue it may be
@@ -2236,7 +2236,7 @@ green_repr(BorrowedGreenlet self)
             "<%s object at %p (otid=%p)%s%s%s%s>",
             tp_name,
             self.borrow_o(),
-            self->main_greenlet.borrow_o(),
+            self->thread_state(),
             state_in_thread,
             self->active() ? " active" : "",
             never_started ? " pending" : " started",
@@ -2249,7 +2249,7 @@ green_repr(BorrowedGreenlet self)
             "<%s object at %p (otid=%p) %sdead>",
             tp_name,
             self.borrow_o(),
-            self->main_greenlet.borrow_o(),
+            self->thread_state(),
             self->was_running_in_dead_thread()
             ? "(thread exited) "
             : ""

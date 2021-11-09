@@ -298,13 +298,13 @@ namespace greenlet
         OwnedObject _run_callable;
         StackState stack_state;
     protected:
-        // The main greenlet subclass accesses this once or twice.
+        // The main greenlet subclass accesses `self` and `main_greenlet` once or twice.
         // But see the comment where it does. This is probably
         // factored wrong.
         BorrowedGreenlet self;
-        Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent, const StackState& initial_state);
-    public:
         OwnedMainGreenlet main_greenlet;
+        Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent, const StackState& initial_state);
+
     public:
         static void* operator new(size_t UNUSED(count));
         static void operator delete(void* ptr);
