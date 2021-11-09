@@ -547,13 +547,21 @@ Greenlet::Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
     p ->pimpl = this;
 }
 
+Greenlet::Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent, const StackState& initial_stack)
+    : _parent(the_parent),
+      stack_state(initial_stack),
+      self(p)
+{
+    // can't use a delegating constructor because of
+    // MSVC for Python 2.7
+    p->pimpl = this;
+}
 
 using greenlet::MainGreenlet;
 
 MainGreenlet::MainGreenlet(PyMainGreenlet* p)
-    : Greenlet(reinterpret_cast<PyGreenlet*>(p), nullptr)
+    : Greenlet(reinterpret_cast<PyGreenlet*>(p), nullptr, StackState::make_main())
 {
-    this->stack_state = StackState::make_main();
     // circular reference; the pending call will clean this up.
     this->main_greenlet = p;
 }
@@ -1953,7 +1961,7 @@ green_getdead(BorrowedGreenlet self, void* UNUSED(context))
 static PyObject*
 green_get_stack_saved(PyGreenlet* self, void* UNUSED(context))
 {
-    return PyLong_FromSsize_t(self->pimpl->stack_state.stack_saved());
+    return PyLong_FromSsize_t(self->pimpl->stack_saved());
 }
 
 
@@ -2344,7 +2352,7 @@ Extern_PyGreenlet_MAIN(PyGreenlet* self)
         PyErr_BadArgument();
         return -1;
     }
-    return self->pimpl->stack_state.main();
+    return self->pimpl->main();
 }
 
 static int
@@ -2354,7 +2362,7 @@ Extern_PyGreenlet_ACTIVE(PyGreenlet* self)
         PyErr_BadArgument();
         return -1;
     }
-    return self->pimpl->stack_state.active();
+    return self->pimpl->active();
 }
 
 static int
@@ -2364,7 +2372,7 @@ Extern_PyGreenlet_STARTED(PyGreenlet* self)
         PyErr_BadArgument();
         return -1;
     }
-    return self->pimpl->stack_state.started();
+    return self->pimpl->started();
 }
 
 static PyGreenlet*

@@ -296,10 +296,14 @@ namespace greenlet
         OwnedGreenlet _parent;
         PythonState python_state;
         OwnedObject _run_callable;
-    protected:
-        BorrowedGreenlet self;
-    public: // protected
         StackState stack_state;
+    protected:
+        // The main greenlet subclass accesses this once or twice.
+        // But see the comment where it does. This is probably
+        // factored wrong.
+        BorrowedGreenlet self;
+        Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent, const StackState& initial_state);
+    public:
         OwnedMainGreenlet main_greenlet;
     public:
         static void* operator new(size_t UNUSED(count));
@@ -319,13 +323,28 @@ namespace greenlet
             return this->switch_args;
         }
 
+        inline intptr_t stack_saved() const G_NOEXCEPT
+        {
+            return this->stack_state.stack_saved();
+        }
+
+        // This is used by the macro SLP_SAVE_STATE to compute the
+        // difference in stack sizes. It might be nice to handle the
+        // computation ourself, but the type of the result
+        // varies by platform, so doing it in the macro is the
+        // simplest way.
+        inline const char* stack_start() const G_NOEXCEPT
+        {
+            return this->stack_state.stack_start();
+        }
+
         OwnedObject throw_GreenletExit();
         OwnedObject g_switch();
         /**
          * Force the greenlet to appear dead. Used when it's not
          * possible to throw an exception into a greenlet anymore.
          *
-         * This loses access to the thread state and the main greenlet.
+         * This losses access to the thread state and the main greenlet.
          */
         void murder_in_place();
 
