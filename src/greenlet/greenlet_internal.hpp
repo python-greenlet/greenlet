@@ -142,6 +142,7 @@ PyTypeObject PyMainGreenlet_Type = {
   */
 static PyMainGreenlet* green_create_main();
 static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
+static int green_is_gc(BorrowedGreenlet self);
 
 #ifdef __clang__
 #    pragma clang diagnostic pop

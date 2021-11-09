@@ -165,6 +165,18 @@ public:
         return !!this->main_greenlet;
     }
 
+    // Called from the ThreadStateCreator when we're in non-standard
+    // threading mode. In that case, there is an object in the Python
+    // thread state dictionary that points to us.
+    int tp_traverse(visitproc visit, void* arg)
+    {
+
+        Py_VISIT(main_greenlet.borrow_o());
+        Py_VISIT(current_greenlet.borrow_o());
+        Py_VISIT(tracefunc.borrow());
+        return 0;
+    }
+
     inline BorrowedMainGreenlet borrow_main_greenlet() const
     {
         assert(this->main_greenlet);
@@ -439,19 +451,25 @@ template<typename Destructor>
 class ThreadStateCreator
 {
 private:
+    // Initialized to 1, and, if still 1, created on access.
+    // Set to 0 on destruction.
     ThreadState* _state;
     G_NO_COPIES_OF_CLS(ThreadStateCreator);
 public:
 
     // Only one of these, auto created per thread
     ThreadStateCreator() :
-        _state(0)
+        _state((ThreadState*)1)
     {
     }
 
     ~ThreadStateCreator()
     {
-        Destructor(this->_state);
+        ThreadState* tmp = this->_state;
+        this->_state = nullptr;
+        if (tmp && tmp != (ThreadState*)1) {
+            Destructor x(tmp);
+        }
     }
 
     inline ThreadState& state()
@@ -463,13 +481,16 @@ public:
         // access the pointer from the main greenlet. Deleting the
         // thread, and hence the thread-local storage, will delete the
         // state pointer in the main greenlet.
-        if (!this->_state) {
+        if (this->_state == (ThreadState*)1) {
             // XXX: Assumming allocation never fails
             this->_state = new ThreadState;
             // For non-standard threading, we need to store an object
             // in the Python thread state dictionary so that it can be
             // DECREF'd when the thread ends (ideally; the dict could
             // last longer) and clean this object up.
+        }
+        if (!this->_state) {
+            throw std::runtime_error("Accessing state after destruction.");
         }
         return *this->_state;
     }
@@ -479,6 +500,18 @@ public:
         return this->state();
     }
 
+    operator ThreadState*()
+    {
+        return &this->state();
+    }
+
+    inline int tp_traverse(visitproc visit, void* arg)
+    {
+        if (this->_state) {
+            return this->_state->tp_traverse(visit, arg);
+        }
+        return 0;
+    }
 
 };
 

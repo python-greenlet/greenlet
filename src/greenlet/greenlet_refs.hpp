@@ -674,7 +674,9 @@ namespace greenlet {
     template<typename T, TypeChecker TC>
     inline OwnedObject PyObjectPointer<T, TC>::PyStr() const G_NOEXCEPT
     {
-        assert(this->p);
+        if (!this->p) {
+            return OwnedObject();
+        }
         return OwnedObject::consuming(PyObject_Str(reinterpret_cast<PyObject*>(this->p)));
     }
 
@@ -687,6 +689,9 @@ namespace greenlet {
             // as long as the original object stays around, and we're
             // about to (probably) toss it. Hence the copy to std::string.
             OwnedObject py_str = this->PyStr();
+            if (!py_str) {
+                return "(nil)";
+            }
 #if PY_MAJOR_VERSION >= 3
             return PyUnicode_AsUTF8(py_str.borrow());
 #else

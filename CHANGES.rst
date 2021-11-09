@@ -29,6 +29,10 @@
   SEH on 32-bit windows, or if you embed Python in a C++ application.
   Please contact the maintainers if you have problems in this area.
 
+- The repr of some greenlets has changed. In particular, if the
+  greenlet object was running in a thread that has exited, the repr
+  now indicates that.
+
 1.1.2 (2021-09-29)
 ==================
 

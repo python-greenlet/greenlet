@@ -712,8 +712,15 @@ Greenlet::throw_GreenletExit()
 
 
 inline ThreadState*
-Greenlet::thread_state() G_NOEXCEPT
+Greenlet::thread_state() const G_NOEXCEPT
 {
+    // TODO: maybe make this throw, if the thread state isn't there?
+    // if (!this->main_greenlet) {
+    //     throw std::runtime_error("No thread state"); // TODO: Better exception
+    // }
+    if (!this->main_greenlet) {
+        return nullptr;
+    }
     return this->main_greenlet.borrow()->thread_state;
 }
 
@@ -1211,6 +1218,8 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
             // We get here if we fell of the end of the run() function
             // raising an exception. The switch itself was
             // successful, but the function raised.
+            // valgrind reports that memory allocated here can still
+            // be reached after a test run.
             throw PyErrOccurred();
         }
 
@@ -1433,24 +1442,27 @@ Greenlet::murder_in_place()
 }
 
 bool
-Greenlet::belongs_to_thread(const ThreadState& thread_state) const
+Greenlet::belongs_to_thread(const ThreadState* thread_state) const
 {
-    if (!this->main_greenlet || !this->main_greenlet.borrow()->thread_state) {
+    if (!this->thread_state() // not running anywhere, or thread
+                              // exited
+        || !thread_state) { // same, or there is no thread state.
         return false;
     }
-    return this->main_greenlet == thread_state.borrow_main_greenlet();
+    return this->main_greenlet == thread_state->borrow_main_greenlet();
 }
 
 void
-Greenlet::deallocing_greenlet_in_thread(const ThreadState& thread_state)
+Greenlet::deallocing_greenlet_in_thread(const ThreadState* thread_state)
 {
     /* Cannot raise an exception to kill the greenlet if
        it is not running in the same thread! */
     if (this->belongs_to_thread(thread_state)) {
+        assert(thread_state);
         /* The dying greenlet cannot be a parent of ts_current
            because the 'parent' field chain would hold a
            reference */
-        Greenlet::ParentIsCurrentGuard with_current_parent(this, thread_state);
+        Greenlet::ParentIsCurrentGuard with_current_parent(this, *thread_state);
         // To get here it had to have run before
         /* Send the greenlet a GreenletExit exception. */
 
@@ -1615,7 +1627,16 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     /* Save the current exception, if any. */
     PyErrPieces saved_err;
     try {
-        self->deallocing_greenlet_in_thread(GET_THREAD_STATE().state());
+        // BY THE TIME WE GET HERE, the state may actually be going
+        // away
+        // if we're shutting down the interpreter and freeing thread
+        // entries,
+        // this could result in freeing greenlets that were leaked. So
+        // we can't try to read the state.
+        self->deallocing_greenlet_in_thread(
+              self->thread_state()
+              ? static_cast<ThreadState*>(GET_THREAD_STATE())
+              : nullptr);
     }
     catch (const PyErrOccurred&) {
         PyErr_WriteUnraisable(self.borrow_o());
@@ -2166,14 +2187,26 @@ green_repr(BorrowedGreenlet self)
 
          As it stands, its only useful for identifying greenlets from the same thread.
         */
+        const char* state_in_thread;
+        if (!self->thread_state()) {
+            // The thread it was running in is dead!
+            // This can happen, especialy at interpreter shut down.
+            // It complicates debugging output becasue it may be
+            // impossible to access the current thread state at that
+            // time. Thus, don't access the current thread state.
+            state_in_thread = " (thread exited)";
+        }
+        else {
+            state_in_thread = GET_THREAD_STATE().state().is_current(self)
+                ? " current"
+                : (self->started() ? " suspended" : "");
+        }
         result = GNative_FromFormat(
             "<%s object at %p (otid=%p)%s%s%s%s>",
             tp_name,
-            self,
+            self.borrow_o(),
             self->main_greenlet.borrow_o(),
-            GET_THREAD_STATE().state().is_current(self)
-                ? " current"
-                : (self->started() ? " suspended" : ""),
+            state_in_thread,
             self->active() ? " active" : "",
             never_started ? " pending" : " started",
             self->main() ? " main" : ""
@@ -2184,7 +2217,7 @@ green_repr(BorrowedGreenlet self)
         result = GNative_FromFormat(
             "<%s object at %p (otid=%p) dead>",
             tp_name,
-            self,
+            self.borrow_o(),
             self->main_greenlet.borrow_o()
             );
     }

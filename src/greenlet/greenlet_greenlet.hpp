@@ -330,14 +330,20 @@ namespace greenlet
          */
         void murder_in_place();
 
-        void deallocing_greenlet_in_thread(const ThreadState& state);
+        // Called when some thread wants to deallocate a greenlet
+        // object.
+        // The thread may or may not be the same thread the greenlet
+        // was running in.
+        // The thread state will be null if the thread the greenlet
+        // was running in was known to have exited.
+        void deallocing_greenlet_in_thread(const ThreadState* current_state);
 
         // TODO: Figure out how to make these non-public.
         inline void slp_restore_state() G_NOEXCEPT;
         inline int slp_save_state(char *const stackref) G_NOEXCEPT;
 
         inline bool is_currently_running_in_some_thread() const;
-        inline bool belongs_to_thread(const ThreadState& state) const;
+        inline bool belongs_to_thread(const ThreadState* state) const;
         inline bool started() const
         {
             return this->stack_state.started();
@@ -387,7 +393,10 @@ namespace greenlet
             ParentIsCurrentGuard(Greenlet* p, const ThreadState& thread_state);
             ~ParentIsCurrentGuard();
         };
-
+        // Return the thread state that the greenlet is running in, or
+        // null if the greenlet is not running or the thread is known
+        // to have exited.
+        inline ThreadState* thread_state() const G_NOEXCEPT;
     protected:
         // The functions that must not be inlined are declared virtual.
         // We also mark them as protected, not private, so that the
@@ -443,7 +452,7 @@ namespace greenlet
         virtual switchstack_result_t g_initialstub(void* mark);
 
     private:
-        inline ThreadState* thread_state() G_NOEXCEPT;
+
         void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT;
         /**
            Perform a stack switch into this greenlet.

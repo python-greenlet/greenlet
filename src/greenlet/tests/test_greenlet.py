@@ -1045,9 +1045,9 @@ class TestRepr(TestCase):
 
         r = repr(t.main_glet)
         # main greenlets, even from dead threads, never really appear dead
-        # TODO: Can we find a better way to differentiate that?
+        # but we can distinguish that the thread is dead
         assert not t.main_glet.dead
-        self.assertEndsWith(r, ' suspended active started main>')
+        self.assertEndsWith(r, ' (thread exited) active started main>')
 
     def test_dead(self):
         g = greenlet(lambda: None)
