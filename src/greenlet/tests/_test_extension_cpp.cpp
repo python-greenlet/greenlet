@@ -33,7 +33,10 @@ test_exception_switch_recurse(int depth, int left)
         return NULL;
 
     try {
-        PyGreenlet_Switch(self->parent, NULL, NULL);
+        if (PyGreenlet_Switch(PyGreenlet_GET_PARENT(self), NULL, NULL) == NULL) {
+            Py_DECREF(self);
+            return NULL;
+        }
         p_test_exception_throw(depth);
         PyErr_SetString(PyExc_RuntimeError,
                         "throwing C++ exception didn't work");
@@ -59,9 +62,8 @@ test_exception_switch_recurse(int depth, int left)
  * - verifies depth matches (exceptions shouldn't be caught in other greenlets)
  */
 static PyObject*
-test_exception_switch(PyObject* self, PyObject* args)
+test_exception_switch(PyObject* UNUSED(self), PyObject* args)
 {
-    UNUSED(self);
     int depth;
     if (!PyArg_ParseTuple(args, "i", &depth))
         return NULL;

@@ -7,7 +7,7 @@
  *
  */
 
-#define UNUSED(expr) do { (void)(expr); } while (0)
+
 /* The compiler used for Python 2.7 on Windows doesn't include
    either stdint.h or cstdint.h. Nor does it understand nullptr or have
    std::shared_ptr. = delete, etc Sigh. */
@@ -25,26 +25,46 @@ typedef unsigned int uint32_t;
 // methods.
 #define G_EXPLICIT_OP
 #define G_NOEXCEPT throw()
+// This version doesn't support "objects with internal linkage"
+// in non-type template arguments. Translation: function pointer
+// template arguments cannot be for static functions.
+#define G_FP_TMPL_STATIC
 #else
 // Newer, reasonable compilers implementing C++11 or so.
 #include <cstdint>
 #define G_HAS_METHOD_DELETE 1
 #define G_EXPLICIT_OP explicit
 #define G_NOEXCEPT noexcept
+# if defined(__clang__)
+#  define G_FP_TMPL_STATIC static
+# else
+// GCC has no problem allowing static function pointers, but emits
+// tons of warnings about "whose type uses the anonymous namespace [-Wsubobject-linkage]"
+#  define G_FP_TMPL_STATIC
+# endif
+
 #endif
 
 #if G_HAS_METHOD_DELETE == 1
-#    define G_NO_COPIES_OF_CLS(Cls) public:     \
+#    define G_NO_COPIES_OF_CLS(Cls) private:     \
     Cls(const Cls& other) = delete; \
     Cls& operator=(const Cls& other) = delete
-#    define G_NO_ASSIGNMENT_OF_CLS(Cls) public:  \
+
+#    define G_NO_ASSIGNMENT_OF_CLS(Cls) private:  \
     Cls& operator=(const Cls& other) = delete
+
+#    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) private: \
+    Cls(const Cls& other) = delete;
 #else
 #    define G_NO_COPIES_OF_CLS(Cls) private: \
     Cls(const Cls& other); \
     Cls& operator=(const Cls& other)
+
 #    define G_NO_ASSIGNMENT_OF_CLS(Cls) private: \
         Cls& operator=(const Cls& other)
+
+#    define G_NO_COPY_CONSTRUCTOR_OF_CLS(Cls) private: \
+    Cls(const Cls& other);
 #endif
 
 // CAUTION: MSVC is stupidly picky:
@@ -64,11 +84,13 @@ typedef unsigned int uint32_t;
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __attribute__((noinline)) name
 #    define GREENLET_NOINLINE_P(rtype, name) rtype __attribute__((noinline)) name
+#    define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
 #elif defined(_MSC_VER)
 /* We used to check for  && (_MSC_VER >= 1300) but that's also out of date. */
 #    define GREENLET_NOINLINE_SUPPORTED
 #    define GREENLET_NOINLINE(name) __declspec(noinline) name
 #    define GREENLET_NOINLINE_P(rtype, name) __declspec(noinline) rtype name
+#    define UNUSED(x) UNUSED_ ## x
 #endif
 
 

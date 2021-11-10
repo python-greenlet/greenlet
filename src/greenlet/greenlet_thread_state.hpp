@@ -119,10 +119,8 @@ private:
     G_NO_COPIES_OF_CLS(ThreadState);
 
 public:
-    static void* operator new(size_t count)
+    static void* operator new(size_t UNUSED(count))
     {
-        UNUSED(count);
-        assert(count == sizeof(ThreadState));
         return ThreadState::allocator.allocate(1);
     }
 
@@ -133,10 +131,9 @@ public:
     }
 
     ThreadState()
+        : main_greenlet(OwnedMainGreenlet::consuming(green_create_main())),
+          current_greenlet(main_greenlet)
     {
-        this->main_greenlet = OwnedMainGreenlet::consuming(green_create_main());
-        this->current_greenlet = main_greenlet;
-
         if(!this->main_greenlet) {
             // We failed to create the main greenlet. That's bad.
             Py_FatalError("Failed to create main greenlet");
@@ -146,7 +143,7 @@ public:
         // the internal self ref. We then copied it to the current
         // greenlet.
         assert(this->main_greenlet.REFCNT() == 3);
-        this->main_greenlet->thread_state = this;
+        this->main_greenlet.borrow()->thread_state = this;
         ThreadState::get_referrers_name = "get_referrers";
 
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
@@ -168,7 +165,19 @@ public:
         return !!this->main_greenlet;
     }
 
-    inline BorrowedMainGreenlet borrow_main_greenlet()
+    // Called from the ThreadStateCreator when we're in non-standard
+    // threading mode. In that case, there is an object in the Python
+    // thread state dictionary that points to us.
+    int tp_traverse(visitproc visit, void* arg)
+    {
+
+        Py_VISIT(main_greenlet.borrow_o());
+        Py_VISIT(current_greenlet.borrow_o());
+        Py_VISIT(tracefunc.borrow());
+        return 0;
+    }
+
+    inline BorrowedMainGreenlet borrow_main_greenlet() const
     {
         assert(this->main_greenlet);
         assert(this->main_greenlet.REFCNT() >= 2);
@@ -180,11 +189,6 @@ public:
         return this->main_greenlet;
     }
 
-    inline BorrowedGreenlet borrow_current() const
-    {
-        return this->current_greenlet;
-    }
-
     /**
      * In addition to returning a new reference to the currunt
      * greenlet, this perfroms any maintenance needed.
@@ -194,14 +198,32 @@ public:
         /* green_dealloc() cannot delete greenlets from other threads, so
            it stores them in the thread dict; delete them now. */
         this->clear_deleteme_list();
-        assert(this->current_greenlet->main_greenlet_s == this->main_greenlet.borrow());
-        assert(this->main_greenlet->super.main_greenlet_s == this->main_greenlet.borrow());
+        //assert(this->current_greenlet->main_greenlet == this->main_greenlet);
+        //assert(this->main_greenlet->main_greenlet == this->main_greenlet);
         return this->current_greenlet;
-    };
+    }
 
-    inline bool is_current(const void* obj) const
+    /**
+     * As for non-const get_current();
+     */
+    inline BorrowedGreenlet borrow_current()
     {
-        return this->current_greenlet.borrow() == obj;
+        this->clear_deleteme_list();
+        return this->current_greenlet;
+    }
+
+    /**
+     * Does no maintenance.
+     */
+    inline OwnedGreenlet get_current() const
+    {
+        return this->current_greenlet;
+    }
+
+    template<typename T, refs::TypeChecker TC>
+    inline bool is_current(const refs::PyObjectPointer<T, TC>& obj) const
+    {
+        return this->current_greenlet.borrow_o() == obj.borrow_o();
     }
 
     inline void set_current(const OwnedGreenlet& target)
@@ -236,24 +258,7 @@ private:
                 if (murder) {
                     // Force each greenlet to appear dead; we can't raise an
                     // exception into it anymore anyway.
-                    Py_CLEAR(to_del->main_greenlet_s);
-                    if (PyGreenlet_ACTIVE(to_del)) {
-                        assert(to_del->top_frame);
-                        to_del->stack_start = NULL;
-                        assert(!PyGreenlet_ACTIVE(to_del));
-
-                        // We're holding a borrowed reference to the last
-                        // frame we executed. Since we borrowed it, the
-                        // normal traversal, clear, and dealloc functions
-                        // ignore it, meaning it leaks. (The thread state
-                        // object can't find it to clear it when that's
-                        // deallocated either, because by definition if we
-                        // got an object on this list, it wasn't
-                        // running and the thread state doesn't have
-                        // this frame.)
-                        // So here, we *do* clear it.
-                        Py_CLEAR(to_del->top_frame);
-                    }
+                    to_del->pimpl->murder_in_place();
                 }
 
                 // The only reference to these greenlets should be in
@@ -327,7 +332,7 @@ public:
         this->clear_deleteme_list(true);
 
         // The pending call did this.
-        assert(this->main_greenlet->thread_state == NULL);
+        assert(this->main_greenlet.borrow()->thread_state == NULL);
 
         // If the main greenlet is the current greenlet,
         // then we "fell off the end" and the thread died.
@@ -335,12 +340,12 @@ public:
         // switched to us, leaving a reference to the main greenlet
         // on the stack, somewhere uncollectable. Try to detect that.
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
-            assert(PyGreenlet_MAIN(this->main_greenlet.borrow()));
-            assert(!this->current_greenlet->top_frame);
-            assert(this->main_greenlet->super.main_greenlet_s == this->main_greenlet.borrow());
+            assert(PyGreenlet_MAIN(this->main_greenlet));
+            assert(this->current_greenlet->is_currently_running_in_some_thread());
+            assert(this->main_greenlet->main_greenlet == this->main_greenlet);
             // Break a cycle we know about, the self reference
             // the main greenlet keeps.
-            Py_CLEAR(this->main_greenlet->super.main_greenlet_s);
+            this->main_greenlet->main_greenlet.CLEAR();
             // Drop one reference we hold.
             this->current_greenlet.CLEAR();
             assert(!this->current_greenlet);
@@ -409,26 +414,23 @@ public:
         // exception in it (the thread is dead) and put it back in our
         // deleteme list.
         if (this->current_greenlet) {
-            OwnedGreenlet& g = this->current_greenlet;
-            assert(!g->top_frame);
-            Py_CLEAR(g->main_greenlet_s);
-            // XXX: This could now put us in an invalid state, with
-            // this->current_greenlet not being valid anymore.
-            Py_DECREF(this->current_greenlet.borrow());
+            this->current_greenlet->murder_in_place();
+            this->current_greenlet.CLEAR();
         }
 
         if (this->main_greenlet) {
             // Couldn't have been the main greenlet that was running
             // when the thread exited (because we already cleared this
             // pointer if it was). This shouldn't be possible?
-            assert(PyGreenlet_MAIN(this->main_greenlet.borrow()));
+            assert(PyGreenlet_MAIN(this->main_greenlet));
             // If the main greenlet was current when the thread died (it
             // should be, right?) then we cleared its self pointer above
             // when we cleared the current greenlet's main greenlet pointer.
-            assert(this->main_greenlet->super.main_greenlet_s == this->main_greenlet.borrow()
-                   || !this->main_greenlet->super.main_greenlet_s);
+            assert(this->main_greenlet->main_greenlet == this->main_greenlet
+                   || !this->main_greenlet->main_greenlet);
             // self reference, probably gone
-            Py_CLEAR(this->main_greenlet->super.main_greenlet_s);
+            this->main_greenlet->main_greenlet.CLEAR();
+
             // This will actually go away when the ivar is destructed.
             this->main_greenlet.CLEAR();
         }
@@ -449,19 +451,25 @@ template<typename Destructor>
 class ThreadStateCreator
 {
 private:
+    // Initialized to 1, and, if still 1, created on access.
+    // Set to 0 on destruction.
     ThreadState* _state;
     G_NO_COPIES_OF_CLS(ThreadStateCreator);
 public:
 
     // Only one of these, auto created per thread
     ThreadStateCreator() :
-        _state(0)
+        _state((ThreadState*)1)
     {
     }
 
     ~ThreadStateCreator()
     {
-        Destructor(this->_state);
+        ThreadState* tmp = this->_state;
+        this->_state = nullptr;
+        if (tmp && tmp != (ThreadState*)1) {
+            Destructor x(tmp);
+        }
     }
 
     inline ThreadState& state()
@@ -473,13 +481,16 @@ public:
         // access the pointer from the main greenlet. Deleting the
         // thread, and hence the thread-local storage, will delete the
         // state pointer in the main greenlet.
-        if (!this->_state) {
+        if (this->_state == (ThreadState*)1) {
             // XXX: Assumming allocation never fails
             this->_state = new ThreadState;
             // For non-standard threading, we need to store an object
             // in the Python thread state dictionary so that it can be
             // DECREF'd when the thread ends (ideally; the dict could
             // last longer) and clean this object up.
+        }
+        if (!this->_state) {
+            throw std::runtime_error("Accessing state after destruction.");
         }
         return *this->_state;
     }
@@ -489,23 +500,18 @@ public:
         return this->state();
     }
 
-    // shadow API to make this easier to use.
-    // inline PyGreenlet* borrow_target()
-    // {
-    //     return this->state().borrow_target();
-    // };
-    inline PyGreenlet* borrow_current()
+    operator ThreadState*()
     {
-        return this->state().borrow_current().borrow();
-    };
-    // inline PyGreenlet* borrow_origin()
-    // {
-    //     return this->state().borrow_origin().borrow();
-    // };
-    inline PyMainGreenlet* borrow_main_greenlet()
+        return &this->state();
+    }
+
+    inline int tp_traverse(visitproc visit, void* arg)
     {
-        return this->state().borrow_main_greenlet().borrow();
-    };
+        if (this->_state) {
+            return this->_state->tp_traverse(visit, arg);
+        }
+        return 0;
+    }
 
 };
 

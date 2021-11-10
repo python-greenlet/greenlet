@@ -35,8 +35,8 @@
 // This is safe beacuse we're protected by the GIL, and if we're
 // running this code, the thread isn't exiting. This also nets us a
 // 10-12% speed improvement.
-class SwitchingState;
-static PyGreenlet* volatile switching_thread_state = nullptr;
+
+static greenlet::Greenlet* volatile switching_thread_state = nullptr;
 
 
 #ifdef GREENLET_NOINLINE_SUPPORTED
@@ -69,9 +69,9 @@ do {                                                    \
     stackref += STACK_MAGIC;                 \
     if (slp_save_state_trampoline((char*)stackref))    \
         return -1;                                     \
-    if (!PyGreenlet_ACTIVE(switching_thread_state))    \
+    if (!switching_thread_state->active()) \
         return 1;                                      \
-    stsizediff = switching_thread_state->stack_start - (char*)stackref; \
+    stsizediff = switching_thread_state->stack_start() - (char*)stackref; \
 } while (0)
 
 #define SLP_RESTORE_STATE() slp_restore_state_trampoline()

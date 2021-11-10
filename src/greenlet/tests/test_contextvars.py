@@ -184,7 +184,7 @@ class ContextVarsTests(TestCase):
 
         gr = greenlet(target)
 
-        with self.assertRaisesRegex(AttributeError, "can't delete attr"):
+        with self.assertRaisesRegex(AttributeError, "can't delete context attribute"):
             del gr.gr_context
 
         self.assertIsNone(gr.gr_context)
@@ -274,6 +274,12 @@ class ContextVarsTests(TestCase):
         del holder[:]
         gr = None
         thread = None
+
+    def test_context_assignment_wrong_type(self):
+        g = greenlet()
+        with self.assertRaisesRegex(TypeError,
+                                    "greenlet context must be a contextvars.Context or None"):
+            g.gr_context = self
 
 
 @skipIf(Context is not None, "ContextVar supported")

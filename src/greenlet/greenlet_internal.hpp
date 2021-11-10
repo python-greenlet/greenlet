@@ -13,23 +13,98 @@
  *
  * C++ templates and inline functions should go here.
  */
+#include "greenlet_compiler_compat.hpp"
+#include "greenlet_cpython_compat.hpp"
+#include "greenlet_exceptions.hpp"
+#include "greenlet_greenlet.hpp"
+#include "greenlet_allocator.hpp"
 
+#include <vector>
 
 #define GREENLET_MODULE
+struct _greenlet;
+typedef struct _greenlet PyGreenlet;
 namespace greenlet {
+
     class ThreadState;
+
+    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
+
 };
 struct _PyMainGreenlet;
-class SwitchingState;
-#define main_greenlet_ptr_t struct _PyMainGreenlet*
-#define switching_state_ptr_t SwitchingState*
+
+#define implementation_ptr_t greenlet::Greenlet*
 
 
 #include "greenlet.h"
-#include "greenlet_compiler_compat.hpp"
-#include "greenlet_cpython_compat.hpp"
 
-#include <vector>
+
+static inline bool PyGreenlet_STARTED(const greenlet::Greenlet* g)
+{
+    return g->started();
+}
+
+static inline bool PyGreenlet_STARTED(const greenlet::refs::PyObjectPointer<PyGreenlet>& g)
+{
+    return PyGreenlet_STARTED(g->pimpl);
+}
+
+static inline bool PyGreenlet_STARTED(const PyGreenlet* g)
+{
+    return PyGreenlet_STARTED(g->pimpl);
+}
+
+static inline bool PyGreenlet_MAIN(const greenlet::Greenlet* g)
+{
+    return g->main();
+}
+
+static inline bool PyGreenlet_MAIN(const greenlet::refs::PyObjectPointer<PyGreenlet>& g)
+{
+    return PyGreenlet_MAIN(g->pimpl);
+}
+
+static inline bool PyGreenlet_MAIN(const PyGreenlet* g)
+{
+    return PyGreenlet_MAIN(g->pimpl);
+}
+
+static inline bool PyGreenlet_ACTIVE(const greenlet::Greenlet* g)
+{
+    return g->active();
+}
+
+static inline bool PyGreenlet_ACTIVE(const greenlet::refs::PyObjectPointer<PyGreenlet>& g)
+{
+    return PyGreenlet_ACTIVE(g->pimpl);
+}
+
+static inline bool PyGreenlet_ACTIVE(const PyGreenlet* g)
+{
+    return PyGreenlet_ACTIVE(g->pimpl);
+}
+
+template<>
+inline greenlet::refs::_OwnedGreenlet<PyMainGreenlet>::operator greenlet::Greenlet*() const G_NOEXCEPT
+{
+    if (!this->p) {
+        return nullptr;
+    }
+    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
+}
+
+template <typename T, greenlet::refs::TypeChecker TC>
+inline greenlet::Greenlet* greenlet::refs::_OwnedGreenlet<T, TC>::operator->() const G_NOEXCEPT
+{
+    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
+}
+
+template <typename T, greenlet::refs::TypeChecker TC>
+inline greenlet::Greenlet* greenlet::refs::_BorrowedGreenlet<T, TC>::operator->() const G_NOEXCEPT
+{
+    return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
+}
+
 #include <memory>
 #include <stdexcept>
 
@@ -51,7 +126,7 @@ typedef struct _PyMainGreenlet
 // initializers; recent MSVC requires ``/std=c++20`` to use
 // designated initializer, and doesn't permit mixing. And then older
 // MSVC doesn't support any of it.
-static PyTypeObject PyMainGreenlet_Type = {
+PyTypeObject PyMainGreenlet_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "greenlet.main_greenlet", // tp_name
     sizeof(PyMainGreenlet)
@@ -60,118 +135,6 @@ static PyTypeObject PyMainGreenlet_Type = {
 
 
 
-namespace greenlet
-{
-
-    // This allocator is stateless; all instances are identical.
-    // It can *ONLY* be used when we're sure we're holding the GIL
-    // (Python's allocators require the GIL).
-    template <class T>
-    struct PythonAllocator : public std::allocator<T> {
-
-        PythonAllocator(const PythonAllocator& other)
-            : std::allocator<T>()
-        {
-            UNUSED(other);
-        }
-
-        PythonAllocator(const std::allocator<T> other)
-            : std::allocator<T>(other)
-        {}
-
-        template <class U>
-        PythonAllocator(const std::allocator<U>& other)
-            : std::allocator<T>(other)
-        {
-        }
-
-        PythonAllocator() : std::allocator<T>() {}
-
-        T* allocate(size_t number_objects, const void* hint=0)
-        {
-            UNUSED(hint);
-            void* p;
-            if (number_objects == 1)
-                p = PyObject_Malloc(sizeof(T));
-            else
-                p = PyMem_Malloc(sizeof(T) * number_objects);
-            return static_cast<T*>(p);
-        }
-
-        void deallocate(T* t, size_t n)
-        {
-            void* p = t;
-            if (n == 1) {
-                PyObject_Free(p);
-            }
-            else
-                PyMem_Free(p);
-        }
-
-    };
-
-    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
-
-    class TypeError : public std::runtime_error
-    {
-    public:
-        TypeError(const char* const what) : std::runtime_error(what)
-        {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_TypeError, what);
-            }
-        }
-    };
-
-    class PyErrOccurred : public std::runtime_error
-    {
-    public:
-        PyErrOccurred() : std::runtime_error("")
-        {
-            assert(PyErr_Occurred());
-        }
-
-        PyErrOccurred(PyObject* exc_kind, const char* const msg)
-            : std::runtime_error(msg)
-        {
-            PyErr_SetString(exc_kind, msg);
-        }
-    };
-
-    /**
-     * Calls `Py_FatalError` when constructed, so you can't actually
-     * throw this. It just makes static analysis easier.
-     */
-    class PyFatalError : public std::runtime_error
-    {
-    public:
-        PyFatalError(const char* const msg)
-            : std::runtime_error(msg)
-        {
-            Py_FatalError(msg);
-        }
-    };
-
-    static inline PyObject*
-    Require(PyObject* p)
-    {
-        if (!p) {
-            throw PyErrOccurred();
-        }
-        return p;
-    };
-
-    static inline void
-    Require(const int retval)
-    {
-        if (retval < 0) {
-            throw PyErrOccurred();
-        }
-    };
-
-
-
-};
 
 
 /**
@@ -179,6 +142,7 @@ namespace greenlet
   */
 static PyMainGreenlet* green_create_main();
 static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
+static int green_is_gc(BorrowedGreenlet self);
 
 #ifdef __clang__
 #    pragma clang diagnostic pop

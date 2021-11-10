@@ -7,8 +7,6 @@
 #ifdef __clang__
 #    pragma clang diagnostic push
 #    pragma clang diagnostic ignored "-Wmissing-field-initializers"
-#    pragma clang diagnostic ignored "-Wunused-variable"
-#    pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
 
 #ifndef G_THREAD_STATE_DICT_CLEANUP_TYPE
@@ -28,33 +26,41 @@ typedef struct _PyGreenletCleanup {
 } PyGreenletCleanup;
 
 static void
-cleanup_dealloc(PyGreenletCleanup* self)
+cleanup_do_dealloc(PyGreenletCleanup* self)
 {
-    PyObject_GC_UnTrack(self);
     ThreadStateCreator* tmp = self->thread_state_creator;
-    self->thread_state_creator = NULL;
+    self->thread_state_creator = nullptr;
     if (tmp) {
         delete tmp;
     }
+}
 
+static void
+cleanup_dealloc(PyGreenletCleanup* self)
+{
+    PyObject_GC_UnTrack(self);
+    cleanup_do_dealloc(self);
 }
 
 static int
 cleanup_clear(PyGreenletCleanup* self)
 {
-    Py_CLEAR(self->thread_state_creator);
+    // This method is never called by our test cases.
+    cleanup_do_dealloc(self);
     return 0;
 }
 
 static int
 cleanup_traverse(PyGreenletCleanup* self, visitproc visit, void* arg)
 {
-    // TODO: Anything we should traverse? Probably yes.
+    if (self->thread_state_creator) {
+        return self->thread_state_creator->tp_traverse(visit, arg);
+    }
     return 0;
 }
 
 static int
-cleanup_is_gc(PyGreenlet* self)
+cleanup_is_gc(PyGreenlet* UNUSED(self))
 {
     return 1;
 }

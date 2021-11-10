@@ -108,17 +108,20 @@ class TestGreenlet(TestCase):
         lst = []
 
         def f():
-            lst.append(1)
+            lst.append('b')
             greenlet.getcurrent().parent.switch()
 
         def g():
-            lst.append(1)
+            lst.append('a')
             g = greenlet(f)
             g.switch()
-            lst.append(1)
+            lst.append('c')
+
         g = greenlet(g)
+        self.assertEqual(sys.getrefcount(g), 2)
         g.switch()
-        self.assertEqual(len(lst), 3)
+        self.assertEqual(lst, ['a', 'b', 'c'])
+        # Just the one in this frame, plus the one on the stack we pass to the function
         self.assertEqual(sys.getrefcount(g), 2)
 
     def test_threads(self):
@@ -228,14 +231,15 @@ class TestGreenlet(TestCase):
             someref.append(g1)
             del g1
             gc.collect()
+
             bg_glet_created_running_and_no_longer_ref_in_bg.set()
             fg_ref_released.wait(3)
-            #print("Triggering")
+
             greenlet()   # trigger release
             bg_should_be_clear.set()
             ok_to_exit_bg_thread.wait(3)
             greenlet() # One more time
-            #print("Exiting")
+
         t = threading.Thread(target=f)
         t.start()
         bg_glet_created_running_and_no_longer_ref_in_bg.wait(10)
@@ -248,11 +252,13 @@ class TestGreenlet(TestCase):
         self.assertEqual(seen, [])
         fg_ref_released.set()
         bg_should_be_clear.wait(3)
-        self.assertEqual(seen, [greenlet.GreenletExit])
-        ok_to_exit_bg_thread.set()
-        t.join(10)
-        del seen[:]
-        del someref[:]
+        try:
+            self.assertEqual(seen, [greenlet.GreenletExit])
+        finally:
+            ok_to_exit_bg_thread.set()
+            t.join(10)
+            del seen[:]
+            del someref[:]
 
     def test_frame(self):
         def f1():
@@ -770,7 +776,7 @@ class TestGreenlet(TestCase):
         # Let any other thread run; it will crash the interpreter
         # if not fixed (or silently corrupt memory and we possibly crash
         # later).
-        time.sleep(1)
+        self.wait_for_pending_cleanups()
         self.assertEqual(sys.getrefcount(MyGreenlet), initial_refs)
 
     def test_falling_off_end_switches_to_unstarted_parent_raises_error(self):
@@ -1036,12 +1042,23 @@ class TestRepr(TestCase):
 
         self.assertEndsWith(t.original_main, ' suspended active started main>')
         self.assertEndsWith(t.thread_main, ' current active started main>')
+        # give the machinery time to notice the death of the thread,
+        # and clean it up. Note that we don't use
+        # ``expect_greenlet_leak`` or wait_for_pending_cleanups,
+        # because at this point we know we have an extra greenlet
+        # still reachable.
+        for _ in range(3):
+            time.sleep(0.001)
 
-        r = repr(t.main_glet)
-        # main greenlets, even from dead threads, never really appear dead
-        # TODO: Can we find a better way to differentiate that?
-        assert not t.main_glet.dead
-        self.assertEndsWith(r, ' suspended active started main>')
+        # In the past, main greenlets, even from dead threads, never
+        # really appear dead. We have fixed that, and we also report
+        # that the thread is dead in the repr. (Do this multiple times
+        # to make sure that we don't self-modify and forget our state
+        # in the C++ code).
+        for _ in range(3):
+            self.assertTrue(t.main_glet.dead)
+            r = repr(t.main_glet)
+            self.assertEndsWith(r, ' (thread exited) dead>')
 
     def test_dead(self):
         g = greenlet(lambda: None)
