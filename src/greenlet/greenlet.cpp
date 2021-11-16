@@ -389,7 +389,6 @@ struct ThreadState_DestroyWithGIL
         // Holding the GIL.
         // Passed a non-shared pointer to the actual thread state.
         // state -> main greenlet
-        // main greenlet -> main greenlet
         assert(state->has_main_greenlet());
         PyGreenlet* main(state->borrow_main_greenlet());
         // When we need to do cross-thread operations, we check this.
@@ -397,7 +396,7 @@ struct ThreadState_DestroyWithGIL
         // We do this here, rather than in a Python dealloc function
         // for the greenlet, in case there's still a reference out
         // there.
-        dynamic_cast<MainGreenlet*>(main->pimpl)->thread_state(nullptr);
+        static_cast<MainGreenlet*>(main->pimpl)->thread_state(nullptr);
 
         delete state; // Deleting this runs the destructor, DECREFs the main greenlet.
         return 0;
@@ -423,7 +422,7 @@ struct ThreadState_DestroyNoGIL
             // is dead which can crash the process.
             PyGreenlet* p = state->borrow_main_greenlet();
             assert(p->pimpl->thread_state() == state || p->pimpl->thread_state() == nullptr);
-            dynamic_cast<MainGreenlet*>(p->pimpl)->thread_state(nullptr);
+            static_cast<MainGreenlet*>(p->pimpl)->thread_state(nullptr);
         }
 
         // NOTE: Because we're not holding the GIL here, some other
@@ -882,7 +881,8 @@ UserGreenlet::g_switch()
         }
         if (!target->started()) {
             // We never encounter a main greenlet that's not started.
-            UserGreenlet* real_target = dynamic_cast<UserGreenlet*>(target);
+            assert(!target->main());
+            UserGreenlet* real_target = static_cast<UserGreenlet*>(target);
             assert(real_target);
             void* dummymarker;
 
