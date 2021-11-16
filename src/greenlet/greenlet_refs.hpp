@@ -11,9 +11,8 @@ struct _greenlet;
 struct _PyMainGreenlet;
 
 typedef struct _greenlet PyGreenlet;
-typedef struct _PyMainGreenlet PyMainGreenlet;
 extern PyTypeObject PyGreenlet_Type;
-extern PyTypeObject PyMainGreenlet_Type;
+
 
 #ifndef NDEBUG
 #include <iostream>
@@ -52,7 +51,7 @@ namespace greenlet
             // static inline function, and it also does a
             // direct comparison of the type pointers, but its fast
             // path only handles one type)
-            if (typ == &PyGreenlet_Type || typ == &PyMainGreenlet_Type) {
+            if (typ == &PyGreenlet_Type) {
                 return;
             }
 
@@ -62,18 +61,7 @@ namespace greenlet
         }
 
         G_FP_TMPL_STATIC inline void
-        MainGreenletExactChecker(void *p)
-        {
-            if (!p) {
-                return;
-            }
-            // This isn't allowed to be subclassed, so we can
-            // go the fast way.
-            if (Py_TYPE(p) != &PyMainGreenlet_Type) {
-                throw TypeError("Expected a main greenlet");
-            }
-        }
-
+        MainGreenletExactChecker(void *p);
 
         template <typename T, TypeChecker>
         class PyObjectPointer;
@@ -94,7 +82,7 @@ namespace greenlet
         class _OwnedGreenlet;
 
         typedef _OwnedGreenlet<PyGreenlet, GreenletChecker> OwnedGreenlet;
-        typedef _OwnedGreenlet<PyMainGreenlet, MainGreenletExactChecker> OwnedMainGreenlet;
+        typedef _OwnedGreenlet<PyGreenlet, MainGreenletExactChecker> OwnedMainGreenlet;
 
         template<typename T, TypeChecker TC>
         class _BorrowedGreenlet;
@@ -235,7 +223,7 @@ namespace greenlet {
         inline OwnedObject PyRequireAttr(const char* const name) const;
         inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
-        inline OwnedObject PyCall(PyMainGreenlet* arg) const G_NOEXCEPT;
+        inline OwnedObject PyCall(PyGreenlet* arg) const G_NOEXCEPT;
         inline OwnedObject PyCall(const PyObject* arg) const G_NOEXCEPT;
         // PyObject_Call(this, args, kwargs);
         inline OwnedObject PyCall(const BorrowedObject args,
@@ -483,10 +471,6 @@ namespace greenlet {
         {
             return _OwnedGreenlet<T, TC>(reinterpret_cast<T*>(it));
         }
-        static _OwnedGreenlet<T, TC> consuming(PyMainGreenlet* it)
-        {
-            return _OwnedGreenlet<T, TC>(reinterpret_cast<T*>(it));
-        }
 
         inline _OwnedGreenlet<T, TC>& operator=(const OwnedGreenlet& other)
         {
@@ -497,7 +481,7 @@ namespace greenlet {
 
         _OwnedGreenlet<T, TC>& operator=(const OwnedMainGreenlet& other)
         {
-            PyMainGreenlet* owned = other.acquire();
+            PyGreenlet* owned = other.acquire();
             Py_XDECREF(this->p);
             this->p = reinterpret_cast<T*>(owned);
             return *this;
@@ -590,20 +574,16 @@ namespace greenlet {
         Py_XINCREF(this->p);
     }
 
-    // template<typename T>
-    // OwnedGreenlet::OwnedGreenlet<T>(const BorrowedGreenlet& other) :
-    //     OwnedReference<T>(other.acquire())
-    // {}
 
-        class BorrowedMainGreenlet
-            : public _BorrowedGreenlet<PyMainGreenlet, MainGreenletExactChecker>
+     class BorrowedMainGreenlet
+            : public _BorrowedGreenlet<PyGreenlet, MainGreenletExactChecker>
     {
     public:
         BorrowedMainGreenlet(const OwnedMainGreenlet& it) :
-            _BorrowedGreenlet<PyMainGreenlet, MainGreenletExactChecker>(it.borrow())
+            _BorrowedGreenlet<PyGreenlet, MainGreenletExactChecker>(it.borrow())
         {}
-        BorrowedMainGreenlet(PyMainGreenlet* it=nullptr)
-            : _BorrowedGreenlet<PyMainGreenlet, MainGreenletExactChecker>(it)
+        BorrowedMainGreenlet(PyGreenlet* it=nullptr)
+            : _BorrowedGreenlet<PyGreenlet, MainGreenletExactChecker>(it)
         {}
     };
 
@@ -731,7 +711,7 @@ namespace greenlet {
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyMainGreenlet* arg) const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyGreenlet* arg) const G_NOEXCEPT
     {
         return this->PyCall(reinterpret_cast<const PyObject*>(arg));
     }

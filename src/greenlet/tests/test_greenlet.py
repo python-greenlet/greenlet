@@ -1106,14 +1106,13 @@ class TestMainGreenlet(TestCase):
         assert 'main' in repr(greenlet.getcurrent())
 
         t = type(greenlet.getcurrent())
-        assert 'main' in repr(t)
+        assert 'main' not in repr(t)
         return t
 
-    def test_main_greenlet_cannot_be_subclassed(self):
+    def test_main_greenlet_type_can_be_subclassed(self):
         main_type = self._check_current_is_main()
-        with self.assertRaises(TypeError):
-            class Subclass(main_type): # pylint:disable=unused-variable
-                pass
+        subclass = type('subclass', (main_type,), {})
+        self.assertIsNotNone(subclass)
 
     def test_main_greenlet_is_greenlet(self):
         self._check_current_is_main()

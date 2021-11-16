@@ -579,13 +579,13 @@ namespace greenlet
     private:
         static greenlet::PythonAllocator<MainGreenlet> allocator;
         refs::BorrowedMainGreenlet _self;
-        // TODO: Move the thread state down from the Python type.
-        //ThreadState* _thread_state;
+        ThreadState* _thread_state;
+        G_NO_COPIES_OF_CLS(MainGreenlet);
     public:
         static void* operator new(size_t UNUSED(count));
         static void operator delete(void* ptr);
 
-        MainGreenlet(refs::BorrowedMainGreenlet::PyType*);
+        MainGreenlet(refs::BorrowedMainGreenlet::PyType*, ThreadState*);
         virtual ~MainGreenlet();
 
 
@@ -600,6 +600,7 @@ namespace greenlet
         virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
         virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
         virtual ThreadState* thread_state() const G_NOEXCEPT;
+        void thread_state(ThreadState*) G_NOEXCEPT;
         virtual OwnedObject g_switch();
         virtual BorrowedGreenlet self() const G_NOEXCEPT;
         virtual int tp_traverse(visitproc visit, void* arg);

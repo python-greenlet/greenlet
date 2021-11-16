@@ -12,9 +12,6 @@
 // based on the Python version. Write both versions of the function,
 // one with the WHEN version, one with the WHEN_NOT version.
 // Instantiate the template using the G_IS_PY37 macro.
-// NOTE: The compiler still sees (and type checks) both versions, apparently, even when
-// not instantiated? I didn't think that was how expansion worked, if
-// one template is never needed.
 struct GREENLET_WHEN_PY37
 {
     typedef GREENLET_WHEN_PY37* Yes;
