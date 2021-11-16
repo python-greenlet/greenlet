@@ -1,6 +1,7 @@
 #ifndef GREENLET_THREAD_STATE_HPP
 #define GREENLET_THREAD_STATE_HPP
 
+#include <ctime>
 #include <stdexcept>
 
 #include "greenlet_internal.hpp"
@@ -103,17 +104,21 @@ private:
     /* Strong reference to the trace function, if any. */
     OwnedObject tracefunc;
 
-    /* A vector of PyGreenlet pointers representing things that need
+    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > deleteme_t;
+    /* A vector of raw PyGreenlet pointers representing things that need
        deleted when this thread is running. The vector owns the
        references, but you need to manually INCREF/DECREF as you use
-       them. */
-    greenlet::g_deleteme_t deleteme;
+       them. We don't use a vector<refs::OwnedGreenlet> because we
+       make copy of this vector, and that would become O(n) as all the
+       refcounts are incremented in the copy.
+    */
+    deleteme_t deleteme;
 
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
     void* exception_state;
 #endif
 
-
+    static std::clock_t _clocks_used_doing_gc;
     static ImmortalString get_referrers_name;
     static PythonAllocator<ThreadState> allocator;
 
@@ -134,6 +139,7 @@ public:
     static void init()
     {
         ThreadState::get_referrers_name = "get_referrers";
+        ThreadState::_clocks_used_doing_gc = 0;
     }
 
     ThreadState()
@@ -256,9 +262,9 @@ private:
             // It's possible we could add items to this list while
             // running Python code if there's a thread switch, so we
             // need to defensively copy it before that can happen.
-            g_deleteme_t copy = this->deleteme;
+            deleteme_t copy = this->deleteme;
             this->deleteme.clear(); // in case things come back on the list
-            for(greenlet::g_deleteme_t::iterator it = copy.begin(), end = copy.end();
+            for(deleteme_t::iterator it = copy.begin(), end = copy.end();
                 it != end;
                 ++it ) {
                 PyGreenlet* to_del = *it;
@@ -320,6 +326,14 @@ public:
         this->deleteme.push_back(to_del);
     }
 
+    /**
+     * Set to std::clock_t(-1) to disable.
+     */
+    inline static std::clock_t& clocks_used_doing_gc()
+    {
+        return ThreadState::_clocks_used_doing_gc;
+    }
+
     ~ThreadState()
     {
         if (!PyInterpreterState_Head()) {
@@ -348,11 +362,6 @@ public:
         // on the stack, somewhere uncollectable. Try to detect that.
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
             assert(this->current_greenlet->is_currently_running_in_some_thread());
-
-            // // Break a cycle we know about, the self reference
-            // // the main greenlet keeps.
-            // this->main_greenlet->main_greenlet.CLEAR();
-
             // Drop one reference we hold.
             this->current_greenlet.CLEAR();
             assert(!this->current_greenlet);
@@ -361,12 +370,14 @@ public:
             PyGreenlet* old_main_greenlet = this->main_greenlet.borrow();
             Py_ssize_t cnt = this->main_greenlet.REFCNT();
             this->main_greenlet.CLEAR();
-            if (cnt == 2 && Py_REFCNT(old_main_greenlet) == 1) {
+            if (ThreadState::_clocks_used_doing_gc != std::clock_t(-1)
+                && cnt == 2 && Py_REFCNT(old_main_greenlet) == 1) {
                 // Highly likely that the reference is somewhere on
                 // the stack, not reachable by GC. Verify.
                 // XXX: This is O(n) in the total number of objects.
                 // TODO: Add a way to disable this at runtime, and
                 // another way to report on it.
+                std::clock_t begin = std::clock();
                 NewReference gc(PyImport_ImportModule("gc"));
                 if (gc) {
                     OwnedObject get_referrers = gc.PyRequireAttr(ThreadState::get_referrers_name);
@@ -412,6 +423,8 @@ public:
                             }
                         }
                     }
+                    std::clock_t end = std::clock();
+                    ThreadState::_clocks_used_doing_gc += (end - begin);
                 }
             }
         }
@@ -453,6 +466,7 @@ public:
 
 ImmortalString ThreadState::get_referrers_name(nullptr);
 PythonAllocator<ThreadState> ThreadState::allocator;
+std::clock_t ThreadState::_clocks_used_doing_gc(0);
 
 template<typename Destructor>
 class ThreadStateCreator

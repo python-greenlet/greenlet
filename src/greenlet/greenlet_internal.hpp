@@ -28,8 +28,6 @@ namespace greenlet {
 
     class ThreadState;
 
-    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > g_deleteme_t;
-
 };
 
 

@@ -2739,6 +2739,68 @@ mod_get_total_main_greenlets(PyObject* UNUSED(module))
     return PyLong_FromSize_t(total_main_greenlets);
 }
 
+PyDoc_STRVAR(mod_get_clocks_used_doing_optional_cleanup_doc,
+             "get_clocks_used_doing_optional_cleanup() -> Integer\n"
+             "\n"
+             "Get the number of clock ticks the program has used doing optional "
+             "greenlet cleanup.\n"
+             "Beginning in greenlet 2.0, greenlet tries to find and dispose of greenlets\n"
+             "that leaked after a thread exited. This requires invoking Python's garbage collector,\n"
+             "which may have a performance cost proportional to the number of live objects.\n"
+             "This function returns the amount of processor time\n"
+             "greenlet has used to do this. In programs that run with very large amounts of live\n"
+             "objects, this metric can be used to decide whether the cost of doing this cleanup\n"
+             "is worth the memory leak being corrected. If not, you can disable the cleanup\n"
+             "using ``enable_optional_cleanup(False)``.\n"
+             "The units are arbitrary and can only be compared to themselves (similarly to ``time.clock()``);\n"
+             "for example, to see how it scales with your heap. You can attempt to convert them into seconds\n"
+             "by dividing by the value of CLOCKS_PER_SEC."
+             "If cleanup has been disabled, returns None."
+             "\n"
+             "This is an implementation specific, provisional API. It may be changed or removed\n"
+             "in the future.\n"
+             ".. versionadded:: 2.0"
+             );
+static PyObject*
+mod_get_clocks_used_doing_optional_cleanup(PyObject* UNUSED(module))
+{
+    std::clock_t& clocks = ThreadState::clocks_used_doing_gc();
+
+    if (clocks == std::clock_t(-1)) {
+        Py_RETURN_NONE;
+    }
+    // This might not actually work on some implementations; clock_t
+    // is an opaque type.
+    return PyLong_FromSsize_t(clocks);
+}
+
+PyDoc_STRVAR(mod_enable_optional_cleanup_doc,
+             "mod_enable_optional_cleanup(bool) -> None\n"
+             "\n"
+             "Enable or disable optional cleanup operations.\n"
+             "See ``get_clocks_used_doing_optional_cleanup()`` for details.\n"
+             );
+static PyObject*
+mod_enable_optional_cleanup(PyObject* UNUSED(module), PyObject* flag)
+{
+    int is_true = PyObject_IsTrue(flag);
+    if (is_true == -1) {
+        return nullptr;
+    }
+
+    std::clock_t& clocks = ThreadState::clocks_used_doing_gc();
+    if (is_true) {
+        // If we already have a value, we don't want to lose it.
+        if (clocks == std::clock_t(-1)) {
+            clocks = 0;
+        }
+    }
+    else {
+        clocks = std::clock_t(-1);
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef GreenMethods[] = {
     {"getcurrent",
      (PyCFunction)mod_getcurrent,
@@ -2749,6 +2811,8 @@ static PyMethodDef GreenMethods[] = {
     {"set_thread_local", (PyCFunction)mod_set_thread_local, METH_VARARGS, mod_set_thread_local_doc},
     {"get_pending_cleanup_count", (PyCFunction)mod_get_pending_cleanup_count, METH_NOARGS, mod_get_pending_cleanup_count_doc},
     {"get_total_main_greenlets", (PyCFunction)mod_get_total_main_greenlets, METH_NOARGS, mod_get_total_main_greenlets_doc},
+    {"get_clocks_used_doing_optional_cleanup", (PyCFunction)mod_get_clocks_used_doing_optional_cleanup, METH_NOARGS, mod_get_clocks_used_doing_optional_cleanup_doc},
+    {"enable_optional_cleanup", (PyCFunction)mod_enable_optional_cleanup, METH_O, mod_enable_optional_cleanup_doc},
     {NULL, NULL} /* Sentinel */
 };
 
@@ -2799,6 +2863,9 @@ greenlet_internal_mod_init() G_NOEXCEPT
         // the same as NULL, which is ambiguous with a pointer.
         m.PyAddObject("GREENLET_USE_CONTEXT_VARS", (long)GREENLET_PY37);
         m.PyAddObject("GREENLET_USE_STANDARD_THREADING", (long)G_USE_STANDARD_THREADING);
+
+        OwnedObject clocks_per_sec = OwnedObject::consuming(PyLong_FromSsize_t(CLOCKS_PER_SEC));
+        m.PyAddObject("CLOCKS_PER_SEC", clocks_per_sec);
 
         /* also publish module-level data as attributes of the greentype. */
         // XXX: This is weird, and enables a strange pattern of

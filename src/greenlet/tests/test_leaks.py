@@ -116,6 +116,15 @@ class TestLeaks(TestCase):
         for g in gg:
             self.assertIsNone(g())
 
+    def assertClocksUsed(self):
+        used = greenlet._greenlet.get_clocks_used_doing_optional_cleanup()
+        self.assertGreaterEqual(used, 0)
+        # we don't lose the value
+        greenlet._greenlet.enable_optional_cleanup(True)
+        used2 = greenlet._greenlet.get_clocks_used_doing_optional_cleanup()
+        self.assertEqual(used, used2)
+        self.assertGreater(greenlet._greenlet.CLOCKS_PER_SEC, 1)
+
     def _check_issue251(self,
                         manually_collect_background=True,
                         explicit_reference_to_switch=False):
@@ -216,7 +225,8 @@ class TestLeaks(TestCase):
         # the ``greenlet.switch`` method still on the stack that we
         # can't reach to clean up. The C code goes through terrific
         # lengths to clean that up.
-        if not explicit_reference_to_switch:
+        if not explicit_reference_to_switch and greenlet._greenlet.get_clocks_used_doing_optional_cleanup() is not None:
+            # If cleanup was disabled, though, we may not find it.
             self.assertEqual(greenlets_after, greenlets_before)
             if manually_collect_background:
                 # TODO: Figure out how to make this work!
@@ -237,8 +247,18 @@ class TestLeaks(TestCase):
             # done by leakcheck will find it.
             pass
 
+        if greenlet._greenlet.get_clocks_used_doing_optional_cleanup() is not None:
+            self.assertClocksUsed()
+
     def test_issue251_killing_cross_thread_leaks_list(self):
         self._check_issue251()
+
+    def test_issue251_with_cleanup_disabled(self):
+        greenlet._greenlet.enable_optional_cleanup(False)
+        try:
+            self._check_issue251()
+        finally:
+            greenlet._greenlet.enable_optional_cleanup(True)
 
     @fails_leakcheck
     def test_issue251_issue252_need_to_collect_in_background(self):
@@ -260,6 +280,15 @@ class TestLeaks(TestCase):
         # Note that this test sometimes spuriously passes on Linux,
         # for some reason, but I've never seen it pass on macOS.
         self._check_issue251(manually_collect_background=False)
+
+    @fails_leakcheck
+    def test_issue251_issue252_need_to_collect_in_background_cleanup_disabled(self):
+        self.expect_greenlet_leak = True
+        greenlet._greenlet.enable_optional_cleanup(False)
+        try:
+            self._check_issue251(manually_collect_background=False)
+        finally:
+            greenlet._greenlet.enable_optional_cleanup(True)
 
     @fails_leakcheck
     def test_issue251_issue252_explicit_reference_not_collectable(self):
