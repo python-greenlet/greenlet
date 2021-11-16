@@ -893,6 +893,8 @@ class TestGreenletSetParentErrors(TestCase):
         # cleared, this test is catching whether ``green_setparent``
         # can detect the dead thread.
         #
+        # Further refactoring once again changes this back to a greenlet.error
+        #
         # We need to wait for the cleanup to happen, but we're
         # deliberately leaking a main greenlet here.
         self.wait_for_pending_cleanups(initial_main_greenlets=self.main_greenlets_before_test + 1)
@@ -903,9 +905,10 @@ class TestGreenletSetParentErrors(TestCase):
                     self.parent = another[0] # pylint:disable=attribute-defined-outside-init
                 return greenlet.__getattribute__(self, name)
         g = convoluted(lambda: None)
-        with self.assertRaises(ValueError) as exc:
+        with self.assertRaises(greenlet.error) as exc:
             g.switch()
-        self.assertEqual(str(exc.exception), "parent must not be garbage collected")
+        self.assertEqual(str(exc.exception),
+                         "cannot switch to a different thread (which happens to have exited)")
         del another[:]
 
     def test_unexpected_reparenting_thread_running(self):
@@ -946,10 +949,15 @@ class TestGreenletSetParentErrors(TestCase):
         worker = greenlet(lambda: None)
         self.assertIs(worker.parent, greenlet.getcurrent())
 
-        for g in (worker, greenlet.getcurrent()):
-            with self.assertRaises(AttributeError) as exc:
-                del g.parent
-            self.assertEqual(str(exc.exception), "can't delete attribute")
+        with self.assertRaises(AttributeError) as exc:
+            del worker.parent
+        self.assertEqual(str(exc.exception), "can't delete attribute")
+
+    def test_cannot_delete_parent_of_main(self):
+        with self.assertRaises(AttributeError) as exc:
+            del greenlet.getcurrent().parent
+        self.assertEqual(str(exc.exception), "can't delete attribute")
+
 
     def test_main_greenlet_parent_is_none(self):
         # assuming we're in a main greenlet here.
@@ -979,17 +987,18 @@ class TestGreenletSetParentErrors(TestCase):
         # Let it finish
         g.switch()
 
-    def _check_trivial_cycle(self, glet):
+
+    def test_trivial_cycle(self):
+        glet = greenlet(lambda: None)
         with self.assertRaises(ValueError) as exc:
             glet.parent = glet
         self.assertEqual(str(exc.exception), "cyclic parent chain")
 
-    def test_trivial_cycle(self):
-        glet = greenlet(lambda: None)
-        self._check_trivial_cycle(glet)
-
     def test_trivial_cycle_main(self):
-        self._check_trivial_cycle(greenlet.getcurrent())
+        # This used to produce a ValueError, but we catch it earlier than that now.
+        with self.assertRaises(AttributeError) as exc:
+            greenlet.getcurrent().parent = greenlet.getcurrent()
+        self.assertEqual(str(exc.exception), "cannot set the parent of a main greenlet")
 
     def test_deeper_cycle(self):
         g1 = greenlet(lambda: None)
@@ -1097,14 +1106,13 @@ class TestMainGreenlet(TestCase):
         assert 'main' in repr(greenlet.getcurrent())
 
         t = type(greenlet.getcurrent())
-        assert 'main' in repr(t)
+        assert 'main' not in repr(t)
         return t
 
-    def test_main_greenlet_cannot_be_subclassed(self):
+    def test_main_greenlet_type_can_be_subclassed(self):
         main_type = self._check_current_is_main()
-        with self.assertRaises(TypeError):
-            class Subclass(main_type): # pylint:disable=unused-variable
-                pass
+        subclass = type('subclass', (main_type,), {})
+        self.assertIsNotNone(subclass)
 
     def test_main_greenlet_is_greenlet(self):
         self._check_current_is_main()

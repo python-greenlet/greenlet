@@ -113,6 +113,7 @@ private:
     void* exception_state;
 #endif
 
+
     static ImmortalString get_referrers_name;
     static PythonAllocator<ThreadState> allocator;
 
@@ -130,21 +131,22 @@ public:
                                                  1);
     }
 
+    static void init()
+    {
+        ThreadState::get_referrers_name = "get_referrers";
+    }
+
     ThreadState()
-        : main_greenlet(OwnedMainGreenlet::consuming(green_create_main())),
+        : main_greenlet(OwnedMainGreenlet::consuming(green_create_main(this))),
           current_greenlet(main_greenlet)
     {
-        if(!this->main_greenlet) {
+        if (!this->main_greenlet) {
             // We failed to create the main greenlet. That's bad.
-            Py_FatalError("Failed to create main greenlet");
-            throw PyErrOccurred();
+            throw PyFatalError("Failed to create main greenlet");
         }
-        // The main greenlet starts with 2 refs: The returned one, and
-        // the internal self ref. We then copied it to the current
-        // greenlet.
-        assert(this->main_greenlet.REFCNT() == 3);
-        this->main_greenlet.borrow()->thread_state = this;
-        ThreadState::get_referrers_name = "get_referrers";
+        // The main greenlet starts with 1 refs: The returned one. We
+        // then copied it to the current greenlet.
+        assert(this->main_greenlet.REFCNT() == 2);
 
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
         this->exception_state = slp_get_exception_state();
@@ -167,12 +169,17 @@ public:
 
     // Called from the ThreadStateCreator when we're in non-standard
     // threading mode. In that case, there is an object in the Python
-    // thread state dictionary that points to us.
-    int tp_traverse(visitproc visit, void* arg)
+    // thread state dictionary that points to us. The main greenlet
+    // also traverses into us, in which case it's crucial not to
+    // traverse back into the main greenlet.
+    int tp_traverse(visitproc visit, void* arg, bool traverse_main=true)
     {
-
-        Py_VISIT(main_greenlet.borrow_o());
-        Py_VISIT(current_greenlet.borrow_o());
+        if (traverse_main) {
+            Py_VISIT(main_greenlet.borrow_o());
+        }
+        if (traverse_main || current_greenlet != main_greenlet) {
+            Py_VISIT(current_greenlet.borrow_o());
+        }
         Py_VISIT(tracefunc.borrow());
         return 0;
     }
@@ -332,7 +339,7 @@ public:
         this->clear_deleteme_list(true);
 
         // The pending call did this.
-        assert(this->main_greenlet.borrow()->thread_state == NULL);
+        assert(this->main_greenlet->thread_state() == nullptr);
 
         // If the main greenlet is the current greenlet,
         // then we "fell off the end" and the thread died.
@@ -340,18 +347,18 @@ public:
         // switched to us, leaving a reference to the main greenlet
         // on the stack, somewhere uncollectable. Try to detect that.
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
-            assert(PyGreenlet_MAIN(this->main_greenlet));
             assert(this->current_greenlet->is_currently_running_in_some_thread());
-            assert(this->main_greenlet->main_greenlet == this->main_greenlet);
-            // Break a cycle we know about, the self reference
-            // the main greenlet keeps.
-            this->main_greenlet->main_greenlet.CLEAR();
+
+            // // Break a cycle we know about, the self reference
+            // // the main greenlet keeps.
+            // this->main_greenlet->main_greenlet.CLEAR();
+
             // Drop one reference we hold.
             this->current_greenlet.CLEAR();
             assert(!this->current_greenlet);
             // Only our reference to the main greenlet should be left,
             // But hold onto the pointer in case we need to do extra cleanup.
-            PyMainGreenlet* old_main_greenlet = this->main_greenlet.borrow();
+            PyGreenlet* old_main_greenlet = this->main_greenlet.borrow();
             Py_ssize_t cnt = this->main_greenlet.REFCNT();
             this->main_greenlet.CLEAR();
             if (cnt == 2 && Py_REFCNT(old_main_greenlet) == 1) {
@@ -422,14 +429,14 @@ public:
             // Couldn't have been the main greenlet that was running
             // when the thread exited (because we already cleared this
             // pointer if it was). This shouldn't be possible?
-            assert(PyGreenlet_MAIN(this->main_greenlet));
+
             // If the main greenlet was current when the thread died (it
             // should be, right?) then we cleared its self pointer above
             // when we cleared the current greenlet's main greenlet pointer.
-            assert(this->main_greenlet->main_greenlet == this->main_greenlet
-                   || !this->main_greenlet->main_greenlet);
-            // self reference, probably gone
-            this->main_greenlet->main_greenlet.CLEAR();
+            // assert(this->main_greenlet->main_greenlet == this->main_greenlet
+            //        || !this->main_greenlet->main_greenlet);
+            // // self reference, probably gone
+            // this->main_greenlet->main_greenlet.CLEAR();
 
             // This will actually go away when the ivar is destructed.
             this->main_greenlet.CLEAR();
