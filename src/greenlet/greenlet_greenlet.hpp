@@ -284,32 +284,26 @@ namespace greenlet
 
     class ThreadState;
 
+    class UserGreenlet;
+    class MainGreenlet;
+
     class Greenlet
     {
     private:
-        static greenlet::PythonAllocator<Greenlet> allocator;
         G_NO_COPIES_OF_CLS(Greenlet);
     private:
-        friend class ThreadState; // XXX: Work to remove this.
+        // XXX: Work to remove these.
+        friend class ThreadState;
+        friend class UserGreenlet;
+        friend class MainGreenlet;
+    protected:
         ExceptionState exception_state;
         SwitchingArgs switch_args;
-        OwnedGreenlet _parent;
-        PythonState python_state;
-        OwnedObject _run_callable;
         StackState stack_state;
-    protected:
-        // The main greenlet subclass accesses `self` and `main_greenlet` once or twice.
-        // But see the comment where it does. This is probably
-        // factored wrong.
-        BorrowedGreenlet self;
-        OwnedMainGreenlet main_greenlet;
-        Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent, const StackState& initial_state);
-
+        PythonState python_state;
+        Greenlet(PyGreenlet* p, const StackState& initial_state);
     public:
-        static void* operator new(size_t UNUSED(count));
-        static void operator delete(void* ptr);
-
-        Greenlet(PyGreenlet* p, BorrowedGreenlet the_parent);
+        Greenlet(PyGreenlet* p);
         virtual ~Greenlet();
 
         template <typename IsPy37> // maybe we can use a value here?
@@ -322,6 +316,8 @@ namespace greenlet
         {
             return this->switch_args;
         }
+
+        virtual const refs::BorrowedMainGreenlet main_greenlet() const = 0;
 
         inline intptr_t stack_saved() const G_NOEXCEPT
         {
@@ -338,15 +334,15 @@ namespace greenlet
             return this->stack_state.stack_start();
         }
 
-        OwnedObject throw_GreenletExit();
-        OwnedObject g_switch();
+        virtual OwnedObject throw_GreenletExit_during_dealloc(const ThreadState& current_thread_state);
+        virtual OwnedObject g_switch() = 0;
         /**
          * Force the greenlet to appear dead. Used when it's not
          * possible to throw an exception into a greenlet anymore.
          *
          * This losses access to the thread state and the main greenlet.
          */
-        void murder_in_place();
+        virtual void murder_in_place();
 
         /**
          * Called when somebody notices we were running in a dead
@@ -371,7 +367,8 @@ namespace greenlet
         inline int slp_save_state(char *const stackref) G_NOEXCEPT;
 
         inline bool is_currently_running_in_some_thread() const;
-        inline bool belongs_to_thread(const ThreadState* state) const;
+        virtual bool belongs_to_thread(const ThreadState* state) const;
+
         inline bool started() const
         {
             return this->stack_state.started();
@@ -384,53 +381,40 @@ namespace greenlet
         {
             return this->stack_state.main();
         }
-        virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
+        virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const = 0;
 
-        inline const OwnedGreenlet parent() const
-        {
-            return this->_parent;
-        }
-
-        inline void parent(const refs::BorrowedObject new_parent);
+        virtual const OwnedGreenlet parent() const = 0;
+        virtual void parent(const refs::BorrowedObject new_parent) = 0;
 
         inline const PythonState::OwnedFrame& top_frame()
         {
             return this->python_state.top_frame();
         }
 
-        inline const OwnedObject& run() const
-        {
-            if (this->started() || !this->_run_callable) {
-                throw AttributeError("run");
-            }
-            return this->_run_callable;
-        }
+        virtual const OwnedObject& run() const = 0;
+        virtual void run(const refs::BorrowedObject nrun) = 0;
 
-        inline void run(const refs::BorrowedObject nrun);
 
-        int tp_traverse(visitproc visit, void* arg);
-        int tp_clear();
+        virtual int tp_traverse(visitproc visit, void* arg);
+        virtual int tp_clear();
 
-        class ParentIsCurrentGuard
-        {
-        private:
-            OwnedGreenlet oldparent;
-            Greenlet* greenlet;
-            G_NO_COPIES_OF_CLS(ParentIsCurrentGuard);
-        public:
-            ParentIsCurrentGuard(Greenlet* p, const ThreadState& thread_state);
-            ~ParentIsCurrentGuard();
-        };
+
         // Return the thread state that the greenlet is running in, or
         // null if the greenlet is not running or the thread is known
         // to have exited.
-        inline ThreadState* thread_state() const G_NOEXCEPT;
+        virtual ThreadState* thread_state() const G_NOEXCEPT = 0;
 
         // Return true if the greenlet is known to have been running
         // (active) in a thread that has now exited.
-        virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
+        virtual bool was_running_in_dead_thread() const G_NOEXCEPT = 0;
+
+        // Return a borrowed greenlet that is the Python object
+        // this object represents.
+        virtual BorrowedGreenlet self() const G_NOEXCEPT = 0;
 
     protected:
+        inline void release_args();
+
         // The functions that must not be inlined are declared virtual.
         // We also mark them as protected, not private, so that the
         // compiler is forced to call them through a function pointer.
@@ -482,11 +466,21 @@ namespace greenlet
         // Returns the previous greenlet we just switched away from.
         virtual OwnedGreenlet g_switchstack_success() G_NOEXCEPT;
 
-        virtual switchstack_result_t g_initialstub(void* mark);
 
-    private:
+        // Check the preconditions for switching to this greenlet; if they
+        // aren't met, throws PyErrOccurred. Most callers will want to
+        // catch this and clear the arguments
+        inline void check_switch_allowed() const;
+        class GreenletStartedWhileInPython : public std::runtime_error
+        {
+        public:
+            GreenletStartedWhileInPython() : std::runtime_error("")
+            {}
+        };
 
-        void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT;
+    protected:
+
+
         /**
            Perform a stack switch into this greenlet.
 
@@ -520,32 +514,95 @@ namespace greenlet
 
         */
         switchstack_result_t g_switchstack(void);
+    private:
         OwnedObject g_switch_finish(const switchstack_result_t& err);
-        // Check the preconditions for switching to this greenlet; if they
-        // aren't met, throws PyErrOccurred. Most callers will want to
-        // catch this and clear the arguments
-        inline void check_switch_allowed() const;
-        inline void release_args();
 
-        class GreenletStartedWhileInPython : public std::runtime_error
-        {
-        public:
-            GreenletStartedWhileInPython() : std::runtime_error("")
-            {}
-        };
     };
 
-
-
-    class MainGreenlet : public Greenlet
+    class UserGreenlet : public Greenlet
     {
+    private:
+        static greenlet::PythonAllocator<UserGreenlet> allocator;
+        BorrowedGreenlet _self;
+        OwnedMainGreenlet _main_greenlet;
+        OwnedObject _run_callable;
+        OwnedGreenlet _parent;
     public:
-        MainGreenlet(refs::BorrowedMainGreenlet::PyType*);
-        virtual ~MainGreenlet()
-        {}
+        static void* operator new(size_t UNUSED(count));
+        static void operator delete(void* ptr);
+
+        UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent);
+        virtual ~UserGreenlet();
 
         virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
         virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
+        virtual ThreadState* thread_state() const G_NOEXCEPT;
+        virtual OwnedObject g_switch();
+        virtual const OwnedObject& run() const
+        {
+            if (this->started() || !this->_run_callable) {
+                throw AttributeError("run");
+            }
+            return this->_run_callable;
+        }
+        virtual void run(const refs::BorrowedObject nrun);
+
+        virtual const OwnedGreenlet parent() const;
+        virtual void parent(const refs::BorrowedObject new_parent);
+
+        virtual const refs::BorrowedMainGreenlet main_greenlet() const;
+
+        virtual BorrowedGreenlet self() const G_NOEXCEPT;
+        virtual void murder_in_place();
+        virtual bool belongs_to_thread(const ThreadState* state) const;
+        virtual int tp_traverse(visitproc visit, void* arg);
+        virtual int tp_clear();
+        class ParentIsCurrentGuard
+        {
+        private:
+            OwnedGreenlet oldparent;
+            UserGreenlet* greenlet;
+            G_NO_COPIES_OF_CLS(ParentIsCurrentGuard);
+        public:
+            ParentIsCurrentGuard(UserGreenlet* p, const ThreadState& thread_state);
+            ~ParentIsCurrentGuard();
+        };
+        virtual OwnedObject throw_GreenletExit_during_dealloc(const ThreadState& current_thread_state);
+    protected:
+        virtual switchstack_result_t g_initialstub(void* mark);
+    private:
+        void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT;
+    };
+
+    class MainGreenlet : public Greenlet
+    {
+    private:
+        static greenlet::PythonAllocator<MainGreenlet> allocator;
+        refs::BorrowedMainGreenlet _self;
+        // TODO: Move the thread state down from the Python type.
+        //ThreadState* _thread_state;
+    public:
+        static void* operator new(size_t UNUSED(count));
+        static void operator delete(void* ptr);
+
+        MainGreenlet(refs::BorrowedMainGreenlet::PyType*);
+        virtual ~MainGreenlet();
+
+
+        virtual const OwnedObject& run() const;
+        virtual void run(const refs::BorrowedObject nrun);
+
+        virtual const OwnedGreenlet parent() const;
+        virtual void parent(const refs::BorrowedObject new_parent);
+
+        virtual const refs::BorrowedMainGreenlet main_greenlet() const;
+
+        virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
+        virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
+        virtual ThreadState* thread_state() const G_NOEXCEPT;
+        virtual OwnedObject g_switch();
+        virtual BorrowedGreenlet self() const G_NOEXCEPT;
+        virtual int tp_traverse(visitproc visit, void* arg);
     };
 
 };
