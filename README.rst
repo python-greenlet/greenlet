@@ -51,7 +51,7 @@ The easiest way to get Greenlet is to install it with pip::
   pip install greenlet
 
 
-Source code archives and binary distributions are vailable on the
+Source code archives and binary distributions are available on the
 python package index at https://pypi.org/project/greenlet
 
 The source code repository is hosted on github:
