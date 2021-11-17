@@ -186,7 +186,7 @@ slp_get_exception_state()
 static int
 slp_switch(void)
 {
-    /* MASM systax is typically reversed from other assemblers.
+    /* MASM syntax is typically reversed from other assemblers.
        It is usually <instruction> <destination> <source>
      */
     int *stackref, stsizediff;

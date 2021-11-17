@@ -32,7 +32,7 @@
 //
 // Our compromise is to use a *glabal*, untracked, weak, pointer
 // to the necessary thread state during the process of switching only.
-// This is safe beacuse we're protected by the GIL, and if we're
+// This is safe because we're protected by the GIL, and if we're
 // running this code, the thread isn't exiting. This also nets us a
 // 10-12% speed improvement.
 

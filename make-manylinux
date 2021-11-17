@@ -5,7 +5,7 @@
 set -e
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
-# Use a fixed hash seed for reproducability
+# Use a fixed hash seed for reproducibility
 export PYTHONHASHSEED=8675309
 export CI=1
 export TRAVIS=true

@@ -160,7 +160,7 @@ namespace greenlet {
     // that way.
 
 
-    // This is the base class for thnigs that can be done with a
+    // This is the base class for things that can be done with a
     // PyObject pointer. It assumes nothing about memory management.
     // NOTE: Nothing is virtual, so subclasses shouldn't add new
     // storage fields or try to override these methods.

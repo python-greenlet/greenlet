@@ -33,7 +33,7 @@ def fmain(seen):
 
 def send_exception(g, exc):
     # note: send_exception(g, exc)  can be now done with  g.throw(exc).
-    # the purpose of this test is to explicitely check the propagation rules.
+    # the purpose of this test is to explicitly check the propagation rules.
     def crasher(exc):
         raise exc
     g1 = greenlet(crasher, parent=g)

@@ -26,7 +26,7 @@ namespace greenlet {
  * Thread-local state of greenlets.
  *
  * Each native thread will get exactly one of these objects,
- * autmatically accessed through the best available thread-local
+ * automatically accessed through the best available thread-local
  * mechanism the compiler supports (``thread_local`` for C++11
  * compilers or ``__thread``/``declspec(thread)`` for older GCC/clang
  * or MSVC, respectively.)
@@ -35,7 +35,7 @@ namespace greenlet {
  * ``static volatile`` variables in the main greenlet file.. This had
  * the problem of requiring extra checks, loops, and great care
  * accessing these variables if we potentially invoked any Python code
- * that could relaese the GIL, because the state could change out from
+ * that could release the GIL, because the state could change out from
  * under us. Making the variables thread-local solves this problem.
  *
  * When we detected that a greenlet API accessing the current greenlet
@@ -191,7 +191,7 @@ public:
 
     /**
      * In addition to returning a new reference to the currunt
-     * greenlet, this perfroms any maintenance needed.
+     * greenlet, this performs any maintenance needed.
      */
     inline OwnedGreenlet get_current()
     {
@@ -372,7 +372,7 @@ public:
                         // 'getcurrent().parent.switch()' to switch
                         // back to us. Clean it up. This will be the
                         // case on CPython 3.7 and newer, as they use
-                        // an internal calling convertion that avoids
+                        // an internal calling conversion that avoids
                         // creating method objects and storing them on
                         // the stack.
                         Py_DECREF(old_main_greenlet);
@@ -482,7 +482,7 @@ public:
         // thread, and hence the thread-local storage, will delete the
         // state pointer in the main greenlet.
         if (this->_state == (ThreadState*)1) {
-            // XXX: Assumming allocation never fails
+            // XXX: Assuming allocation never fails
             this->_state = new ThreadState;
             // For non-standard threading, we need to store an object
             // in the Python thread state dictionary so that it can be

@@ -650,7 +650,7 @@ g_handle_exit(const OwnedObject& greenlet_result);
  * CAUTION: May invoke arbitrary Python code.
  *
  * Figure out what the result of ``greenlet.switch(arg, kwargs)``
- * should be and transfers ownerhsip of it to the left-hand-side.
+ * should be and transfers ownership of it to the left-hand-side.
  *
  * If switch() was just passed an arg tuple, then we'll just return that.
  * If only keyword arguments were passed, then we'll pass the keyword
@@ -1382,7 +1382,7 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
     if (o) {
         new Greenlet(o, GET_THREAD_STATE().state().borrow_current());
-        //cerr << "For PyGreenlet at " << o << " allocted Greenlet at " << p << endl;
+        //cerr << "For PyGreenlet at " << o << " allocated Greenlet at " << p << endl;
         assert(Py_REFCNT(o) == 1);
     }
     return o;
@@ -2211,7 +2211,7 @@ green_repr(BorrowedGreenlet self)
         : Py_TYPE(self)->tp_name;
 
     if (_green_not_dead(self)) {
-        /* XXX: The otid= is almost useless becasue you can't correlate it to
+        /* XXX: The otid= is almost useless because you can't correlate it to
          any thread identifier exposed to Python. We could use
          PyThreadState_GET()->thread_id, but we'd need to save that in the
          greenlet, or save the whole PyThreadState object itself.
@@ -2221,8 +2221,8 @@ green_repr(BorrowedGreenlet self)
         const char* state_in_thread;
         if (self->was_running_in_dead_thread()) {
             // The thread it was running in is dead!
-            // This can happen, especialy at interpreter shut down.
-            // It complicates debugging output becasue it may be
+            // This can happen, especially at interpreter shut down.
+            // It complicates debugging output because it may be
             // impossible to access the current thread state at that
             // time. Thus, don't access the current thread state.
             state_in_thread = " (thread exited)";

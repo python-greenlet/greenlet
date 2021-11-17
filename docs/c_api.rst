@@ -56,7 +56,7 @@ Functions
 
     Set the parent greenlet of *g*.
 
-    :return: 0 for succes, or -1 on error. When an error is returned,
+    :return: 0 for success, or -1 on error. When an error is returned,
              *g* is not a pointer to a greenlet, and an
              :exc:`AttributeError` has been raised.
 
