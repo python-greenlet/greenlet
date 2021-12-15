@@ -767,7 +767,11 @@ PythonState::PythonState()
 
 void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 {
+#if GREENLET_USE_RECURSION_REMAINING
+    this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+#else
     this->recursion_depth = tstate->recursion_depth;
+#endif
     this->_top_frame.steal(tstate->frame);
 #if GREENLET_PY37
     this->_context.steal(tstate->context);
@@ -790,7 +794,11 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 {
+#if GREENLET_USE_RECURSION_REMAINING
+    tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
+#else
     tstate->recursion_depth = this->recursion_depth;
+#endif
     tstate->frame = this->_top_frame.relinquish_ownership();
 #if GREENLET_PY37
     tstate->context = this->_context.relinquish_ownership();
@@ -824,7 +832,11 @@ void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEP
 void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT
 {
     this->_top_frame = nullptr;
+#if GREENLET_USE_RECURSION_REMAINING
+    this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+#else
     this->recursion_depth = tstate->recursion_depth;
+#endif
 }
 // TODO: Better state management about when we own the top frame.
 int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) G_NOEXCEPT
