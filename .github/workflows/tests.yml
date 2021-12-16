@@ -119,6 +119,39 @@ jobs:
         python -c 'import greenlet._greenlet as G; assert not G.GREENLET_USE_STANDARD_THREADING'
         python -m unittest discover -v greenlet.tests
 
+  CodeQL:
+    runs-on: ubuntu-latest
+    permissions:
+      # required for all workflows
+      security-events: write
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+      - name: Pip cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ql-${{ hashFiles('setup.*') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-ql-
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v1
+        with:
+          languages: python, cpp
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip setuptools wheel
+      - name: Install greenlet
+        run: |
+          python setup.py bdist_wheel
+          python -m pip install -U -v -e ".[test,docs]"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v1
+
   manylinux:
 
     runs-on: ubuntu-latest
