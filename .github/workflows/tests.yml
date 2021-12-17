@@ -167,7 +167,13 @@ jobs:
     strategy:
       matrix:
         python-version: [3.9]
-        image: [manylinux2010_x86_64, manylinux2014_aarch64, manylinux2014_ppc64le, manylinux2014_x86_64]
+        image:
+          - manylinux2010_x86_64
+          - manylinux2014_aarch64
+          - manylinux2014_ppc64le
+          - manylinux2014_x86_64
+          - musllinux_1_1_x86_64
+    name: ${{ matrix.image }}
 
     steps:
       - name: checkout
