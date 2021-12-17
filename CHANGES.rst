@@ -35,6 +35,10 @@
 
 - Main greenlets from threads that have exited are now marked as dead.
 
+- Wheels compatible with the musllinux specification are built,
+  tested, and uploaded to PyPI. (This was retroactively done for
+  version 1.1.2 as well.)
+
 1.1.2 (2021-09-29)
 ==================
 
