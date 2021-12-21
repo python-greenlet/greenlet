@@ -62,9 +62,9 @@ See https://github.com/python/cpython/pull/29524
 Python 3.11 alpha 4 changed how exception state is stored.
 See https://github.com/python/cpython/pull/30122
 */
-#    define GREENLET_USE_EXC_TRIPLET 1
-#else
 #    define GREENLET_USE_EXC_TRIPLET 0
+#else
+#    define GREENLET_USE_EXC_TRIPLET 1
 #endif
 
 #ifndef Py_SET_REFCNT
