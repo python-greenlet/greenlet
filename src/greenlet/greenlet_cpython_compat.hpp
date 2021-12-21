@@ -57,6 +57,16 @@ See https://github.com/python/cpython/pull/29524
 #    define GREENLET_USE_RECURSION_REMAINING 0
 #endif
 
+#if PY_VERSION_HEX >= 0x30B00A4
+/*
+Python 3.11 alpha 4 changed how exception state is stored.
+See https://github.com/python/cpython/pull/30122
+*/
+#    define GREENLET_USE_EXC_TRIPLET 1
+#else
+#    define GREENLET_USE_EXC_TRIPLET 0
+#endif
+
 #ifndef Py_SET_REFCNT
 /* Py_REFCNT and Py_SIZE macros are converted to functions
 https://bugs.python.org/issue39573 */

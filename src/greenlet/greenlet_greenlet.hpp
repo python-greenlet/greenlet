@@ -5,6 +5,7 @@
 */
 
 #include <Python.h>
+#include "frameobject.h"
 //#include "greenlet_internal.hpp"
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_refs.hpp"
@@ -31,9 +32,7 @@ namespace greenlet
         _PyErr_StackItem* exc_info;
         _PyErr_StackItem exc_state;
 #else
-        OwnedObject exc_type;
         OwnedObject exc_value;
-        OwnedObject exc_traceback;
 #endif
     public:
         ExceptionState();
@@ -640,63 +639,79 @@ void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 void ExceptionState::clear() G_NOEXCEPT
 {
     this->exc_info = nullptr;
-    this->exc_state.exc_type = nullptr;
     this->exc_state.exc_value = nullptr;
+#if GREENLET_USE_EXC_TRIPLET
+    this->exc_state.exc_type = nullptr;
     this->exc_state.exc_traceback = nullptr;
+#endif
     this->exc_state.previous_item = nullptr;
 }
 
 int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
 {
-    Py_VISIT(this->exc_state.exc_type);
     Py_VISIT(this->exc_state.exc_value);
+#if GREENLET_USE_EXC_TRIPLET
+    Py_VISIT(this->exc_state.exc_type);
     Py_VISIT(this->exc_state.exc_traceback);
+#endif
     return 0;
 }
 
 void ExceptionState::tp_clear() G_NOEXCEPT
 {
-    Py_CLEAR(this->exc_state.exc_type);
     Py_CLEAR(this->exc_state.exc_value);
+#if GREENLET_USE_EXC_TRIPLET
+    Py_CLEAR(this->exc_state.exc_type);
     Py_CLEAR(this->exc_state.exc_traceback);
+#endif
 }
 #else
 // ********** Python 3.6 and below ********
 void ExceptionState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 {
-    this->exc_type.steal(tstate->exc_type);
     this->exc_value.steal(tstate->exc_value);
+#if GREENLET_USE_EXC_TRIPLET
+    this->exc_type.steal(tstate->exc_type);
     this->exc_traceback.steal(tstate->exc_traceback);
+#endif
 }
 
 void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 {
-    tstate->exc_type <<= this->exc_type;
     tstate->exc_value <<= this->exc_value;
+#if GREENLET_USE_EXC_TRIPLET
+    tstate->exc_type <<= this->exc_type;
     tstate->exc_traceback <<= this->exc_traceback;
+#endif
     this->clear();
 }
 
 void ExceptionState::clear() G_NOEXCEPT
 {
-    this->exc_type = nullptr;
     this->exc_value = nullptr;
+#if GREENLET_USE_EXC_TRIPLET
+    this->exc_type = nullptr;
     this->exc_traceback = nullptr;
+#endif
 }
 
 int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
 {
-    Py_VISIT(this->exc_type.borrow());
     Py_VISIT(this->exc_value.borrow());
+#if GREENLET_USE_EXC_TRIPLET
+    Py_VISIT(this->exc_type.borrow());
     Py_VISIT(this->exc_traceback.borrow());
+#endif
     return 0;
 }
 
 void ExceptionState::tp_clear() G_NOEXCEPT
 {
-    this->exc_type.CLEAR();
     this->exc_value.CLEAR();
+#if GREENLET_USE_EXC_TRIPLET
+    this->exc_type.CLEAR();
     this->exc_traceback.CLEAR();
+#endif
 }
 #endif
 
