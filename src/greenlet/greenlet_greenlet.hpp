@@ -5,7 +5,6 @@
 */
 
 #include <Python.h>
-#include "frameobject.h"
 //#include "greenlet_internal.hpp"
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_refs.hpp"
