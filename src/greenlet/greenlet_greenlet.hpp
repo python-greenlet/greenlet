@@ -32,6 +32,10 @@ namespace greenlet
         _PyErr_StackItem exc_state;
 #else
         OwnedObject exc_value;
+#if GREENLET_USE_EXC_TRIPLET
+        OwnedObject exc_type;
+        OwnedObject exc_traceback;
+#endif
 #endif
     public:
         ExceptionState();
