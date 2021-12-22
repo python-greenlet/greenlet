@@ -47,6 +47,26 @@ We have to save and restore this as well.
 #    define GREENLET_USE_CFRAME 0
 #endif
 
+#if PY_VERSION_HEX >= 0x30B00A1
+/*
+Python 3.11 alpha 1 changed how frame objects are represented internally.
+See https://github.com/python/cpython/pull/30122
+*/
+#    define GREENLET_USE_DATASTACK 1
+#else
+#    define GREENLET_USE_DATASTACK 0
+#endif
+
+#if PY_VERSION_HEX >= 0x30B00A2
+/*
+Python 3.11 alpha 2 moved the current frame from the thread state to the cframe.
+See https://github.com/python/cpython/pull/29267
+*/
+#    define GREENLET_USE_CFRAME_CURRENT_FRAME 1
+#else
+#    define GREENLET_USE_CFRAME_CURRENT_FRAME 0
+#endif
+
 #if PY_VERSION_HEX >= 0x30B00A3
 /*
 Python 3.11 alpha 3 changed how recursion limits are stored.

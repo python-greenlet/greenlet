@@ -135,6 +135,12 @@ namespace greenlet
         int use_tracing;
 #endif
         int recursion_depth;
+#if GREENLET_USE_DATASTACK
+        _interpreter_frame *current_frame;
+        _PyStackChunk *datastack_chunk;
+        PyObject **datastack_top;
+        PyObject **datastack_limit;
+#endif
 
     public:
         PythonState();
@@ -728,6 +734,12 @@ PythonState::PythonState()
     ,use_tracing(0)
 #endif
     ,recursion_depth(0)
+#if GREENLET_USE_DATASTACK
+    ,current_frame(nullptr)
+    ,datastack_chunk(nullptr)
+    ,datastack_top(nullptr)
+    ,datastack_limit(nullptr)
+#endif
 {
 #if GREENLET_USE_CFRAME
     /*
@@ -790,7 +802,6 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 #else
     this->recursion_depth = tstate->recursion_depth;
 #endif
-    this->_top_frame.steal(tstate->frame);
 #if GREENLET_PY37
     this->_context.steal(tstate->context);
 #endif
@@ -808,6 +819,21 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     this->cframe = tstate->cframe;
     this->use_tracing = tstate->cframe->use_tracing;
 #endif
+#if GREENLET_USE_DATASTACK
+#if GREENLET_USE_CFRAME_CURRENT_FRAME
+    this->current_frame = tstate->cframe->current_frame;
+#else
+    this->current_frame = tstate->frame;
+#endif
+    this->datastack_chunk = tstate->datastack_chunk;
+    this->datastack_top = tstate->datastack_top;
+    this->datastack_limit = tstate->datastack_limit;
+    PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
+    Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
+    this->_top_frame.steal(frame);
+#else
+    this->_top_frame.steal(tstate->frame);
+#endif
 }
 
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
@@ -817,7 +843,6 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 #else
     tstate->recursion_depth = this->recursion_depth;
 #endif
-    tstate->frame = this->_top_frame.relinquish_ownership();
 #if GREENLET_PY37
     tstate->context = this->_context.relinquish_ownership();
     /* Incrementing this value invalidates the contextvars cache,
@@ -834,6 +859,19 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     */
     tstate->cframe->use_tracing = this->use_tracing;
 #endif
+#if GREENLET_USE_DATASTACK
+#if GREENLET_USE_CFRAME_CURRENT_FRAME
+    tstate->cframe->current_frame = this->current_frame;
+#else
+    tstate->frame = this->current_frame;
+#endif
+    tstate->datastack_chunk = this->datastack_chunk;
+    tstate->datastack_top = this->datastack_top;
+    tstate->datastack_limit = this->datastack_limit;
+    this->_top_frame.relinquish_ownership();
+#else
+    tstate->frame = this->_top_frame.relinquish_ownership();
+#endif
 }
 
 void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT
@@ -847,6 +885,10 @@ void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEP
 #endif
 }
 
+#if GREENLET_USE_DATASTACK
+static _PyStackChunk _dummy_stack_chunk;
+#endif
+
 void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT
 {
     this->_top_frame = nullptr;
@@ -854,6 +896,11 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEP
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
 #else
     this->recursion_depth = tstate->recursion_depth;
+#endif
+#if GREENLET_USE_DATASTACK
+    this->datastack_chunk = &_dummy_stack_chunk;
+    this->datastack_top = &_dummy_stack_chunk.data[1];
+    this->datastack_limit = (PyObject **)&_dummy_stack_chunk;
 #endif
 }
 // TODO: Better state management about when we own the top frame.
