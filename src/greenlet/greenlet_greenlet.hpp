@@ -31,9 +31,11 @@ namespace greenlet
         _PyErr_StackItem* exc_info;
         _PyErr_StackItem exc_state;
 #else
-        OwnedObject exc_type;
         OwnedObject exc_value;
+#if !GREENLET_PY311
+        OwnedObject exc_type;
         OwnedObject exc_traceback;
+#endif
 #endif
     public:
         ExceptionState();
@@ -133,6 +135,12 @@ namespace greenlet
         int use_tracing;
 #endif
         int recursion_depth;
+#if GREENLET_PY311
+        _interpreter_frame *current_frame;
+        _PyStackChunk *datastack_chunk;
+        PyObject **datastack_top;
+        PyObject **datastack_limit;
+#endif
 
     public:
         PythonState();
@@ -640,63 +648,79 @@ void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 void ExceptionState::clear() G_NOEXCEPT
 {
     this->exc_info = nullptr;
-    this->exc_state.exc_type = nullptr;
     this->exc_state.exc_value = nullptr;
+#if !GREENLET_PY311
+    this->exc_state.exc_type = nullptr;
     this->exc_state.exc_traceback = nullptr;
+#endif
     this->exc_state.previous_item = nullptr;
 }
 
 int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
 {
-    Py_VISIT(this->exc_state.exc_type);
     Py_VISIT(this->exc_state.exc_value);
+#if !GREENLET_PY311
+    Py_VISIT(this->exc_state.exc_type);
     Py_VISIT(this->exc_state.exc_traceback);
+#endif
     return 0;
 }
 
 void ExceptionState::tp_clear() G_NOEXCEPT
 {
-    Py_CLEAR(this->exc_state.exc_type);
     Py_CLEAR(this->exc_state.exc_value);
+#if !GREENLET_PY311
+    Py_CLEAR(this->exc_state.exc_type);
     Py_CLEAR(this->exc_state.exc_traceback);
+#endif
 }
 #else
 // ********** Python 3.6 and below ********
 void ExceptionState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 {
-    this->exc_type.steal(tstate->exc_type);
     this->exc_value.steal(tstate->exc_value);
+#if !GREENLET_PY311
+    this->exc_type.steal(tstate->exc_type);
     this->exc_traceback.steal(tstate->exc_traceback);
+#endif
 }
 
 void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 {
-    tstate->exc_type <<= this->exc_type;
     tstate->exc_value <<= this->exc_value;
+#if !GREENLET_PY311
+    tstate->exc_type <<= this->exc_type;
     tstate->exc_traceback <<= this->exc_traceback;
+#endif
     this->clear();
 }
 
 void ExceptionState::clear() G_NOEXCEPT
 {
-    this->exc_type = nullptr;
     this->exc_value = nullptr;
+#if !GREENLET_PY311
+    this->exc_type = nullptr;
     this->exc_traceback = nullptr;
+#endif
 }
 
 int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
 {
-    Py_VISIT(this->exc_type.borrow());
     Py_VISIT(this->exc_value.borrow());
+#if !GREENLET_PY311
+    Py_VISIT(this->exc_type.borrow());
     Py_VISIT(this->exc_traceback.borrow());
+#endif
     return 0;
 }
 
 void ExceptionState::tp_clear() G_NOEXCEPT
 {
-    this->exc_type.CLEAR();
     this->exc_value.CLEAR();
+#if !GREENLET_PY311
+    this->exc_type.CLEAR();
     this->exc_traceback.CLEAR();
+#endif
 }
 #endif
 
@@ -710,6 +734,12 @@ PythonState::PythonState()
     ,use_tracing(0)
 #endif
     ,recursion_depth(0)
+#if GREENLET_PY311
+    ,current_frame(nullptr)
+    ,datastack_chunk(nullptr)
+    ,datastack_top(nullptr)
+    ,datastack_limit(nullptr)
+#endif
 {
 #if GREENLET_USE_CFRAME
     /*
@@ -767,8 +797,6 @@ PythonState::PythonState()
 
 void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 {
-    this->recursion_depth = tstate->recursion_depth;
-    this->_top_frame.steal(tstate->frame);
 #if GREENLET_PY37
     this->_context.steal(tstate->context);
 #endif
@@ -786,12 +814,23 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     this->cframe = tstate->cframe;
     this->use_tracing = tstate->cframe->use_tracing;
 #endif
+#if GREENLET_PY311
+    this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+    this->current_frame = tstate->cframe->current_frame;
+    this->datastack_chunk = tstate->datastack_chunk;
+    this->datastack_top = tstate->datastack_top;
+    this->datastack_limit = tstate->datastack_limit;
+    PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
+    Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
+    this->_top_frame.steal(frame);
+#else
+    this->recursion_depth = tstate->recursion_depth;
+    this->_top_frame.steal(tstate->frame);
+#endif
 }
 
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 {
-    tstate->recursion_depth = this->recursion_depth;
-    tstate->frame = this->_top_frame.relinquish_ownership();
 #if GREENLET_PY37
     tstate->context = this->_context.relinquish_ownership();
     /* Incrementing this value invalidates the contextvars cache,
@@ -807,6 +846,17 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
       just copy this from ``origin->cframe->use_tracing``.
     */
     tstate->cframe->use_tracing = this->use_tracing;
+#endif
+#if GREENLET_PY311
+    tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
+    tstate->cframe->current_frame = this->current_frame;
+    tstate->datastack_chunk = this->datastack_chunk;
+    tstate->datastack_top = this->datastack_top;
+    tstate->datastack_limit = this->datastack_limit;
+    this->_top_frame.relinquish_ownership();
+#else
+    tstate->frame = this->_top_frame.relinquish_ownership();
+    tstate->recursion_depth = this->recursion_depth;
 #endif
 }
 
@@ -824,7 +874,11 @@ void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEP
 void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT
 {
     this->_top_frame = nullptr;
+#if GREENLET_PY311
+    this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+#else
     this->recursion_depth = tstate->recursion_depth;
+#endif
 }
 // TODO: Better state management about when we own the top frame.
 int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) G_NOEXCEPT

@@ -47,6 +47,24 @@ We have to save and restore this as well.
 #    define GREENLET_USE_CFRAME 0
 #endif
 
+#if PY_VERSION_HEX >= 0x30B00A4
+/*
+Greenlet won't compile on anything older than Python 3.11 alpha 4 (see
+https://bugs.python.org/issue46090). Summary of breaking internal changes:
+- Python 3.11 alpha 1 changed how frame objects are represented internally.
+  - https://github.com/python/cpython/pull/30122
+- Python 3.11 alpha 3 changed how recursion limits are stored.
+  - https://github.com/python/cpython/pull/29524
+- Python 3.11 alpha 4 changed how exception state is stored. It also includes a
+  change to help greenlet save and restore the interpreter frame "data stack".
+  - https://github.com/python/cpython/pull/30122
+  - https://github.com/python/cpython/pull/30234
+*/
+#    define GREENLET_PY311 1
+#else
+#    define GREENLET_PY311 0
+#endif
+
 #ifndef Py_SET_REFCNT
 /* Py_REFCNT and Py_SIZE macros are converted to functions
 https://bugs.python.org/issue39573 */
