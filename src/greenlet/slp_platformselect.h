@@ -1,11 +1,15 @@
 /*
  * Platform Selection for Stackless Python
  */
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 #if   defined(MS_WIN32) && !defined(MS_WIN64) && defined(_M_IX86) && defined(_MSC_VER)
 #include "platform/switch_x86_msvc.h" /* MS Visual Studio on X86 */
 #elif defined(MS_WIN64) && defined(_M_X64) && defined(_MSC_VER) || defined(__MINGW64__)
 #include "platform/switch_x64_msvc.h" /* MS Visual Studio on X64 */
+#elif  defined(MS_WIN64) && defined(_M_ARM64)
+#include "platform/switch_arm64_msvc.h" /* MS Visual Studio on ARM64 */
 #elif defined(__GNUC__) && defined(__amd64__) && defined(__ILP32__)
 #include "platform/switch_x32_unix.h" /* gcc on amd64 with x32 ABI */
 #elif defined(__GNUC__) && defined(__amd64__)
@@ -55,4 +59,7 @@
 #include "platform/switch_riscv_unix.h" /* gcc on RISC-V */
 #elif defined(__GNUC__) && defined(__alpha__)
 #include "platform/switch_alpha_unix.h" /* gcc on DEC Alpha */
+#endif
+#ifdef __cplusplus
+};
 #endif

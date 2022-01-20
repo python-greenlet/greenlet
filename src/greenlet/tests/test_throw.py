@@ -1,14 +1,14 @@
 import sys
-import unittest
+
 
 from greenlet import greenlet
-
+from . import TestCase
 
 def switch(*args):
     return greenlet.getcurrent().parent.switch(*args)
 
 
-class ThrowTests(unittest.TestCase):
+class ThrowTests(TestCase):
     def test_class(self):
         def f():
             try:
@@ -75,7 +75,8 @@ class ThrowTests(unittest.TestCase):
 
         g1 = greenlet(f1)
         g2 = greenlet(f2, parent=g1)
-        self.assertRaises(IndexError, g2.throw, IndexError)
+        with self.assertRaises(IndexError):
+            g2.throw(IndexError)
         self.assertTrue(g2.dead)
         self.assertTrue(g1.dead)
 
@@ -98,3 +99,31 @@ class ThrowTests(unittest.TestCase):
         self.assertEqual(res, "caught")
         self.assertTrue(g2.dead)
         self.assertTrue(g1.dead)
+
+    def test_non_traceback_param(self):
+        with self.assertRaises(TypeError) as exc:
+            greenlet.getcurrent().throw(
+                Exception,
+                Exception(),
+                self
+            )
+        self.assertEqual(str(exc.exception),
+                         "throw() third argument must be a traceback object")
+
+    def test_instance_of_wrong_type(self):
+        with self.assertRaises(TypeError) as exc:
+            greenlet.getcurrent().throw(
+                Exception(),
+                BaseException()
+            )
+
+        self.assertEqual(str(exc.exception),
+                         "instance exception may not have a separate value")
+
+    def test_not_throwable(self):
+        with self.assertRaises(TypeError) as exc:
+            greenlet.getcurrent().throw(
+                "abc"
+            )
+        self.assertEqual(str(exc.exception),
+                         "exceptions must be classes, or instances, not str")

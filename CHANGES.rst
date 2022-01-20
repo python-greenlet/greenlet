@@ -2,6 +2,70 @@
  Changes
 =========
 
+2.0.0a2 (unreleased)
+====================
+
+- Nothing changed yet.
+
+
+2.0.0a1 (2022-01-20)
+====================
+
+Platforms
+---------
+
+- Add experimental, untested support for 64-bit Windows on ARM using
+  MSVC. See `PR 271 <https://github.com/python-greenlet/greenlet/pull/271>`_.
+
+- Drop support for very old versions of GCC and MSVC.
+
+- Compilation now requires a compiler that either supports C++11 or
+  has some other intrinsic way to create thread local variables; for
+  older GCC, clang and SunStudio we use ``__thread``, while for older
+  MSVC we use ``__declspec(thread)``.
+
+- Wheels compatible with the musllinux specification are built,
+  tested, and uploaded to PyPI. (This was retroactively done for
+  version 1.1.2 as well.)
+
+- This version of greenlet is known to compile and pass tests on
+  CPython 3.11.0a4. Earlier or later 3.11 releases may or may not
+  work. See `PR 280
+  <https://github.com/python-greenlet/greenlet/pull/280>`_. Special
+  thanks to Brandt Bucher and the CPython developers.
+
+Fixes
+-----
+
+- Fix several leaks that could occur when using greenlets from
+  multiple threads. For example, it is no longer necessary to call
+  ``getcurrent()`` before exiting a thread to allow its main greenlet
+  to be cleaned up. See `issue 252 <https://github.com/python-greenlet/greenlet/issues/251>`_.
+
+- Fix the C API ``PyGreenlet_Throw`` to perform the same error
+  checking that the Python API ``greenlet.throw()`` does. Previously,
+  it did no error checking.
+
+- Fix C++ exception handling on 32-bit Windows. This might have
+  ramifications if you embed Python in your application and also use
+  SEH on 32-bit windows, or if you embed Python in a C++ application.
+  Please contact the maintainers if you have problems in this area.
+
+  In general, C++ exception handling is expected to be better on most
+  platforms. This work is ongoing.
+
+Changes
+-------
+
+- The repr of some greenlets has changed. In particular, if the
+  greenlet object was running in a thread that has exited, the repr
+  now indicates that. *NOTE:* The repr of a greenlet is not part of
+  the API and should not be relied upon by production code. It is
+  likely to differ in other implementations such as PyPy.
+
+- Main greenlets from threads that have exited are now marked as dead.
+
+
 1.1.2 (2021-09-29)
 ==================
 
@@ -223,9 +287,9 @@ Packaging Changes
 =====
 * Greenlet has an instance dictionary now, which means it can be
   used for implementing greenlet local storage, etc. However, this
-  might introduce incompatibility if subclasses have __dict__ in their
-  __slots__. Classes like that will fail, because greenlet already
-  has __dict__ out of the box.
+  might introduce incompatibility if subclasses have ``__dict__`` in their
+  ``__slots__``. Classes like that will fail, because greenlet already
+  has ``__dict__`` out of the box.
 * Greenlet no longer leaks memory after thread termination, as long as
   terminated thread has no running greenlets left at the time.
 * Add support for debian sparc and openbsd5-sparc64

@@ -1,15 +1,18 @@
-import unittest
-from greenlet import greenlet
 
+from greenlet import greenlet
+from . import TestCase
+from .leakcheck import fails_leakcheck
 
 class genlet(greenlet):
-
+    parent = None
     def __init__(self, *args, **kwds):
         self.args = args
         self.kwds = kwds
         self.child = None
 
     def run(self):
+        # Note the function is packed in a tuple
+        # to avoid creating a bound method for it.
         fn, = self.fn
         fn(*self.args, **self.kwds)
 
@@ -34,12 +37,10 @@ class genlet(greenlet):
 
         if self:
             return result
-        else:
-            raise StopIteration
 
-    # Hack: Python < 2.6 compatibility
+        raise StopIteration
+
     next = __next__
-
 
 def Yield(value, level=1):
     g = greenlet.getcurrent()
@@ -56,9 +57,9 @@ def Yield(value, level=1):
 
 
 def Genlet(func):
-    class Genlet(genlet):
+    class TheGenlet(genlet):
         fn = (func,)
-    return Genlet
+    return TheGenlet
 
 # ____________________________________________________________
 
@@ -101,7 +102,8 @@ def perms(l):
     if len(l) > 1:
         for e in l:
             # No syntactical sugar for generator expressions
-            [Yield([e] + p) for p in perms([x for x in l if x != e])]
+            x = [Yield([e] + p) for p in perms([x for x in l if x != e])]
+            assert x
     else:
         Yield(l)
 perms = Genlet(perms)
@@ -122,19 +124,20 @@ def gr2(n, seen):
 gr2 = Genlet(gr2)
 
 
-class NestedGeneratorTests(unittest.TestCase):
+class NestedGeneratorTests(TestCase):
     def test_layered_genlets(self):
         seen = []
         for ii in gr2(5, seen):
             seen.append(ii)
         self.assertEqual(seen, [1, 1, 2, 4, 3, 9, 4, 16])
 
+    @fails_leakcheck
     def test_permutations(self):
         gen_perms = perms(list(range(4)))
         permutations = list(gen_perms)
         self.assertEqual(len(permutations), 4 * 3 * 2 * 1)
-        self.assertTrue([0, 1, 2, 3] in permutations)
-        self.assertTrue([3, 2, 1, 0] in permutations)
+        self.assertIn([0, 1, 2, 3], permutations)
+        self.assertIn([3, 2, 1, 0], permutations)
         res = []
         for ii in zip(perms(list(range(4))), perms(list(range(3)))):
             res.append(ii)
@@ -148,7 +151,7 @@ class NestedGeneratorTests(unittest.TestCase):
     def test_genlet_simple(self):
         for g in [g1, g2, g3]:
             seen = []
-            for k in range(3):
+            for _ in range(3):
                 for j in g(5, seen):
                     seen.append(j)
             self.assertEqual(seen, 3 * [1, 0, 2, 1, 3, 2, 4, 3, 5, 4])

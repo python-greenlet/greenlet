@@ -1,9 +1,10 @@
-import unittest
+
 from greenlet import greenlet
 
+from . import TestCase
 
 class genlet(greenlet):
-
+    parent = None
     def __init__(self, *args, **kwds):
         self.args = args
         self.kwds = kwds
@@ -20,10 +21,9 @@ class genlet(greenlet):
         result = self.switch()
         if self:
             return result
-        else:
-            raise StopIteration
 
-    # Hack: Python < 2.6 compatibility
+        raise StopIteration
+
     next = __next__
 
 
@@ -37,14 +37,14 @@ def Yield(value):
 
 
 def generator(func):
-    class generator(genlet):
+    class Generator(genlet):
         fn = (func,)
-    return generator
+    return Generator
 
 # ____________________________________________________________
 
 
-class GeneratorTests(unittest.TestCase):
+class GeneratorTests(TestCase):
     def test_generator(self):
         seen = []
 
@@ -53,7 +53,7 @@ class GeneratorTests(unittest.TestCase):
                 seen.append(i)
                 Yield(i)
         g = generator(g)
-        for k in range(3):
+        for _ in range(3):
             for j in g(5):
                 seen.append(j)
         self.assertEqual(seen, 3 * [0, 0, 1, 1, 2, 2, 3, 3, 4, 4])

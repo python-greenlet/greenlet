@@ -8,6 +8,7 @@ env:
   PYTHONUNBUFFERED: 1
   PYTHONDONTWRITEBYTECODE: 1
   PYTHONDEVMODE: 1
+  PYTHONFAULTHANDLER: 1
   PIP_UPGRADE_STRATEGY: eager
   # Don't get warnings about Python 2 support being deprecated. We
   # know. The env var works for pip 20.
@@ -24,7 +25,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.0-rc.1]
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9, "3.10", "3.11.0-alpha.4"]
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v2
@@ -43,10 +44,18 @@ jobs:
       run: |
         python -m pip install -U pip setuptools wheel
         python -m pip install -U twine
+        python -m pip install -q -U 'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"'
     - name: Install greenlet
       run: |
         python setup.py bdist_wheel
         python -m pip install -U -e ".[test,docs]"
+      env:
+        # Ensure we test with assertions enabled.
+        # As opposed to the manylinux builds, which we distribute and
+        # thus only use O3 (because Ofast enables fast-math, which has
+        # process-wide effects), we test with Ofast here, because we
+        # expect that some people will compile it themselves with that setting.
+        CPPFLAGS: "-Ofast -UNDEBUG"
     - name: Check greenlet build
       run: |
         ls -l dist
@@ -58,11 +67,10 @@ jobs:
         path: dist/*whl
     - name: Test
       run: |
+        python -c 'import faulthandler; assert faulthandler.is_enabled()'
+        python -c 'import greenlet._greenlet as G; assert G.GREENLET_USE_STANDARD_THREADING'
         python -m unittest discover -v greenlet.tests
     - name: Doctest
-      # FIXME: This conditional can go away when a Sphinx greater than 4.1.2
-      # is released. See https://github.com/sphinx-doc/sphinx/issues/9512
-      if: matrix.python-version != '3.10.0-rc.1'
       run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
     - name: Publish package to PyPI (mac)
@@ -75,6 +83,82 @@ jobs:
       run: |
         twine upload --skip-existing dist/*
 
+  test_non_standard_thread:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: [2.7, 3.5, "3.10"]
+        os: [ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Pip cache
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-ns-${{ hashFiles('setup.*') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-ns-
+    - name: Install dependencies
+      run: |
+        python -m pip install -U pip setuptools wheel
+        python -m pip install -U twine
+        python -m pip install -q -U 'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"'
+    - name: Install greenlet
+      env:
+        CPPFLAGS: "-DG_USE_STANDARD_THREADING=0 -UNDEBUG -Ofast"
+      run: |
+        python setup.py bdist_wheel
+        python -m pip install -U -v -e ".[test,docs]"
+    - name: Test
+      run: |
+        python -c 'import faulthandler; assert faulthandler.is_enabled()'
+        python -c 'import greenlet._greenlet as G; assert not G.GREENLET_USE_STANDARD_THREADING'
+        python -m unittest discover -v greenlet.tests
+
+  CodeQL:
+    runs-on: ubuntu-latest
+    permissions:
+      # required for all workflows
+      security-events: write
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+      - name: Pip cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ql-${{ hashFiles('setup.*') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-ql-
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          python -m pip install -U setuptools wheel
+          # Set the `CODEQL-PYTHON` environment variable to the Python executable
+          # that includes the dependencies
+          echo "CODEQL_PYTHON=$(which python)" >> $GITHUB_ENV
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v1
+        with:
+          languages: python, cpp
+          # Override the default behavior so that the action doesn't attempt
+          # to auto-install Python dependencies
+          setup-python-dependencies: false
+      - name: Install greenlet
+        run: |
+          python setup.py build
+      # - name: Autobuild
+      #   uses: github/codeql-action/autobuild@v1
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v1
 
   manylinux:
 
@@ -83,7 +167,13 @@ jobs:
     strategy:
       matrix:
         python-version: [3.9]
-        image: [manylinux2010_x86_64, manylinux2014_aarch64, manylinux2014_ppc64le, manylinux2014_x86_64]
+        image:
+          - manylinux2010_x86_64
+          - manylinux2014_aarch64
+          - manylinux2014_ppc64le
+          - manylinux2014_x86_64
+          - musllinux_1_1_x86_64
+    name: ${{ matrix.image }}
 
     steps:
       - name: checkout

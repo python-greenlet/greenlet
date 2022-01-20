@@ -4,11 +4,18 @@
 recursive-include src *.py
 recursive-include src *.c
 recursive-include src *.cpp
+recursive-include src *.hpp
 recursive-include src *.h
 recursive-include src *.cmd
 recursive-include src *.asm
 recursive-include src *.obj
-recursive-include benchmarks *
+
+###
+# Benchmarks and results
+###
+exclude benchmarks/*.json
+recursive-include benchmarks *.py
+
 
 ###
 # Documentation
@@ -28,6 +35,7 @@ include *.cfg
 include *.py
 include *.ini
 include .clang-format
+include .pylintrc
 
 recursive-include appveyor *.cmd
 recursive-include appveyor *.ps1

@@ -7,9 +7,9 @@ import signal
 
 import greenlet
 from . import _test_extension_cpp
+from . import TestCase
 
-
-class CPPTests(unittest.TestCase):
+class CPPTests(TestCase):
     def test_exception_switch(self):
         greenlets = []
         for i in range(4):

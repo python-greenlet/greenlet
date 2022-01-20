@@ -25,7 +25,7 @@ __all__ = [
 ###
 # Metadata
 ###
-__version__ = '1.1.2'
+__version__ = '2.0.0a2.dev0'
 from ._greenlet import _C_API # pylint:disable=no-name-in-module
 
 ###
@@ -61,3 +61,8 @@ except ImportError:
 from ._greenlet import GREENLET_USE_CONTEXT_VARS # pylint:disable=unused-import
 from ._greenlet import GREENLET_USE_GC # pylint:disable=unused-import
 from ._greenlet import GREENLET_USE_TRACING # pylint:disable=unused-import
+
+# Controlling the use of the gc module.
+from ._greenlet import CLOCKS_PER_SEC # pylint:disable=unused-import
+from ._greenlet import enable_optional_cleanup # pylint:disable=unused-import
+from ._greenlet import get_clocks_used_doing_optional_cleanup # pylint:disable=unused-import

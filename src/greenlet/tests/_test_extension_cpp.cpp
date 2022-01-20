@@ -3,6 +3,7 @@
  */
 
 #include "../greenlet.h"
+#include "../greenlet_compiler_compat.hpp"
 
 struct exception_t {
     int depth;
@@ -32,12 +33,15 @@ test_exception_switch_recurse(int depth, int left)
         return NULL;
 
     try {
-        PyGreenlet_Switch(self->parent, NULL, NULL);
+        if (PyGreenlet_Switch(PyGreenlet_GET_PARENT(self), NULL, NULL) == NULL) {
+            Py_DECREF(self);
+            return NULL;
+        }
         p_test_exception_throw(depth);
         PyErr_SetString(PyExc_RuntimeError,
                         "throwing C++ exception didn't work");
     }
-    catch (exception_t& e) {
+    catch (const exception_t& e) {
         if (e.depth != depth)
             PyErr_SetString(PyExc_AssertionError, "depth mismatch");
         else
@@ -58,7 +62,7 @@ test_exception_switch_recurse(int depth, int left)
  * - verifies depth matches (exceptions shouldn't be caught in other greenlets)
  */
 static PyObject*
-test_exception_switch(PyObject* self, PyObject* args)
+test_exception_switch(PyObject* UNUSED(self), PyObject* args)
 {
     int depth;
     if (!PyArg_ParseTuple(args, "i", &depth))

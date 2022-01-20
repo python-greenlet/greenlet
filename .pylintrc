@@ -1,0 +1,124 @@
+[MASTER]
+extension-pkg-whitelist=greenlet._greenlet,greenlet.tests._test_extension
+extension-pkg-allow-list=greenlet._greenlet,greenlet.tests._test_extension
+
+
+[MESSAGES CONTROL]
+
+# Disable the message, report, category or checker with the given id(s). You
+# can either give multiple identifier separated by comma (,) or put this option
+# multiple time (only on the command line, not in the configuration file where
+# it should appear only once).
+# NOTE: comments must go ABOVE the statement. In Python 2, mixing in
+# comments disables all directives that follow, while in Python 3, putting
+# comments at the end of the line does the same thing (though Py3 supports
+# mixing)
+
+
+# invalid-name, ; We get lots of these, especially in scripts. should fix many of them
+# protected-access, ; We have many cases of this; legit ones need to be examinid and commented, then this removed
+# no-self-use, ; common in superclasses with extension points
+# too-few-public-methods, ; Exception and marker classes get tagged with this
+# exec-used, ; should tag individual instances with this, there are some but not too many
+# global-statement,     ; should tag individual instances
+# multiple-statements, ; "from gevent import monkey; monkey.patch_all()"
+# locally-disabled, ; yes, we know we're doing this. don't replace one warning with another
+# cyclic-import, ; most of these are deferred imports
+# too-many-arguments, ; these are almost always because that's what the stdlib does
+# redefined-builtin, ; likewise: these tend to be keyword arguments like len= in the stdlib
+# undefined-all-variable,     ; XXX: This crashes with pylint 1.5.4 on Travis (but not locally on Py2/3
+#     ; or landscape.io on Py3). The file causing the problem is unclear. UPDATE: identified and disabled
+#   that file.
+#   see https://github.com/PyCQA/pylint/issues/846
+# useless-suppression: the only way to avoid repeating it for specific statements everywhere that we
+#   do Py2/Py3 stuff is to put it here. Sadly this means that we might get better but not realize it.
+# duplicate-code: Yeah, the compatibility ssl modules are much the same
+# In pylint 1.8.0, inconsistent-return-statements are created for the wrong reasons.
+# This code raises it, even though there's only one return (the implicit 'return None' is presumably
+# what triggers it):
+#  def foo():
+#    if baz:
+#      return 1
+# In Pylint 2dev1, needed for Python 3.7, we get spurious 'useless return' errors:
+# @property
+# def foo(self):
+#   return None # generates useless-return
+# Pylint 2.4 adds import-outside-toplevel. But we do that a lot to defer imports because of patching.
+# Pylint 2.4 adds self-assigning-variable. But we do *that* to avoid unused-import when we
+# "export" the variable and don't have a __all__.
+# Pylint 2.6+ adds some python-3-only things that don't apply: raise-missing-from, super-with-arguments, consider-using-f-string, redundant-u-string-prefix
+disable=missing-docstring,
+    ungrouped-imports,
+    invalid-name,
+    protected-access,
+    no-self-use,
+    too-few-public-methods,
+    exec-used,
+    global-statement,
+    multiple-statements,
+    locally-disabled,
+    cyclic-import,
+    too-many-arguments,
+    redefined-builtin,
+    useless-suppression,
+    duplicate-code,
+    undefined-all-variable,
+    inconsistent-return-statements,
+    useless-return,
+    useless-object-inheritance,
+    import-outside-toplevel,
+    self-assigning-variable,
+    raise-missing-from,
+    super-with-arguments,
+    consider-using-f-string,
+    redundant-u-string-prefix
+
+[FORMAT]
+# duplicated from setup.cfg
+max-line-length=160
+max-module-lines=1100
+
+[MISCELLANEOUS]
+# List of note tags to take in consideration, separated by a comma.
+#notes=FIXME,XXX,TODO
+# Disable that, we don't want them in the report (???)
+notes=
+
+[VARIABLES]
+
+dummy-variables-rgx=_.*
+
+[TYPECHECK]
+
+# List of members which are set dynamically and missed by pylint inference
+# system, and so shouldn't trigger E1101 when accessed. Python regular
+# expressions are accepted.
+# gevent: this is helpful for py3/py2 code.
+generated-members=exc_clear
+
+# List of classes names for which member attributes should not be checked
+# (useful for classes with attributes dynamically set). This can work
+# with qualified names.
+#ignored-classes=SSLContext, SSLSocket, greenlet, Greenlet, parent, dead
+
+
+# List of module names for which member attributes should not be checked
+# (useful for modules/projects where namespaces are manipulated during runtime
+# and thus existing member attributes cannot be deduced by static analysis. It
+# supports qualified module names, as well as Unix pattern matching.
+ignored-modules=gevent._corecffi,gevent.os,os,threading,gevent.libev.corecffi,gevent.socket,gevent.core,gevent.testing.support
+
+[DESIGN]
+max-attributes=12
+max-parents=10
+
+[BASIC]
+bad-functions=input
+# Prospector turns ot unsafe-load-any-extension by default, but
+# pylint leaves it off. This is the proximal cause of the
+# undefined-all-variable crash.
+unsafe-load-any-extension = yes
+
+# Local Variables:
+# mode: conf
+# End:

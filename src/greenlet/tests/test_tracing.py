@@ -1,6 +1,8 @@
+from __future__ import print_function
 import sys
-import unittest
 import greenlet
+
+from . import TestCase
 
 class SomeError(Exception):
     pass
@@ -25,12 +27,12 @@ class GreenletTracer(object):
         greenlet.settrace(self.oldtrace)
 
 
-class TestGreenletTracing(unittest.TestCase):
+class TestGreenletTracing(TestCase):
     """
     Tests of ``greenlet.settrace()``
     """
 
-    def test_greenlet_tracing(self):
+    def test_a_greenlet_tracing(self):
         main = greenlet.getcurrent()
         def dummy():
             pass
@@ -50,7 +52,7 @@ class TestGreenletTracing(unittest.TestCase):
             ('throw', (g2, main)),
         ])
 
-    def test_exception_disables_tracing(self):
+    def test_b_exception_disables_tracing(self):
         main = greenlet.getcurrent()
         def dummy():
             main.switch()
@@ -85,7 +87,7 @@ class PythonTracer(object):
 def tpt_callback():
     return 42
 
-class TestPythonTracing(unittest.TestCase):
+class TestPythonTracing(TestCase):
     """
     Tests of the interaction of ``sys.settrace()``
     with greenlet facilities.

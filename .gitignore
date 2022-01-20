@@ -11,3 +11,4 @@ greenlet.egg-info/
 __pycache__/
 /.ropeproject/
 /MANIFEST
+benchmarks/*.json
