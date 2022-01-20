@@ -16,6 +16,9 @@ using greenlet::refs::OwnedGreenlet;
 using greenlet::refs::OwnedMainGreenlet;
 using greenlet::refs::BorrowedGreenlet;
 
+// XXX: TODO: Work to remove all virtual functions
+// for speed of calling and size of objects (no vtable).
+// One pattern is the Curiously Recurring Template
 namespace greenlet
 {
     class ExceptionState

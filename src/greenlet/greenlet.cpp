@@ -2911,6 +2911,20 @@ greenlet_internal_mod_init() G_NOEXCEPT
                                                NULL)));
         m.PyAddObject("_C_API", c_api_object);
         assert(c_api_object.REFCNT() == 2);
+
+        // cerr << "Sizes:"
+        //      << "\n\tGreenlet       : " << sizeof(Greenlet)
+        //      << "\n\tUserGreenlet   : " << sizeof(UserGreenlet)
+        //      << "\n\tMainGreenlet   : " << sizeof(MainGreenlet)
+        //      << "\n\tExceptionState : " << sizeof(greenlet::ExceptionState)
+        //      << "\n\tPythonState    : " << sizeof(greenlet::PythonState)
+        //      << "\n\tStackState     : " << sizeof(greenlet::StackState)
+        //      << "\n\tSwitchingArgs  : " << sizeof(greenlet::SwitchingArgs)
+        //      << "\n\tOwnedObject    : " << sizeof(greenlet::refs::OwnedObject)
+        //      << "\n\tBorrowedObject : " << sizeof(greenlet::refs::BorrowedObject)
+        //      << "\n\tPyGreenlet     : " << sizeof(PyGreenlet)
+        //      << endl;
+
         return m.borrow(); // But really it's the main reference.
     }
     catch (const LockInitError& e) {
