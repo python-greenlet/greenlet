@@ -9,7 +9,13 @@ recursive-include src *.h
 recursive-include src *.cmd
 recursive-include src *.asm
 recursive-include src *.obj
-recursive-include benchmarks *
+
+###
+# Benchmarks and results
+###
+exclude benchmarks/*.json
+recursive-include benchmarks *.py
+
 
 ###
 # Documentation
