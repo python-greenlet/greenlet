@@ -5,7 +5,12 @@
 2.0.0a2 (unreleased)
 ====================
 
-- Nothing changed yet.
+- Fix a crash on older versions of the Windows C runtime when an
+  unhandled C++ exception was thrown inside a greenlet by another
+  native extension. This is a bug in that extension, and the
+  interpreter will still abort, but at least it does so deliberately.
+  Thanks to Kirill Smelkov. See `PR 286
+  <https://github.com/python-greenlet/greenlet/pull/286>`_.
 
 
 2.0.0a1 (2022-01-20)

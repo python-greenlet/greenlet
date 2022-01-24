@@ -1154,17 +1154,26 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) 
             result = run.PyCall(args.args(), args.kwargs());
         }
         catch(...) {
-            // Unhandled exception! If we don't catch this here, most
-            // platforms will just abort() the process. But on 64-bit
-            // Windows with older versions of the C runtime, this can
-            // actually corrupt memory and just return. We see this
-            // when compiling with the Windows 7.0 SDK targeting
-            // Windows Server 2008, but not when using the Appveyor
-            // Visual Studio 2019 image. So this currently only
-            // affects Python 2.7 on Windows 64. That is, the tests
-            // pass and the runtime aborts. But if we catch it and try
-            // to continue with a Python error, then all Windows 64
-            // bit platforms corrupt memory. So all we can do is abort.
+            // Unhandled C++ exception!
+
+            // If we don't catch this here, most platforms will just
+            // abort() the process. But on 64-bit Windows with older
+            // versions of the C runtime, this can actually corrupt
+            // memory and just return. We see this when compiling with
+            // the Windows 7.0 SDK targeting Windows Server 2008, but
+            // not when using the Appveyor Visual Studio 2019 image.
+            // So this currently only affects Python 2.7 on Windows
+            // 64. That is, the tests pass and the runtime aborts
+            // everywhere else.
+            //
+            // However, if we catch it and try to continue with a
+            // Python error, then all Windows 64 bit platforms corrupt
+            // memory. So all we can do is manually abort.
+            //
+            // Hopefully the basic C stdlib is still functional enough
+            // for us to at least print an error.
+            fprintf(stderr, "greenlet: Unhandled C++ exception from a greenlet run function. ");
+            fprintf(stderr, "Because memory is likely corrupted, terminating process.");
             abort();
         }
     }
