@@ -70,12 +70,76 @@ test_exception_switch(PyObject* UNUSED(self), PyObject* args)
     return p_test_exception_switch_recurse(depth, depth);
 }
 
+
+static PyObject*
+py_test_exception_throw(PyObject* self, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, ""))
+        return NULL;
+    p_test_exception_throw(0);
+    PyErr_SetString(PyExc_AssertionError, "unreachable code running after throw");
+    return NULL;
+}
+
+
+/* test_exception_switch_and_do_in_g2(g2func)
+ * - creates new greenlet g2 to run g2func
+ * - switches to g2 inside try/catch block
+ * - verifies that no exception has been caught
+ *
+ * it is used together with test_exception_throw to verify that unhandled
+ * exceptions thrown in one greenlet do not propagate to other greenlet nor
+ * segfault the process.
+ */
+static PyObject*
+test_exception_switch_and_do_in_g2(PyObject* self, PyObject* args)
+{
+    PyObject* g2func = NULL;
+    PyObject* result = NULL;
+
+    if (!PyArg_ParseTuple(args, "O", &g2func))
+        return NULL;
+    PyGreenlet* g2 = PyGreenlet_New(g2func, NULL);
+    if (!g2) {
+        return NULL;
+    }
+
+    try {
+        result = PyGreenlet_Switch(g2, NULL, NULL);
+        if (!result) {
+            return NULL;
+        }
+    }
+    catch (...) {
+        /* if we are here the memory can be already corrupted and the program
+         * might crash before below py-level exception might become printed.
+         * -> print something to stderr to make it clear that we had entered
+         *    this catch block.
+         */
+        fprintf(stderr, "C++ exception unexpectedly caught in g1\n");
+        PyErr_SetString(PyExc_AssertionError, "C++ exception unexpectedly caught in g1");
+    }
+
+    Py_XDECREF(result);
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef test_methods[] = {
     {"test_exception_switch",
      (PyCFunction)&test_exception_switch,
      METH_VARARGS,
      "Switches to parent twice, to test exception handling and greenlet "
      "switching."},
+    {"test_exception_switch_and_do_in_g2",
+     (PyCFunction)&test_exception_switch_and_do_in_g2,
+     METH_VARARGS,
+     "Creates new greenlet g2 to run g2func and switches to it inside try/catch "
+     "block. Used together with test_exception_throw to verify that unhandled "
+     "C++ exceptions thrown in a greenlet doe not corrupt memory."},
+    {"test_exception_throw",
+     (PyCFunction)&py_test_exception_throw,
+     METH_VARARGS,
+     "Throws C++ exception. Calling this function directly should abort the process."},
     {NULL, NULL, 0, NULL}};
 
 #if PY_MAJOR_VERSION >= 3
