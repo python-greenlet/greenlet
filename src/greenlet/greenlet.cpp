@@ -1150,7 +1150,16 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) 
     else {
         /* call g.run(*args, **kwargs) */
         // This could result in further switches
-        result = run.PyCall(args.args(), args.kwargs());
+        try {
+            result = run.PyCall(args.args(), args.kwargs());
+        }
+        catch(...) {
+            // Unhandled exception! Try to recover.
+            // If we don't catch this here, most platforms will just
+            // abort() the process. But 64-bit Windows, because of the
+            // way SEH works, can actually corrupt memory.
+            PyErr_SetString(PyExc_RuntimeError, "Unexpected C++ exception caught.");
+        }
     }
     args.CLEAR();
     run.CLEAR();
