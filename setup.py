@@ -39,7 +39,7 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
 if sys.platform == 'darwin':
     # The clang compiler doesn't use --std=c++11 by default
     cpp_compile_args.append("--std=gnu++11")
-elif sys.platform == 'win32':
+elif sys.platform == 'win32' and "MSC" in platform.python_compiler():
     # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
     # correctly by default. While newer versions do handle exceptions by default,
     # they don't do it fully correctly. So we need an argument on all versions.
