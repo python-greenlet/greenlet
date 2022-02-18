@@ -173,6 +173,7 @@ jobs:
           - manylinux2014_ppc64le
           - manylinux2014_x86_64
           - musllinux_1_1_x86_64
+          - musllinux_1_1_aarch64
     name: ${{ matrix.image }}
 
     steps:
