@@ -13,6 +13,11 @@
   <https://github.com/python-greenlet/greenlet/pull/286>`_.
 - Musllinux wheels fro aarch64 are now built, tested, and uploaded to
   PyPI. Thanks to Alexander Piskun.
+- This version of greenlet is known to compile and pass tests on
+  CPython 3.11.0a6. Earlier 3.11 releases will not work; later
+  releases may or may not work. See `PR 294
+  <https://github.com/python-greenlet/greenlet/pull/294>`_. Special
+  thanks to Victor Stinner, Brandt Bucher and the CPython developers.
 
 
 2.0.0a1 (2022-01-20)
