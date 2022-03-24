@@ -11,7 +11,7 @@
   interpreter will still abort, but at least it does so deliberately.
   Thanks to Kirill Smelkov. See `PR 286
   <https://github.com/python-greenlet/greenlet/pull/286>`_.
-- Musllinux wheels fro aarch64 are now built, tested, and uploaded to
+- Musllinux wheels for aarch64 are now built, tested, and uploaded to
   PyPI. Thanks to Alexander Piskun.
 - This version of greenlet is known to compile and pass tests on
   CPython 3.11.0a6. Earlier 3.11 releases will not work; later
