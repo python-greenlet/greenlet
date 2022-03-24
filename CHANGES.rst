@@ -11,6 +11,8 @@
   interpreter will still abort, but at least it does so deliberately.
   Thanks to Kirill Smelkov. See `PR 286
   <https://github.com/python-greenlet/greenlet/pull/286>`_.
+- Musllinux wheels fro aarch64 are now built, tested, and uploaded to
+  PyPI. Thanks to Alexander Piskun.
 
 
 2.0.0a1 (2022-01-20)
@@ -30,8 +32,8 @@ Platforms
   MSVC we use ``__declspec(thread)``.
 
 - Wheels compatible with the musllinux specification are built,
-  tested, and uploaded to PyPI. (This was retroactively done for
-  version 1.1.2 as well.)
+  tested, and uploaded to PyPI for x86_64. (This was retroactively
+  done for version 1.1.2 as well.)
 
 - This version of greenlet is known to compile and pass tests on
   CPython 3.11.0a4. Earlier or later 3.11 releases may or may not
