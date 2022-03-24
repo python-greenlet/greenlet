@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.0a2 (unreleased)
+2.0.0a2 (2022-03-24)
 ====================
 
 - Fix a crash on older versions of the Windows C runtime when an
