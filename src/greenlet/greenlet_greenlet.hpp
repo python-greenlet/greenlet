@@ -16,6 +16,11 @@ using greenlet::refs::OwnedGreenlet;
 using greenlet::refs::OwnedMainGreenlet;
 using greenlet::refs::BorrowedGreenlet;
 
+#if PY_VERSION_HEX < 0x30B00A6
+#  define _PyCFrame CFrame
+#  define _PyInterpreterFrame _interpreter_frame
+#endif
+
 // XXX: TODO: Work to remove all virtual functions
 // for speed of calling and size of objects (no vtable).
 // One pattern is the Curiously Recurring Template
@@ -133,13 +138,13 @@ namespace greenlet
         // won't be reachable from the place that normally decref's
         // it, so we need to do it (hence owning it).
         OwnedFrame _top_frame;
-#if  GREENLET_USE_CFRAME
-        CFrame* cframe;
+#if GREENLET_USE_CFRAME
+        _PyCFrame* cframe;
         int use_tracing;
 #endif
         int recursion_depth;
 #if GREENLET_PY311
-        _interpreter_frame *current_frame;
+        _PyInterpreterFrame *current_frame;
         _PyStackChunk *datastack_chunk;
         PyObject **datastack_top;
         PyObject **datastack_limit;
@@ -160,7 +165,7 @@ namespace greenlet
         void tp_clear(bool own_top_frame) G_NOEXCEPT;
         void set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT;
 #if GREENLET_USE_CFRAME
-        void set_new_cframe(CFrame& frame) G_NOEXCEPT;
+        void set_new_cframe(_PyCFrame& frame) G_NOEXCEPT;
 #endif
         void will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT;
     };
@@ -759,7 +764,7 @@ PythonState::PythonState()
       one from the greenlet parent for the same reason. Yet a further
       no: we can't allocate one scoped to the greenlet and then
       destroy it when the greenlet is deallocated, because inside the
-      interpreter the CFrame objects form a linked list, and that too
+      interpreter the _PyCFrame objects form a linked list, and that too
       can result in accessing memory beyond its dynamic lifetime (if
       the greenlet doesn't actually finish before it dies, its entry
       could still be in the list).
@@ -778,14 +783,14 @@ PythonState::PythonState()
       creation, it uses the ``root_cframe`` just to have something to
       put there. However, once the greenlet is actually switched to
       for the first time, ``g_initialstub`` (which doesn't actually
-      "return" while the greenlet is running) stores a new CFrame on
+      "return" while the greenlet is running) stores a new _PyCFrame on
       its local stack, and copies the appropriate values from the
-      currently running CFrame; this is then made the CFrame for the
+      currently running _PyCFrame; this is then made the _PyCFrame for the
       newly-minted greenlet. ``g_initialstub`` then proceeds to call
       ``glet.run()``, which results in ``PyEval_...`` adding the
-      CFrame to the list. Switches continue as normal. Finally, when
+      _PyCFrame to the list. Switches continue as normal. Finally, when
       the greenlet finishes, the call to ``glet.run()`` returns and
-      the CFrame is taken out of the linked list and the stack value
+      the _PyCFrame is taken out of the linked list and the stack value
       is now unused and free to expire.
 
       XXX: I think we can do better. If we're deallocing in the same
@@ -907,7 +912,7 @@ void PythonState::tp_clear(bool own_top_frame) G_NOEXCEPT
 }
 
 #if GREENLET_USE_CFRAME
-void PythonState::set_new_cframe(CFrame& frame) G_NOEXCEPT
+void PythonState::set_new_cframe(_PyCFrame& frame) G_NOEXCEPT
 {
     frame = *PyThreadState_GET()->cframe;
     /* Make the target greenlet refer to the stack value. */

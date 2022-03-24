@@ -1034,7 +1034,7 @@ UserGreenlet::g_initialstub(void* mark)
       We want to defer copying the state info until we're sure
       we need it and are in a stable place to do so.
     */
-    CFrame trace_info;
+    _PyCFrame trace_info;
 
     this->python_state.set_new_cframe(trace_info);
 #endif
