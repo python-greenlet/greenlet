@@ -32,7 +32,8 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
     or ("-with-redhat-3." in platform.platform() and platform.machine() == 'i686')
     or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
     or ("SunOS" in platform.platform() and platform.machine() == "sun4v")
-    or (is_linux and platform.machine() == "ppc")):
+    or (is_linux and platform.machine() == "ppc")
+    or (is_linux and platform.machine() == "riscv64")):
     global_compile_args.append("-Os")
 
 
