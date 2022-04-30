@@ -339,7 +339,7 @@ namespace greenlet {
             Py_XINCREF(other.p);
             const T* tmp = this->p;
             this->p = other.p;
-            Py_XDECREF(tmp);
+            Py_XDECREF(const_cast<T*>(tmp));
             return *this;
         }
 
@@ -851,7 +851,7 @@ namespace greenlet {
 
         void PyAddObject(const char* name, const PyObject* new_object)
         {
-            Py_INCREF(new_object);
+            Py_INCREF(const_cast<PyObject*>(new_object));
             try {
                 Require(PyModule_AddObject(this->p, name, const_cast<PyObject*>(new_object)));
             }
