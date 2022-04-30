@@ -12,3 +12,4 @@ __pycache__/
 /.ropeproject/
 /MANIFEST
 benchmarks/*.json
+.vscode
