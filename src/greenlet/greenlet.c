@@ -170,9 +170,11 @@ green_clear_exc(PyGreenlet* g)
 {
 #if GREENLET_PY37
     g->exc_info = NULL;
-    g->exc_state.exc_type = NULL;
     g->exc_state.exc_value = NULL;
+#if !GREENLET_PY311
+    g->exc_state.exc_type = NULL;
     g->exc_state.exc_traceback = NULL;
+#endif
     g->exc_state.previous_item = NULL;
 #else
     g->exc_type = NULL;
@@ -525,8 +527,13 @@ g_switchstack(void)
     { /* save state */
         PyGreenlet* current = ts_current;
         PyThreadState* tstate = PyThreadState_GET();
+#if GREENLET_PY311
+        current->recursion_depth = (tstate->recursion_limit
+                                    - tstate->recursion_remaining);
+#else
         current->recursion_depth = tstate->recursion_depth;
         current->top_frame = tstate->frame;
+#endif
 #if GREENLET_PY37
         current->context = tstate->context;
 #endif
@@ -551,6 +558,15 @@ g_switchstack(void)
          */
         current->cframe = tstate->cframe;
         ts__g_switchstack_use_tracing = tstate->cframe->use_tracing;
+#if GREENLET_PY311
+        current->current_frame = tstate->cframe->current_frame;
+        current->datastack_chunk = tstate->datastack_chunk;
+        current->datastack_top = tstate->datastack_top;
+        current->datastack_limit = tstate->datastack_limit;
+        PyFrameObject *frame = PyThreadState_GetFrame(tstate);
+        Py_XDECREF(frame); /* PyThreadState_GetFrame gives us a new reference. */
+        current->top_frame = frame;
+#endif
 #endif
     }
 
@@ -574,9 +590,6 @@ g_switchstack(void)
         PyGreenlet* target = ts_target;
         PyGreenlet* origin = ts_current;
         PyThreadState* tstate = PyThreadState_GET();
-        tstate->recursion_depth = target->recursion_depth;
-        tstate->frame = target->top_frame;
-        target->top_frame = NULL;
 
 #if GREENLET_PY37
         tstate->context = target->context;
@@ -607,7 +620,18 @@ g_switchstack(void)
         */
         tstate->cframe->use_tracing = ts__g_switchstack_use_tracing;
 #endif
-
+#if GREENLET_PY311
+        tstate->recursion_remaining = (tstate->recursion_limit
+                                       - target->recursion_depth);
+        tstate->cframe->current_frame = target->current_frame;
+        tstate->datastack_chunk = target->datastack_chunk;
+        tstate->datastack_top = target->datastack_top;
+        tstate->datastack_limit = target->datastack_limit;
+#else
+        tstate->recursion_depth = target->recursion_depth;
+        tstate->frame = target->top_frame;
+#endif
+        target->top_frame = NULL;
         assert(ts_origin == NULL);
         Py_INCREF(target);
         ts_current = target;
@@ -810,7 +834,7 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
       We want to defer copying the state info until we're sure
       we need it and are in a stable place to do so.
     */
-    CFrame trace_info;
+    _PyCFrame trace_info;
 #endif
     /* save exception in case getattr clears it */
     PyErr_Fetch(&exc, &val, &tb);
@@ -875,7 +899,12 @@ static int GREENLET_NOINLINE(g_initialstub)(void* mark)
     }
     self->top_frame = NULL;
     green_clear_exc(self);
+#if GREENLET_PY311
+    self->recursion_depth = (PyThreadState_GET()->recursion_limit
+                             - PyThreadState_GET()->recursion_remaining);
+#else
     self->recursion_depth = PyThreadState_GET()->recursion_depth;
+#endif
 
     /* restore arguments in case they are clobbered */
     ts_target = self;
@@ -1006,13 +1035,13 @@ green_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
           it uses the ``root_cframe`` just to have something to put there.
           However, once the greenlet is actually switched to for the first
           time, ``g_initialstub`` (which doesn't actually "return" while the
-          greenlet is running) stores a new CFrame on its local stack, and
+          greenlet is running) stores a new _PyCFrame on its local stack, and
           copies the appropriate values from the currently running CFrame;
-          this is then made the CFrame for the newly-minted greenlet.
+          this is then made the _PyCFrame for the newly-minted greenlet.
           ``g_initialstub`` then proceeds to call ``glet.run()``, which
-          results in ``PyEval_...`` adding the CFrame to the list. Switches
+          results in ``PyEval_...`` adding the _PyCFrame to the list. Switches
           continue as normal. Finally, when the greenlet finishes, the call to
-          ``glet.run()`` returns and the CFrame is taken out of the linked
+          ``glet.run()`` returns and the _PyCFrame is taken out of the linked
           list and the stack value is now unused and free to expire.
         */
         ((PyGreenlet*)o)->cframe = &PyThreadState_GET()->root_cframe;
@@ -1121,9 +1150,11 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
     Py_VISIT(self->context);
 #endif
 #if GREENLET_PY37
-    Py_VISIT(self->exc_state.exc_type);
     Py_VISIT(self->exc_state.exc_value);
+#if !GREENLET_PY311
+    Py_VISIT(self->exc_state.exc_type);
     Py_VISIT(self->exc_state.exc_traceback);
+#endif
 #else
     Py_VISIT(self->exc_type);
     Py_VISIT(self->exc_value);
@@ -1159,9 +1190,11 @@ green_clear(PyGreenlet* self)
     Py_CLEAR(self->context);
 #endif
 #if GREENLET_PY37
-    Py_CLEAR(self->exc_state.exc_type);
     Py_CLEAR(self->exc_state.exc_value);
+#if !GREENLET_PY311
+    Py_CLEAR(self->exc_state.exc_type);
     Py_CLEAR(self->exc_state.exc_traceback);
+#endif
 #else
     Py_CLEAR(self->exc_type);
     Py_CLEAR(self->exc_value);
@@ -1253,9 +1286,11 @@ green_dealloc(PyGreenlet* self)
     Py_CLEAR(self->context);
 #endif
 #if GREENLET_PY37
-    Py_CLEAR(self->exc_state.exc_type);
     Py_CLEAR(self->exc_state.exc_value);
+#if !GREENLET_PY311
+    Py_CLEAR(self->exc_state.exc_type);
     Py_CLEAR(self->exc_state.exc_traceback);
+#endif
 #else
     Py_CLEAR(self->exc_type);
     Py_CLEAR(self->exc_value);
