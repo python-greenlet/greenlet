@@ -359,7 +359,7 @@ public:
         // then we "fell off the end" and the thread died.
         // It's possible that there is some other greenlet that
         // switched to us, leaving a reference to the main greenlet
-        // on the stack, somewhere uncollectable. Try to detect that.
+        // on the stack, somewhere uncollectible. Try to detect that.
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
             assert(this->current_greenlet->is_currently_running_in_some_thread());
             // Drop one reference we hold.

@@ -514,7 +514,7 @@ static ThreadStateCreator& GET_THREAD_STATE()
         // NOTE: If any of this fails, we'll probably go on to hard
         // crash the process, because we're returning a reference to a
         // null pointer. we've called Py_FatalError(), but have no way
-        // to commuticate that to the caller. Since these should
+        // to communicate that to the caller. Since these should
         // essentially never fail unless the entire process is borked,
         // a hard crash with a decent C++ backtrace from the exception
         // is much more useful.
@@ -1713,7 +1713,7 @@ green_traverse(PyGreenlet* self, visitproc visit, void* arg)
     //    alive greenlets are not garbage collected
     //    anyway. This can be a problem, however, if this greenlet is
     //    never allowed to finish, and is referenced from the frame: we
-    //    have an uncollectable cycle in that case. Note that the
+    //    have an uncollectible cycle in that case. Note that the
     //    frame object itself is also frequently not even tracked by the GC
     //    starting with Python 3.7 (frames are allocated by the
     //    interpreter untracked, and only become tracked when their
@@ -1754,7 +1754,7 @@ green_is_gc(BorrowedGreenlet self)
         // would have returned 0, the tuple will take itself out of GC
         // tracking and never be investigated again. So that could
         // result in both us and the tuple leaking due to an
-        // unreachable/uncollectable reference. The same goes for
+        // unreachable/uncollectible reference. The same goes for
         // dictionaries.
         //
         // It's not a great idea to be changing our GC state on the
@@ -1921,7 +1921,7 @@ green_dealloc(PyGreenlet* self)
 
     if (self->pimpl) {
         // In case deleting this, which frees some memory,
-        // somewhow winds up calling back into us. That's usually a
+        // somehow winds up calling back into us. That's usually a
         //bug in our code.
         Greenlet* p = self->pimpl;
         self->pimpl = nullptr;

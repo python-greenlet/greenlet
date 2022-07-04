@@ -36,7 +36,7 @@ Prior to greenlet 2.0, when a thread dies, the thread's main greenlet was not
 considered to be dead. This has been changed in greenlet 2.0; however,
 observing this property is still a race condition, and, on some
 platforms (those that cannot use the C runtime to detect when a thread
-exits), not guaranteed (because of the potential for uncollectable
+exits), not guaranteed (because of the potential for uncollectible
 reference cycles to keep the Python thread state alive). In addition,
 this is considered an implementation detail and may not be true in all
 greenlet implementations.
