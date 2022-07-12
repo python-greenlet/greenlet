@@ -1,6 +1,7 @@
 #ifndef GREENLET_ALLOCATOR_HPP
 #define GREENLET_ALLOCATOR_HPP
 
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <memory>
 #include "greenlet_compiler_compat.hpp"

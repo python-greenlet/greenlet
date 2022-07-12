@@ -1,6 +1,7 @@
 #ifndef GREENLET_EXCEPTIONS_HPP
 #define GREENLET_EXCEPTIONS_HPP
 
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdexcept>
 
