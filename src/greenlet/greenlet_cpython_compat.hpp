@@ -6,6 +6,7 @@
  * Helpers for compatibility with multiple versions of CPython.
  */
 
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 
 // These enable writing template functions or classes specialized

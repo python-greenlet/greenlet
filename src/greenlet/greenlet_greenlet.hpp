@@ -4,6 +4,7 @@
  * Declarations of the core data structures.
 */
 
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 //#include "greenlet_internal.hpp"
 #include "greenlet_compiler_compat.hpp"
