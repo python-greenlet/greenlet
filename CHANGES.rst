@@ -2,6 +2,12 @@
  Changes
 =========
 
+1.1.3 (unreleased)
+==================
+
+- Add support for Python 3.11. Please note that Windows binary wheels
+  are not available at this time.
+
 1.1.2 (2021-09-29)
 ==================
 
