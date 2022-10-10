@@ -84,6 +84,18 @@ Changes
 - Main greenlets from threads that have exited are now marked as dead.
 
 
+1.1.3.post0 (2022-10-10)
+========================
+
+- Add musllinux (Alpine) binary wheels.
+
+
+1.1.3 (2022-08-25)
+==================
+
+- Add support for Python 3.11. Please note that Windows binary wheels
+  are not available at this time.
+
 1.1.2 (2021-09-29)
 ==================
 
@@ -106,6 +118,7 @@ Changes
   work as expected. See `issue 256
   <https://github.com/python-greenlet/greenlet/issues/256>`_, reported
   by Joe Rickerby.
+
 
 1.1.1 (2021-08-06)
 ==================
