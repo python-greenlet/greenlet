@@ -2,10 +2,10 @@
  Changes
 =========
 
-1.1.4 (unreleased)
-==================
+1.1.3.post0 (unreleased)
+========================
 
-- Nothing changed yet.
+- Add musllinux (Alpine) binary wheels.
 
 
 1.1.3 (2022-08-25)
