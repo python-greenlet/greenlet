@@ -15,7 +15,7 @@ typedef struct _greenlet PyGreenlet;
 extern PyTypeObject PyGreenlet_Type;
 
 
-#ifndef NDEBUG
+#ifdef  GREENLET_USE_STDIO
 #include <iostream>
 using std::cerr;
 using std::endl;
@@ -244,7 +244,7 @@ namespace greenlet {
         }
     };
 
-#ifndef NDEBUG
+#ifdef GREENLET_USE_STDIO
         template<typename T, TypeChecker TC>
         std::ostream& operator<<(std::ostream& os, const PyObjectPointer<T, TC>& s)
         {

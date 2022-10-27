@@ -13,6 +13,7 @@
  *
  * C++ templates and inline functions should go here.
  */
+#define PY_SSIZE_T_CLEAN
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_cpython_compat.hpp"
 #include "greenlet_exceptions.hpp"
