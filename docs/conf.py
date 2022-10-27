@@ -271,7 +271,7 @@ autoclass_content = 'both'
 
 extlinks = {
     'issue': ('https://github.com/python-greenlet/greenlet/issues/%s',
-              'issue #'),
+              'issue #%s'),
     'pr': ('https://github.com/python-greenlet/greenlet/pull/%s',
-           'pull request #')
+           'pull request #%s')
 }
