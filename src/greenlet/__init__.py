@@ -62,7 +62,10 @@ from ._greenlet import GREENLET_USE_CONTEXT_VARS # pylint:disable=unused-import
 from ._greenlet import GREENLET_USE_GC # pylint:disable=unused-import
 from ._greenlet import GREENLET_USE_TRACING # pylint:disable=unused-import
 
-# Controlling the use of the gc module.
+# Controlling the use of the gc module. Provisional API for this greenlet
+# implementation in 2.0.
 from ._greenlet import CLOCKS_PER_SEC # pylint:disable=unused-import
 from ._greenlet import enable_optional_cleanup # pylint:disable=unused-import
 from ._greenlet import get_clocks_used_doing_optional_cleanup # pylint:disable=unused-import
+
+# Other APIS in the _greenlet module are for test support.

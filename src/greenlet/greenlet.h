@@ -113,21 +113,37 @@ static void** _PyGreenlet_API = NULL;
         (*(int (*)(PyGreenlet * greenlet, PyGreenlet * nparent)) \
              _PyGreenlet_API[PyGreenlet_SetParent_NUM])
 
-#     define PyGreenlet_MAIN                                    \
-    (*(int (*)(PyGreenlet*))                                     \
+/*
+ * PyGreenlet_GetParent(PyObject* greenlet)
+ *
+ * return greenlet.parent;
+ *
+ * This could return NULL even if there is no exception active.
+ * If it does not return NULL, you are responsible for decrementing the
+ * reference count.
+ */
+#     define PyGreenlet_GetParent                                    \
+    (*(PyGreenlet* (*)(PyGreenlet*))                                 \
+     _PyGreenlet_API[PyGreenlet_GET_PARENT_NUM])
+
+/*
+ * deprecated, undocumented alias.
+ */
+#     define PyGreenlet_GET_PARENT PyGreenlet_GetParent
+
+#     define PyGreenlet_MAIN                                         \
+    (*(int (*)(PyGreenlet*))                                         \
      _PyGreenlet_API[PyGreenlet_MAIN_NUM])
 
-#     define PyGreenlet_STARTED                                    \
-    (*(int (*)(PyGreenlet*))                                     \
+#     define PyGreenlet_STARTED                                      \
+    (*(int (*)(PyGreenlet*))                                         \
      _PyGreenlet_API[PyGreenlet_STARTED_NUM])
 
-#     define PyGreenlet_ACTIVE                                    \
-    (*(int (*)(PyGreenlet*))                                     \
+#     define PyGreenlet_ACTIVE                                       \
+    (*(int (*)(PyGreenlet*))                                         \
      _PyGreenlet_API[PyGreenlet_ACTIVE_NUM])
 
-#     define PyGreenlet_GET_PARENT                                    \
-    (*(PyGreenlet* (*)(PyGreenlet*))                                     \
-     _PyGreenlet_API[PyGreenlet_GET_PARENT_NUM])
+
 
 
 /* Macro that imports greenlet and initializes C API */

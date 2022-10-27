@@ -143,6 +143,7 @@ namespace greenlet
         int use_tracing;
 #endif
         int recursion_depth;
+        int trash_delete_nesting;
 #if GREENLET_PY311
         _PyInterpreterFrame *current_frame;
         _PyStackChunk *datastack_chunk;
@@ -742,6 +743,7 @@ PythonState::PythonState()
     ,use_tracing(0)
 #endif
     ,recursion_depth(0)
+    ,trash_delete_nesting(0)
 #if GREENLET_PY311
     ,current_frame(nullptr)
     ,datastack_chunk(nullptr)
@@ -835,6 +837,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
 #endif
+
+    // All versions of Python.
+    this->trash_delete_nesting = tstate->trash_delete_nesting;
 }
 
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
@@ -866,6 +871,8 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
 #endif
+    // All versions of Python.
+    tstate->trash_delete_nesting = this->trash_delete_nesting;
 }
 
 void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT
@@ -933,6 +940,7 @@ const PythonState::OwnedFrame& PythonState::top_frame() const G_NOEXCEPT
 
 
 using greenlet::StackState;
+#ifdef GREENLET_USE_STDIO
 #include <iostream>
 using std::cerr;
 using std::endl;
@@ -948,6 +956,7 @@ std::ostream& greenlet::operator<<(std::ostream& os, const StackState& s)
        << ")";
     return os;
 }
+#endif
 
 StackState::StackState(void* mark, StackState& current)
     : _stack_start(nullptr),

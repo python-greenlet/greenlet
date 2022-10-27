@@ -5,7 +5,19 @@
 2.0.0a3 (unreleased)
 ====================
 
-- Nothing changed yet.
+- Deal gracefully with greenlet switches that occur while deferred
+  deallocation of objects is happening using CPython's "trash can"
+  mechanism. Previously, if a large nested container held items that
+  switched greenlets during delayed deallocation, and that second
+  greenlet also invoked the trash can, CPython's internal state could
+  become corrupt. This was visible as an assertion error in debug
+  builds. Now, the relevant internal state is saved and restored
+  during greenlet switches. See also `gevent issue 1909
+  <https://github.com/gevent/gevent/issues/1909>`_.
+- Rename the C API function ``PyGreenlet_GET_PARENT`` to
+  ``PyGreenlet_GetParent`` for consistency. The old name remains
+  available as a deprecated alias.
+
 
 
 2.0.0a2 (2022-03-24)
