@@ -2,8 +2,8 @@
  Changes
 =========
 
-2.0.0a3 (unreleased)
-====================
+2.0.0rc1 (2022-10-27)
+=====================
 
 - Deal gracefully with greenlet switches that occur while deferred
   deallocation of objects is happening using CPython's "trash can"
