@@ -404,7 +404,7 @@ struct ThreadState_DestroyWithGIL
     }
 };
 
-#if PY_VERSION_HEX >= 0x30800A0 && PY_VERSION_HEX < 0x3090000
+#if (PY_VERSION_HEX >= 0x30800A0 && PY_VERSION_HEX < 0x3090000) && !(defined(_WIN32) || defined(WIN32))
 // XXX: From Python 3.8a3 [1] up until Python 3.9a6 [2][3],
 // ``Py_AddPendingCall`` would try to produce a Python exception if
 // the interpreter was in the beginning of shutting down when this
@@ -441,7 +441,9 @@ struct ThreadState_DestroyWithGIL
 // fine, but on Ubuntu jammy with 3.8 from ppa:deadsnakes or GitHub
 // Actions 3.8 (I think it's Ubuntu 18.04), they con't be used; at
 // least, I couldn't get them to work). So we need to define the
-// structures and _PyRuntime data member ourself.
+// structures and _PyRuntime data member ourself. Yet more
+// unfortunately, _PyRuntime  won't link on Windows, so we can only do
+// this on other platforms.
 //
 // [1] https://github.com/python/cpython/commit/842a2f07f2f08a935ef470bfdaeef40f87490cfc
 // [2] https://github.com/python/cpython/commit/cfc3c2f8b34d3864717ab584c5b6c260014ba55a
