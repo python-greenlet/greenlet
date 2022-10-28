@@ -5,7 +5,13 @@
 2.0.0rc2 (unreleased)
 =====================
 
-- Nothing changed yet.
+- Workaround `CPython 3.8 bug
+  <https://github.com/python/cpython/issues/81308>`_ that could cause
+  the interpreter to crash during an early phase of shutdown with the
+  message "Fatal Python error: Python memory allocator called without
+  holding the GI." This only impacted CPython 3.8a3 through CPython
+  3.9a5; the fix is only applied to CPython 3.8 releases (please don't
+  use an early alpha release of CPython 3.9).
 
 
 2.0.0rc1 (2022-10-27)
