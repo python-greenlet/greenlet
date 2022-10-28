@@ -404,8 +404,84 @@ struct ThreadState_DestroyWithGIL
     }
 };
 
+#if PY_VERSION_HEX >= 0x30800A0 && PY_VERSION_HEX < 0x3090000
+// XXX: From Python 3.8a3 [1] up until Python 3.9a6 [2][3],
+// Py_AddPendingCall would try to produce a Python exception if the
+// interpreter was in the middle of shutting down when this function
+// is called. However, this function doesn't require the GIL, and we
+// are absolutely not holding it. That means that trying to create the
+// Python exception is using the C API in an undefined state; under
+// some circumstances at least, the C API detects this and aborts the
+// process with an error ("Fatal Python error: Python memory allocator
+// called without holding the GIL": Add -> PyErr_SetString ->
+// PyUnicode_New -> PyObject_Malloc)
+//
+// Of course, we checked for whether the interpreter was shutting down
+// earlier, but as noted, that's a race condition, and so we may not
+// have actually gotten the right answer.
+//
+// Our solution for those versions is to inline the same code, without
+// the problematic bit.
+//
+// [1] https://github.com/python/cpython/commit/842a2f07f2f08a935ef470bfdaeef40f87490cfc
+// [2] https://github.com/python/cpython/commit/cfc3c2f8b34d3864717ab584c5b6c260014ba55a
+// [3] https://github.com/python/cpython/issues/81308
+# define GREENLET_BROKEN_PY_ADD_PENDING 1
+# define Py_BUILD_CORE 1
+# include "internal/pycore_pystate.h"
+# undef Py_BUILD_CORE
+#define SIGNAL_PENDING_CALLS(ceval) \
+    do { \
+        _Py_atomic_store_relaxed(&(ceval)->pending.calls_to_do, 1); \
+        _Py_atomic_store_relaxed(&(ceval)->eval_breaker, 1); \
+    } while (0)
+#else
+# define GREENLET_BROKEN_PY_ADD_PENDING 0
+#endif
+
+
 struct ThreadState_DestroyNoGIL
 {
+#if GREENLET_BROKEN_PY_ADD_PENDING
+    static int _push_pending_call(struct _pending_calls *pending,
+                                  int (*func)(void *), void *arg)
+    {
+        int i = pending->last;
+        int j = (i + 1) % NPENDINGCALLS;
+        if (j == pending->first) {
+            return -1; /* Queue full */
+        }
+        pending->calls[i].func = func;
+        pending->calls[i].arg = arg;
+        pending->last = j;
+        return 0;
+    }
+    static int AddPendingCall(int (*func)(void *), void *arg)
+    {
+        _PyRuntimeState *runtime = &_PyRuntime;
+        if (!runtime) {
+            return 0;
+        }
+        struct _pending_calls *pending = &runtime->ceval.pending;
+        if (!pending->lock) {
+            return 0;
+        }
+        int result = 0;
+        PyThread_acquire_lock(pending->lock, WAIT_LOCK);
+        if (!pending->finishing) {
+            result = ThreadState_DestroyNoGIL::_push_pending_call(pending, func, arg);
+        }
+        PyThread_release_lock(pending->lock);
+        SIGNAL_PENDING_CALLS(&runtime->ceval);
+        return result;
+    }
+#else
+    static int AddPendingCall(int (*func)(void*), void* arg)
+    {
+        return Py_AddPendingCall(func, arg);
+    }
+#endif
+
     ThreadState_DestroyNoGIL(ThreadState* state)
     {
         // We are *NOT* holding the GIL. Our thread is in the middle
@@ -450,8 +526,9 @@ struct ThreadState_DestroyNoGIL
             if (mod_globs.thread_states_to_destroy.size() == 1) {
                 // We added the first item to the queue. We need to schedule
                 // the cleanup.
-                int result = Py_AddPendingCall(ThreadState_DestroyNoGIL::DestroyQueueWithGIL,
-                                               NULL);
+                int result = ThreadState_DestroyNoGIL::AddPendingCall(
+                    ThreadState_DestroyNoGIL::DestroyQueueWithGIL,
+                    NULL);
                 if (result < 0) {
                     // Hmm, what can we do here?
                     fprintf(stderr,
