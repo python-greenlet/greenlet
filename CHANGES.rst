@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.0rc2 (unreleased)
+2.0.0rc2 (2022-10-28)
 =====================
 
 - Workaround `CPython 3.8 bug
