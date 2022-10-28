@@ -36,6 +36,12 @@ environment:
 
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
+    - PYTHON: "C:\\Python311-x64"
+      PYTHON_VERSION: "3.11.0"
+      PYTHON_ARCH: "64"
+      PYTHON_EXE: python
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
     - PYTHON: "C:\\Python27"
       PYTHON_ARCH: "32"
       PYTHON_VERSION: "2.7.x"
