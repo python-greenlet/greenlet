@@ -223,14 +223,14 @@ namespace greenlet {
         inline OwnedObject PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT;
         inline OwnedObject PyRequireAttr(const char* const name) const;
         inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
-        inline OwnedObject PyCall(const BorrowedObject& arg) const G_NOEXCEPT;
-        inline OwnedObject PyCall(PyGreenlet* arg) const G_NOEXCEPT;
-        inline OwnedObject PyCall(const PyObject* arg) const G_NOEXCEPT;
+        inline OwnedObject PyCall(const BorrowedObject& arg) const;
+        inline OwnedObject PyCall(PyGreenlet* arg) const ;
+        inline OwnedObject PyCall(const PyObject* arg) const ;
         // PyObject_Call(this, args, kwargs);
         inline OwnedObject PyCall(const BorrowedObject args,
-                                  const BorrowedObject kwargs) const G_NOEXCEPT;
+                                  const BorrowedObject kwargs) const;
         inline OwnedObject PyCall(const OwnedObject& args,
-                                  const OwnedObject& kwargs) const G_NOEXCEPT;
+                                  const OwnedObject& kwargs) const;
 
     protected:
         void _set_raw_pointer(void* t)
@@ -706,19 +706,19 @@ namespace greenlet {
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const BorrowedObject& arg) const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const BorrowedObject& arg) const
     {
         return this->PyCall(arg.borrow());
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyGreenlet* arg) const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyGreenlet* arg) const
     {
         return this->PyCall(reinterpret_cast<const PyObject*>(arg));
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const PyObject* arg) const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const PyObject* arg) const
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
@@ -726,7 +726,7 @@ namespace greenlet {
 
     template<typename T, TypeChecker TC>
     inline OwnedObject PyObjectPointer<T, TC>::PyCall(const BorrowedObject args,
-                                                  const BorrowedObject kwargs) const G_NOEXCEPT
+                                                  const BorrowedObject kwargs) const
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_Call(this->p, args, kwargs));
@@ -734,7 +734,7 @@ namespace greenlet {
 
     template<typename T, TypeChecker TC>
     inline OwnedObject PyObjectPointer<T, TC>::PyCall(const OwnedObject& args,
-                                                  const OwnedObject& kwargs) const G_NOEXCEPT
+                                                  const OwnedObject& kwargs) const
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_Call(this->p, args.borrow(), kwargs.borrow()));

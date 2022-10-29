@@ -1296,7 +1296,7 @@ UserGreenlet::g_initialstub(void* mark)
 
 
 void
-UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT
+UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
 {
     // The arguments here would be another great place for move.
     // As it is, we take them as a reference so that when we clear
@@ -1385,9 +1385,19 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) 
             //
             // Hopefully the basic C stdlib is still functional enough
             // for us to at least print an error.
+            //
+            // It gets more complicated than that, though, on some
+            // platforms, specifically at least Linux/gcc/libstdc++. They use
+            // an exception to unwind the stack when a background
+            // thread exits. (See comments about G_NOEXCEPT.) So this
+            // may not actually represent anything untoward.
+# if defined(WIN32) || defined(_WIN32)
             fprintf(stderr, "greenlet: Unhandled C++ exception from a greenlet run function. ");
             fprintf(stderr, "Because memory is likely corrupted, terminating process.");
             abort();
+#else
+            throw;
+#endif
         }
     }
     args.CLEAR();
