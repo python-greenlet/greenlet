@@ -22,6 +22,8 @@ cpp_link_args = []
 # Extra compiler arguments passed to the main extension
 main_compile_args = []
 
+is_win = sys.platform.startswith("win")
+
 # workaround segfaults on openbsd and RHEL 3 / CentOS 3 . see
 # https://bitbucket.org/ambroff/greenlet/issue/11/segfault-on-openbsd-i386
 # https://github.com/python-greenlet/greenlet/issues/4
@@ -39,7 +41,7 @@ if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
 if sys.platform == 'darwin':
     # The clang compiler doesn't use --std=c++11 by default
     cpp_compile_args.append("--std=gnu++11")
-elif sys.platform == 'win32' and "MSC" in platform.python_compiler():
+elif is_win and "MSC" in platform.python_compiler():
     # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
     # correctly by default. While newer versions do handle exceptions by default,
     # they don't do it fully correctly. So we need an argument on all versions.
@@ -100,7 +102,7 @@ else:
 
     headers = [GREENLET_HEADER]
 
-    if sys.platform == 'win32' and '64 bit' in sys.version:
+    if is_win and '64 bit' in sys.version:
         # this works when building with msvc, not with 64 bit gcc
         # switch_<platform>_masm.obj can be created with setup_switch_<platform>_masm.cmd
         obj_fn = 'switch_arm64_masm.obj' if platform.machine() == 'ARM64' else 'switch_x64_masm.obj'
@@ -108,7 +110,7 @@ else:
     else:
         extra_objects = []
 
-    if sys.platform == 'win32' and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
+    if is_win and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
         main_compile_args.append('/MT')
     elif hasattr(os, 'uname') and os.uname()[4] in ['ppc64el', 'ppc64le']:
         main_compile_args.append('-fno-tree-dominator-opts')
@@ -126,7 +128,12 @@ else:
             depends=[
                 GREENLET_HEADER,
                 GREENLET_SRC_DIR + 'slp_platformselect.h',
-            ] + _find_platform_headers() + _find_impl_headers()
+            ] + _find_platform_headers() + _find_impl_headers(),
+            define_macros=[
+            ] + ([
+                ('WIN32', '1'),
+            ] if is_win else [
+            ])
         ),
         # Test extensions.
         #
