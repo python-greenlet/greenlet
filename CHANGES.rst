@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.0rc3 (unreleased)
+2.0.0rc3 (2022-10-29)
 =====================
 
 - Python 2: Fix a crash that could occur when raising an old-style
