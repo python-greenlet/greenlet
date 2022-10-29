@@ -1002,7 +1002,10 @@ namespace greenlet {
 
             }
             else if (PyExceptionInstance_Check(type)) {
-                /* Raising an instance. The value should be a dummy. */
+                /* Raising an instance --- usually that means an
+                   object that is a subclass of BaseException, but on
+                   Python 2, that can also mean an arbitrary old-style
+                   object. The value should be a dummy. */
                 if (instance && !instance.is_None()) {
                     throw PyErrOccurred(
                                     PyExc_TypeError,
@@ -1010,11 +1013,21 @@ namespace greenlet {
                 }
                 /* Normalize to raise <class>, <instance> */
                 this->instance = this->type;
-#ifndef NDEBUG
-                Py_ssize_t type_count = Py_REFCNT(Py_TYPE(instance.borrow()));
-#endif
                 this->type = PyExceptionInstance_Class(instance.borrow());
-                assert(type.REFCNT() == type_count + 1);
+
+                /*
+                  It would be tempting to do this:
+
+                Py_ssize_t type_count = Py_REFCNT(Py_TYPE(instance.borrow()));
+                this->type = PyExceptionInstance_Class(instance.borrow());
+                assert(this->type.REFCNT() == type_count + 1);
+
+                But that doesn't work on Python 2 in the case of
+                old-style instances: The result of Py_TYPE is going to
+                be the global shared <type instance> that all
+                old-style classes have, while the return of Instance_Class()
+                will be the Python-level class object. The two are unrelated.
+                */
             }
             else {
                 /* Not something you can raise. throw() fails. */

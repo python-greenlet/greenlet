@@ -5,13 +5,14 @@
 2.0.0rc3 (unreleased)
 =====================
 
-- Nothing changed yet.
+- Python 2: Fix a crash that could occur when raising an old-style
+  instance object.
 
 
 2.0.0rc2 (2022-10-28)
 =====================
 
-- Workaround `CPython 3.8 bug
+- Workaround `a CPython 3.8 bug
   <https://github.com/python/cpython/issues/81308>`_ that could cause
   the interpreter to crash during an early phase of shutdown with the
   message "Fatal Python error: Python memory allocator called without
