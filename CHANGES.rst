@@ -5,7 +5,9 @@
 2.0.0rc4 (unreleased)
 =====================
 
-- Nothing changed yet.
+- Linux: Fix a rare crash that could occur when shutting down an
+  interpreter running multiple threads, when some of those threads are
+  in greenlets making calls to functions that release the GIL.
 
 
 2.0.0rc3 (2022-10-29)

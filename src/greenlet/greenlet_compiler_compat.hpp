@@ -5,6 +5,35 @@
 /**
  * Definitions to aid with compatibility with different compilers.
  *
+ * .. caution:: Use extreme care with G_NOEXCEPT.
+ * Some compilers and runtimes, specifically gcc/libgcc/libstdc++ on
+ * Linux, implement stack unwinding by throwing an uncatchable
+ * exception, one that specifically does not appear to be an active
+ * exception to the rest of the runtime. If this happens while we're in a G_NOEXCEPT function,
+ * we have violated our dynamic exception contract, and so the runtime
+ * will call std::terminate(), which kills the process with the
+ * unhelpful message "terminate called without an active exception".
+ *
+ * This has happened in this scenario: A background thread is running
+ * a greenlet that has made a native call and released the GIL.
+ * Meanwhile, the main thread finishes and starts shutting down the
+ * interpreter. When the background thread is scheduled again and
+ * attempts to obtain the  GIL, it notices that the interpreter is
+ * exiting and calls ``pthread_exit()``. This in turn starts to unwind
+ * the stack by throwing that exception. But we had the ``PyCall``
+ * functions annotated as G_NOEXCEPT, so the runtime terminated us.
+ *
+ * #2  0x00007fab26fec2b7 in std::terminate() () from /lib/x86_64-linux-gnu/libstdc++.so.6
+ * #3  0x00007fab26febb3c in __gxx_personality_v0 () from /lib/x86_64-linux-gnu/libstdc++.so.6
+ * #4  0x00007fab26f34de6 in ?? () from /lib/x86_64-linux-gnu/libgcc_s.so.1
+ * #6  0x00007fab276a34c6 in __GI___pthread_unwind  at ./nptl/unwind.c:130
+ * #7  0x00007fab2769bd3a in __do_cancel () at ../sysdeps/nptl/pthreadP.h:280
+ * #8  __GI___pthread_exit (value=value@entry=0x0) at ./nptl/pthread_exit.c:36
+ * #9  0x000000000052e567 in PyThread_exit_thread () at ../Python/thread_pthread.h:370
+ * #10 0x00000000004d60b5 in take_gil at ../Python/ceval_gil.h:224
+ * #11 0x00000000004d65f9 in PyEval_RestoreThread  at ../Python/ceval.c:467
+ * #12 0x000000000060cce3 in setipaddr  at ../Modules/socketmodule.c:1203
+ * #13 0x00000000006101cd in socket_gethostbyname
  */
 
 
@@ -91,6 +120,12 @@ typedef unsigned int uint32_t;
 #    define GREENLET_NOINLINE(name) __declspec(noinline) name
 #    define GREENLET_NOINLINE_P(rtype, name) __declspec(noinline) rtype name
 #    define UNUSED(x) UNUSED_ ## x
+#endif
+
+#if defined(_MSC_VER)
+#    define G_NOEXCEPT_WIN32 G_NOEXCEPT
+#else
+#    define G_NOEXCEPT_WIN32
 #endif
 
 

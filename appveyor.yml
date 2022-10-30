@@ -36,16 +36,14 @@ environment:
 
   matrix:
     # http://www.appveyor.com/docs/installed-software#python
+
+    # Fully supported 64-bit versions, with testing. This should be
+    # all the current (non EOL) versions.
     - PYTHON: "C:\\Python311-x64"
       PYTHON_VERSION: "3.11.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-
-    - PYTHON: "C:\\Python27"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "2.7.x"
-      PYTHON_EXE: python
 
     - PYTHON: "C:\\Python310-x64"
       PYTHON_VERSION: "3.10.0"
@@ -59,9 +57,15 @@ environment:
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
 
-    - PYTHON: "C:\\Python39"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.9.x"
+    - PYTHON: "C:\\Python38-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.8.x"
+      PYTHON_EXE: python
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
+    - PYTHON: "C:\\Python37-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.7.x"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
 
@@ -70,45 +74,65 @@ environment:
       PYTHON_VERSION: "2.7.x"
       PYTHON_EXE: python
 
-    - PYTHON: "C:\\Python35"
+    # Tested 32-bit versions. A small, hand-picked selection covering
+    # important variations. No need to include newer versions of
+    # cpython here, 32-bit x86 windows is on the way out.
+
+    - PYTHON: "C:\\Python39"
       PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.5.x"
+      PYTHON_VERSION: "3.9.x"
       PYTHON_EXE: python
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
 
-    - PYTHON: "C:\\Python35-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.5.x"
-      PYTHON_EXE: python
-
-    - PYTHON: "C:\\Python37"
+    - PYTHON: "C:\\Python27"
       PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.7.x"
+      PYTHON_VERSION: "2.7.x"
       PYTHON_EXE: python
 
-    - PYTHON: "C:\\Python37-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.7.x"
-      PYTHON_EXE: python
 
-    - PYTHON: "C:\\Python38"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.8.x"
-      PYTHON_EXE: python
-
-    - PYTHON: "C:\\Python38-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.8.x"
-      PYTHON_EXE: python
-
-    - PYTHON: "C:\\Python36"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.6.x"
-      PYTHON_EXE: python
+    # Untested 64-bit versions. We don't expect any variance here from
+    # the other tested 64-bit versions, OR they are very EOL
 
     - PYTHON: "C:\\Python36-x64"
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "3.6.x"
       PYTHON_EXE: python
+      GWHEEL_ONLY: true
+
+    - PYTHON: "C:\\Python35-x64"
+      PYTHON_ARCH: "64"
+      PYTHON_VERSION: "3.5.x"
+      PYTHON_EXE: python
+      GWHEEL_ONLY: true
+
+    # Untested 32-bit versions. As above, we don't expect any variance
+    # from the tested 32-bit versions, OR they are very EOL.
+
+    - PYTHON: "C:\\Python38"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.8.x"
+      PYTHON_EXE: python
+      GWHEEL_ONLY: true
+
+    - PYTHON: "C:\\Python37"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.7.x"
+      PYTHON_EXE: python
+      GWHEEL_ONLY: true
+
+    - PYTHON: "C:\\Python36"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_EXE: python
+      GWHEEL_ONLY: true
+
+    - PYTHON: "C:\\Python35"
+      PYTHON_ARCH: "32"
+      PYTHON_VERSION: "3.5.x"
+      PYTHON_EXE: python
+      GWHEEL_ONLY: true
+
+
 
 cache:
   - "%TMP%\\py\\"
@@ -177,7 +201,7 @@ build_script:
 
 test_script:
   - "%CMD_IN_ENV% python -c \"import faulthandler; assert faulthandler.is_enabled()\""
-  - "%CMD_IN_ENV% python -m zope.testrunner --test-path=src -vvv"
+  -  if not "%GWHEEL_ONLY%"=="true" %PYEXE% -m zope.testrunner --test-path=src -vvv
 # XXX: Doctest disabled pending sphinx release for 3.10; see tests.yml.
 #  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 

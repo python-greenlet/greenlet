@@ -110,14 +110,21 @@ test_exception_switch_and_do_in_g2(PyObject* self, PyObject* args)
             return NULL;
         }
     }
-    catch (...) {
+    catch (const exception_t& e) {
         /* if we are here the memory can be already corrupted and the program
          * might crash before below py-level exception might become printed.
          * -> print something to stderr to make it clear that we had entered
          *    this catch block.
+         * See comments in inner_bootstrap()
          */
+#if defined(WIN32) || defined(_WIN32)
         fprintf(stderr, "C++ exception unexpectedly caught in g1\n");
         PyErr_SetString(PyExc_AssertionError, "C++ exception unexpectedly caught in g1");
+        Py_XDECREF(result);
+        return NULL;
+#else
+        throw;
+#endif
     }
 
     Py_XDECREF(result);
