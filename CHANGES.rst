@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.0rc4 (unreleased)
+2.0.0rc4 (2022-10-30)
 =====================
 
 - Linux: Fix a rare crash that could occur when shutting down an
