@@ -55,7 +55,7 @@ elif is_win and "MSC" in platform.python_compiler():
     # with it. Leaving off the "c" should just result in slower, safer code.
     # Other options:
     #    "r" == Always generate standard confirming checks for noexcept blocks, terminating
-    #           if violated.
+    #           if violated. IMPORTANT: We rely on this.
     # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
     handler = "/EHsr"
     cpp_compile_args.append(handler)

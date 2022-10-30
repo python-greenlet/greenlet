@@ -1270,7 +1270,7 @@ UserGreenlet::g_initialstub(void* mark)
        explicitly to us. Either way, the ``err`` variable is
        created twice at the same memory location, but possibly
        having different ``origin`` values. Note that it's not
-       constructed for the second time until the switch actually happens.`
+       constructed for the second time until the switch actually happens.
     */
     if (err.status == 1) {
         // This never returns!
@@ -1297,7 +1297,7 @@ UserGreenlet::g_initialstub(void* mark)
 
 
 void
-UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
+UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT_WIN32
 {
     // The arguments here would be another great place for move.
     // As it is, we take them as a reference so that when we clear
@@ -1370,19 +1370,28 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
         catch(...) {
             // Unhandled C++ exception!
 
-            // If we don't catch this here, most platforms will just
-            // abort() the process. But on 64-bit Windows with older
-            // versions of the C runtime, this can actually corrupt
-            // memory and just return. We see this when compiling with
-            // the Windows 7.0 SDK targeting Windows Server 2008, but
-            // not when using the Appveyor Visual Studio 2019 image.
-            // So this currently only affects Python 2.7 on Windows
-            // 64. That is, the tests pass and the runtime aborts
+            // If we declare ourselves as noexcept, if we don't catch
+            // this here, most platforms will just abort() the
+            // process. But on 64-bit Windows with older versions of
+            // the C runtime, this can actually corrupt memory and
+            // just return. We see this when compiling with the
+            // Windows 7.0 SDK targeting Windows Server 2008, but not
+            // when using the Appveyor Visual Studio 2019 image. So
+            // this currently only affects Python 2.7 on Windows 64.
+            // That is, the tests pass and the runtime aborts
             // everywhere else.
             //
             // However, if we catch it and try to continue with a
             // Python error, then all Windows 64 bit platforms corrupt
-            // memory. So all we can do is manually abort.
+            // memory. So all we can do is manually abort, hopefully
+            // with a good error message. (Note that the above was
+            // tested WITHOUT the `/EHr` switch being used at compile
+            // time, so MSVC may have "optimized" out important
+            // checking. Using that switch, we may be in a better
+            // place in terms of memory corruption.) But sometimes it
+            // can't be caught here at all, which is confusing but not
+            // terribly surprising; so again, the G_NOEXCEPT_WIN32
+            // plus "/EHr".
             //
             // Hopefully the basic C stdlib is still functional enough
             // for us to at least print an error.
@@ -1391,7 +1400,9 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
             // platforms, specifically at least Linux/gcc/libstdc++. They use
             // an exception to unwind the stack when a background
             // thread exits. (See comments about G_NOEXCEPT.) So this
-            // may not actually represent anything untoward.
+            // may not actually represent anything untoward. On those
+            // platforms we allow throws of this to propagate, or
+            // attempt to anyway.
 # if defined(WIN32) || defined(_WIN32)
             Py_FatalError(
                 "greenlet: Unhandled C++ exception from a greenlet run function. "

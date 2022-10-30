@@ -589,7 +589,7 @@ namespace greenlet
     protected:
         virtual switchstack_result_t g_initialstub(void* mark);
     private:
-        void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run);
+        void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT_WIN32;
     };
 
     class MainGreenlet : public Greenlet

@@ -122,5 +122,11 @@ typedef unsigned int uint32_t;
 #    define UNUSED(x) UNUSED_ ## x
 #endif
 
+#if defined(_MSC_VER)
+#    define G_NOEXCEPT_WIN32 G_NOEXCEPT
+#else
+#    define G_NOEXCEPT_WIN32
+#endif
+
 
 #endif
