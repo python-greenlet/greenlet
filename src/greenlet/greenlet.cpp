@@ -6,6 +6,7 @@
  * Fix missing braces with:
  *   clang-tidy src/greenlet/greenlet.c -fix -checks="readability-braces-around-statements"
 */
+#include <cstdlib>
 #include <string>
 #include <algorithm>
 #include <exception>
@@ -1392,9 +1393,10 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
             // thread exits. (See comments about G_NOEXCEPT.) So this
             // may not actually represent anything untoward.
 # if defined(WIN32) || defined(_WIN32)
-            fprintf(stderr, "greenlet: Unhandled C++ exception from a greenlet run function. ");
-            fprintf(stderr, "Because memory is likely corrupted, terminating process.");
-            abort();
+            Py_FatalError(
+                "greenlet: Unhandled C++ exception from a greenlet run function. "
+                "Because memory is likely corrupted, terminating process.");
+            std::abort();
 #else
             throw;
 #endif
@@ -1453,6 +1455,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run)
     PyErr_WriteUnraisable(this->self().borrow_o());
     Py_FatalError("greenlet: ran out of parent greenlets while propagating exception; "
                   "cannot continue");
+    std::abort();
 }
 
 

@@ -110,7 +110,7 @@ test_exception_switch_and_do_in_g2(PyObject* self, PyObject* args)
             return NULL;
         }
     }
-    catch (...) {
+    catch (const exception_t& e) {
         /* if we are here the memory can be already corrupted and the program
          * might crash before below py-level exception might become printed.
          * -> print something to stderr to make it clear that we had entered
