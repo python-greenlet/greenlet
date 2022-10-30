@@ -51,10 +51,13 @@ elif is_win and "MSC" in platform.python_compiler():
     # OR
     #   "a" == standard C++, and Windows SEH; anything may throw, compiler optimizations
     #          around try blocks are less aggressive.
-    # /EHsc is suggested, as /EHa isn't supposed to be linked to other things not built
-    # with it.
+    # /EHsc is suggested, and /EHa isn't supposed to be linked to other things not built
+    # with it. Leaving off the "c" should just result in slower, safer code.
+    # Other options:
+    #    "r" == Always generate standard confirming checks for noexcept blocks, terminating
+    #           if violated.
     # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
-    handler = "/EHsc"
+    handler = "/EHsr"
     cpp_compile_args.append(handler)
     # To disable most optimizations:
     #cpp_compile_args.append('/Od')
