@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.0rc5 (unreleased)
+2.0.0rc5 (2022-10-31)
 =====================
 
 - Linux: Fix another group of rare crashes that could occur when shutting down an
