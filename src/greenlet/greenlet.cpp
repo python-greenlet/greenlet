@@ -1273,11 +1273,15 @@ UserGreenlet::g_initialstub(void* mark)
        constructed for the second time until the switch actually happens.
     */
     if (err.status == 1) {
-        // This never returns!
+        // This never returns! Calling inner_bootstrap steals
+        // the contents of our run object within this stack frame, so
+        // it is not valid to do anything with it.
         this->inner_bootstrap(err.origin_greenlet, run);
+        Py_FatalError("greenlet: inner_bootstrap returned\n");
     }
     // The child will take care of decrefing this.
     run.relinquish_ownership();
+
     // In contrast, notice that we're keeping the origin greenlet
     // around as an owned reference; we need it to call the trace
     // function for the switch back into the parent. It was only
@@ -1291,17 +1295,23 @@ UserGreenlet::g_initialstub(void* mark)
         // XXX: This code path is not tested.
         this->stack_state = StackState();
         this->_main_greenlet.CLEAR();
+        fprintf(stderr, "greenlet: g_initialstub: starting child failed.\n");
     }
     return err;
 }
 
 
 void
-UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT_WIN32
+UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run) G_NOEXCEPT_WIN32
 {
     // The arguments here would be another great place for move.
     // As it is, we take them as a reference so that when we clear
-    // them we clear what's on the stack above us.
+    // them we clear what's on the stack above us. Do that NOW, and
+    // without using a C++ RAII object,
+    // so there's no way that exiting the parent frame can clear it,
+    // or we clear it unexpectedly. This arises in the context of the
+    // interpreter shutting down. See https://github.com/python-greenlet/greenlet/issues/325
+    PyObject* run = _run.relinquish_ownership();
 
     /* in the new greenlet */
     assert(this->thread_state()->borrow_current() == this->_self);
@@ -1365,7 +1375,8 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) 
         /* call g.run(*args, **kwargs) */
         // This could result in further switches
         try {
-            result = run.PyCall(args.args(), args.kwargs());
+            //result = run.PyCall(args.args(), args.kwargs());
+            result = OwnedObject::consuming(PyObject_Call(run, args.args().borrow(), args.kwargs().borrow()));
         }
         catch(...) {
             // Unhandled C++ exception!
@@ -1414,7 +1425,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) 
         }
     }
     args.CLEAR();
-    run.CLEAR();
+    Py_CLEAR(run);
 
     if (!result
         && mod_globs.PyExc_GreenletExit.PyExceptionMatches()
