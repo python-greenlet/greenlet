@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.0.post0 (unreleased)
+2.0.0.post0 (2022-11-03)
 ========================
 
 - Add ``Programming Language :: Python :: 3.11`` to the PyPI
