@@ -184,7 +184,7 @@ setup(
     author="Alexey Borzenkov",
     author_email="snaury@gmail.com",
     maintainer='Jason Madden',
-    maintainer_email='jason@nextthought.com',
+    maintainer_email='jason@seecoresoftware.com',
     project_urls={
         'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
         'Source Code': 'https://github.com/python-greenlet/greenlet/',
@@ -213,6 +213,7 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Operating System :: OS Independent',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],

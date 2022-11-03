@@ -2,10 +2,11 @@
  Changes
 =========
 
-2.0.1 (unreleased)
-==================
+2.0.0.post0 (unreleased)
+========================
 
-- Nothing changed yet.
+- Add ``Programming Language :: Python :: 3.11`` to the PyPI
+  classifier metadata.
 
 
 2.0.0 (2022-10-31)
