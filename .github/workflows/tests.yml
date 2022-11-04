@@ -25,15 +25,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.5, 3.6, 3.7, 3.8, 3.9, "3.10", "3.11"]
+        python-version: [3.5, 3.6, 3.7, 3.8, 3.9, "3.10", "3.11", "3.12.0~a1"]
         # Jan 2023: We have pinned back from ubuntu-latest (which is
         # now ubuntu 22.04) because older Python versions like
         # 3.5, 3.6 and presumably 2.7 are not available in it.
-        os: [ubuntu-20.04, macos-latest]
+        os: [ubuntu-latest, macos-latest]
+        exclude:
+          - os: macos-latest
+            python-version: 3.12.0~a1
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python
       uses: actions/setup-python@v4
+      if: "!contains(matrix.python-version, '~')"
+      with:
+        python-version: ${{ matrix.python-version }}
+    - uses: deadsnakes/action@v2.1.1
+      if: "contains(matrix.python-version, '~')"
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
