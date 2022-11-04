@@ -831,7 +831,11 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     this->use_tracing = tstate->cframe->use_tracing;
 #endif
 #if GREENLET_PY311
+    #if GREENLET_PY312
+    this->recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    #else
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+    #endif
     this->current_frame = tstate->cframe->current_frame;
     this->datastack_chunk = tstate->datastack_chunk;
     this->datastack_top = tstate->datastack_top;
@@ -867,7 +871,11 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     tstate->cframe->use_tracing = this->use_tracing;
 #endif
 #if GREENLET_PY311
+    #if GREENLET_PY312
+    tstate->py_recursion_remaining = tstate->py_recursion_limit - this->recursion_depth;
+    #else
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
+    #endif
     tstate->cframe->current_frame = this->current_frame;
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;
@@ -895,7 +903,9 @@ void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEP
 void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT
 {
     this->_top_frame = nullptr;
-#if GREENLET_PY311
+#if GREENLET_PY312
+    this->recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+#elif GREENLET_PY311
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
 #else
     this->recursion_depth = tstate->recursion_depth;

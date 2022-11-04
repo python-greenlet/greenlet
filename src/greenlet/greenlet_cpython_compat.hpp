@@ -48,6 +48,12 @@ We have to save and restore this as well.
 #    define GREENLET_USE_CFRAME 0
 #endif
 
+#if PY_VERSION_HEX >= 0x30C0000
+#    define GREENLET_PY312 1
+#else
+#    define GREENLET_PY312 0
+#endif
+
 #if PY_VERSION_HEX >= 0x30B00A4
 /*
 Greenlet won't compile on anything older than Python 3.11 alpha 4 (see
