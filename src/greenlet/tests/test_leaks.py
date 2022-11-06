@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Testing scenarios that may have leaked.
 """
@@ -10,9 +11,14 @@ import time
 import weakref
 import threading
 
+import psutil
+
 import greenlet
 from . import TestCase
 from .leakcheck import fails_leakcheck
+from .leakcheck import ignores_leakcheck
+from .leakcheck import RUNNING_ON_GITHUB_ACTIONS
+from .leakcheck import RUNNING_ON_MANYLINUX
 
 try:
     from sys import intern
@@ -295,3 +301,148 @@ class TestLeaks(TestCase):
         self._check_issue251(
             manually_collect_background=False,
             explicit_reference_to_switch=True)
+
+    UNTRACK_ATTEMPTS = 100
+
+    def _only_test_some_versions(self):
+        # We're only looking for this problem specifically on 3.11,
+        # and this set of tests is relatively fragile, depending on
+        # OS and memory management details. So we want to run it on 3.11+
+        # (obviously) but not every older 3.x version in order to reduce
+        # false negatives.
+        if sys.version_info[0] >= 3 and sys.version_info[:2] < (3, 8):
+            self.skipTest('Only observed on 3.11')
+        if sys.version_info[0] == 2 and RUNNING_ON_GITHUB_ACTIONS:
+            self.skipTest('Hard to get a stable pattern here')
+        if RUNNING_ON_MANYLINUX:
+            self.skipTest("Slow and not worth repeating here")
+
+    @ignores_leakcheck
+    # Because we're just trying to track raw memory, not objects, and running
+    # the leakcheck makes an already slow test slower.
+    def test_untracked_memory_doesnt_increase(self):
+        # See https://github.com/gevent/gevent/issues/1924
+        # and https://github.com/python-greenlet/greenlet/issues/328
+        self._only_test_some_versions()
+        def f():
+            return 1
+
+        ITER = 10000
+        def run_it():
+            for _ in range(ITER):
+                greenlet.greenlet(f).switch()
+
+        # Establish baseline
+        for _ in range(3):
+            run_it()
+
+        # uss: (Linux, macOS, Windows): aka "Unique Set Size", this is
+        # the memory which is unique to a process and which would be
+        # freed if the process was terminated right now.
+        uss_before = psutil.Process().memory_full_info().uss
+
+        for count in range(self.UNTRACK_ATTEMPTS):
+            uss_before = max(uss_before, psutil.Process().memory_full_info().uss)
+            run_it()
+
+            uss_after = psutil.Process().memory_full_info().uss
+            if uss_after <= uss_before and count > 1:
+                break
+
+        self.assertLessEqual(uss_after, uss_before)
+
+    def _check_untracked_memory_thread(self, deallocate_in_thread=True):
+        self._only_test_some_versions()
+        # Like the above test, but what if there are a bunch of
+        # unfinished greenlets in a thread that dies?
+        # Does it matter if we deallocate in the thread or not?
+        EXIT_COUNT = [0]
+
+        def f():
+            try:
+                greenlet.getcurrent().parent.switch()
+            except greenlet.GreenletExit:
+                EXIT_COUNT[0] += 1
+                raise
+            return 1
+
+        ITER = 10000
+        def run_it():
+            glets = []
+            for _ in range(ITER):
+                # Greenlet starts, switches back to us.
+                # We keep a strong reference to the greenlet though so it doesn't
+                # get a GreenletExit exception.
+                g = greenlet.greenlet(f)
+                glets.append(g)
+                g.switch()
+
+            return glets
+
+        test = self
+
+        class ThreadFunc:
+            uss_before = uss_after = 0
+            glets = ()
+            ITER = 2
+            def __call__(self):
+                self.uss_before = psutil.Process().memory_full_info().uss
+
+                for _ in range(self.ITER):
+                    self.glets += tuple(run_it())
+
+                for g in self.glets:
+                    test.assertIn('suspended active', str(g))
+                # Drop them.
+                if deallocate_in_thread:
+                    self.glets = ()
+                self.uss_after = psutil.Process().memory_full_info().uss
+
+        # Establish baseline
+        uss_before = uss_after = None
+        for count in range(self.UNTRACK_ATTEMPTS):
+            EXIT_COUNT[0] = 0
+            thread_func = ThreadFunc()
+            t = threading.Thread(target=thread_func)
+            t.start()
+            t.join(30)
+            self.assertFalse(t.is_alive())
+
+            if uss_before is None:
+                uss_before = thread_func.uss_before
+
+            uss_before = max(uss_before, thread_func.uss_before)
+            if deallocate_in_thread:
+                self.assertEqual(thread_func.glets, ())
+                self.assertEqual(EXIT_COUNT[0], ITER * thread_func.ITER)
+
+            del thread_func # Deallocate the greenlets; but this won't raise into them
+            del t
+            if not deallocate_in_thread:
+                self.assertEqual(EXIT_COUNT[0], 0)
+            if deallocate_in_thread:
+                self.wait_for_pending_cleanups()
+
+            uss_after = psutil.Process().memory_full_info().uss
+            # See if we achieve a non-growth state at some point. Break when we do.
+            if uss_after <= uss_before and count > 1:
+                break
+
+        self.wait_for_pending_cleanups()
+        uss_after = psutil.Process().memory_full_info().uss
+        self.assertLessEqual(uss_after, uss_before, "after attempts %d" % (count,))
+
+    @ignores_leakcheck
+    # Because we're just trying to track raw memory, not objects, and running
+    # the leakcheck makes an already slow test slower.
+    def test_untracked_memory_doesnt_increase_unfinished_thread_dealloc_in_thread(self):
+        self._check_untracked_memory_thread(deallocate_in_thread=True)
+
+    @ignores_leakcheck
+    # Because the main greenlets from the background threads do not exit in a timely fashion,
+    # we fail the object-based leakchecks.
+    def test_untracked_memory_doesnt_increase_unfinished_thread_dealloc_in_main(self):
+        self._check_untracked_memory_thread(deallocate_in_thread=False)
+
+if __name__ == '__main__':
+    __import__('unittest').main()
