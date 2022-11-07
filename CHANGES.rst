@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.1 (unreleased)
+2.0.1 (2022-11-07)
 ==================
 
 - Python 3.11: Fix a memory leak. See `issue 328
