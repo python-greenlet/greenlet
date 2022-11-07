@@ -5,7 +5,9 @@
 2.0.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Python 3.11: Fix a memory leak. See `issue 328
+  <https://github.com/python-greenlet/greenlet/issues/328>`_ and
+  `gevent issue 1924 <https://github.com/gevent/gevent/issues/1924>`_.
 
 
 2.0.0.post0 (2022-11-03)
@@ -154,12 +156,17 @@ Changes
 
 - Add musllinux (Alpine) binary wheels.
 
+.. important:: This preliminary support for Python 3.11 leaks memory.
+               Please upgrade to greenlet 2 if you're using Python 3.11.
 
 1.1.3 (2022-08-25)
 ==================
 
 - Add support for Python 3.11. Please note that Windows binary wheels
   are not available at this time.
+
+.. important:: This preliminary support for Python 3.11 leaks memory.
+               Please upgrade to greenlet 2 if you're using Python 3.11.
 
 1.1.2 (2021-09-29)
 ==================

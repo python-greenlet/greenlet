@@ -45,6 +45,7 @@ class TestCaseMetaClass(type):
                 classDict[key] = value
         return type.__new__(cls, classname, bases, classDict)
 
+
 class TestCase(TestCaseMetaClass(
         "NewBase",
         (unittest.TestCase,),

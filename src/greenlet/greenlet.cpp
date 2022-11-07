@@ -1438,11 +1438,14 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
         result = single_result(result);
     }
     this->release_args();
+    this->python_state.did_finish(PyThreadState_GET());
 
     result = g_handle_exit(result);
     assert(this->thread_state()->borrow_current() == this->_self);
+
     /* jump back to parent */
     this->stack_state.set_inactive(); /* dead */
+
 
     // TODO: Can we decref some things here? Release our main greenlet
     // and maybe parent?
@@ -2029,7 +2032,6 @@ UserGreenlet::tp_clear()
     this->_parent.CLEAR();
     this->_main_greenlet.CLEAR();
     this->_run_callable.CLEAR();
-
     return 0;
 }
 
@@ -2140,6 +2142,10 @@ Greenlet::~Greenlet()
 
 UserGreenlet::~UserGreenlet()
 {
+    // Python 3.11: If we don't clear out the raw frame datastack
+    // when deleting an unfinished greenlet,
+    // TestLeaks.test_untracked_memory_doesnt_increase_unfinished_thread_dealloc_in_main fails.
+    this->python_state.did_finish(nullptr);
     this->tp_clear();
 }
 

@@ -146,10 +146,10 @@ namespace greenlet
         int recursion_depth;
         int trash_delete_nesting;
 #if GREENLET_PY311
-        _PyInterpreterFrame *current_frame;
-        _PyStackChunk *datastack_chunk;
-        PyObject **datastack_top;
-        PyObject **datastack_limit;
+        _PyInterpreterFrame* current_frame;
+        _PyStackChunk* datastack_chunk;
+        PyObject** datastack_top;
+        PyObject** datastack_limit;
 #endif
 
     public:
@@ -170,6 +170,7 @@ namespace greenlet
         void set_new_cframe(_PyCFrame& frame) G_NOEXCEPT;
 #endif
         void will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT;
+        void did_finish(PyThreadState* tstate) G_NOEXCEPT;
     };
 
     class StackState
@@ -213,9 +214,13 @@ namespace greenlet
         inline intptr_t stack_saved() const G_NOEXCEPT;
         inline char* stack_start() const G_NOEXCEPT;
         static inline StackState make_main() G_NOEXCEPT;
+#ifdef GREENLET_USE_STDIO
         friend std::ostream& operator<<(std::ostream& os, const StackState& s);
+#endif
     };
+#ifdef GREENLET_USE_STDIO
     std::ostream& operator<<(std::ostream& os, const StackState& s);
+#endif
 
     class SwitchingArgs
     {
@@ -933,14 +938,97 @@ void PythonState::set_new_cframe(_PyCFrame& frame) G_NOEXCEPT
 }
 #endif
 
-
 const PythonState::OwnedFrame& PythonState::top_frame() const G_NOEXCEPT
 {
     return this->_top_frame;
 }
 
+void PythonState::did_finish(PyThreadState* tstate) G_NOEXCEPT
+{
+#if GREENLET_PY311
+    // See https://github.com/gevent/gevent/issues/1924 and
+    // https://github.com/python-greenlet/greenlet/issues/328. In
+    // short, Python 3.11 allocates memory for frames as a sort of
+    // linked list that's kept as part of PyThreadState in the
+    // ``datastack_chunk`` member and friends. These are saved and
+    // restored as part of switching greenlets.
+    //
+    // When we initially switch to a greenlet, we set those to NULL.
+    // That causes the frame management code to treat this like a
+    // brand new thread and start a fresh list of chunks, beginning
+    // with a new "root" chunk. As we make calls in this greenlet,
+    // those chunks get added, and as calls return, they get popped.
+    // But the frame code (pystate.c) is careful to make sure that the
+    // root chunk never gets popped.
+    //
+    // Thus, when a greenlet exits for the last time, there will be at
+    // least a single root chunk that we must be responsible for
+    // deallocating.
+    //
+    // The complex part is that these chunks are allocated and freed
+    // using ``_PyObject_VirtualAlloc``/``Free``. Those aren't public
+    // functions, and they aren't exported for linking. It so happens
+    // that we know they are just thin wrappers around the Arena
+    // allocator, so we can use that directly to deallocate in a
+    // compatible way.
+    //
+    // CAUTION: Check this implementation detail on every major version.
+    //
+    // It might be nice to be able to do this in our destructor, but
+    // can we be sure that no one else is using that memory? Plus, as
+    // described below, our pointers may not even be valid anymore. As
+    // a special case, there is one time that we know we can do this,
+    // and that's from the destructor of the associated UserGreenlet
+    // (NOT main greenlet)
+    PyObjectArenaAllocator alloc;
+    _PyStackChunk* chunk = nullptr;
+    if (tstate) {
+        // We really did finish, we can never be switched to again.
+        chunk = tstate->datastack_chunk;
+        // Unfortunately, we can't do much sanity checking. Our
+        // this->datastack_chunk pointer is out of date (evaluation may
+        // have popped down through it already) so we can't verify that
+        // we deallocate it. I don't think we can even check datastack_top
+        // for the same reason.
+
+        PyObject_GetArenaAllocator(&alloc);
+        tstate->datastack_chunk = nullptr;
+        tstate->datastack_limit = nullptr;
+        tstate->datastack_top = nullptr;
+
+    }
+    else if (this->datastack_chunk) {
+        // The UserGreenlet (NOT the main greenlet!) is being deallocated. If we're
+        // still holding a stack chunk, it's garbage because we know
+        // we can never switch back to let cPython clean it up.
+        // Because the last time we got switched away from, and we
+        // haven't run since then, we know our chain is valid and can
+        // be dealloced.
+        chunk = this->datastack_chunk;
+        PyObject_GetArenaAllocator(&alloc);
+    }
+
+    if (alloc.free && chunk) {
+        // In case the arena mechanism has been torn down already.
+        while (chunk) {
+            _PyStackChunk *prev = chunk->previous;
+            chunk->previous = nullptr;
+            alloc.free(alloc.ctx, chunk, chunk->size);
+            chunk = prev;
+        }
+    }
+
+    this->datastack_chunk = nullptr;
+    this->datastack_limit = nullptr;
+    this->datastack_top = nullptr;
+#endif
+}
+
+
+
 
 using greenlet::StackState;
+
 #ifdef GREENLET_USE_STDIO
 #include <iostream>
 using std::cerr;

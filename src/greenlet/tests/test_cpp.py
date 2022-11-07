@@ -11,6 +11,8 @@ from . import TestCase
 def run_unhandled_exception_in_greenlet_aborts():
     # This is used in multiprocessing.Process and must be picklable
     # so it needs to be global.
+
+
     def _():
         _test_extension_cpp.test_exception_switch_and_do_in_g2(
             _test_extension_cpp.test_exception_throw
@@ -63,3 +65,7 @@ class CPPTests(TestCase):
     def test_unhandled_exception_in_greenlet_aborts(self):
         # verify that unhandled throw called in greenlet aborts too
         self._do_test_unhandled_exception(run_unhandled_exception_in_greenlet_aborts)
+
+
+if __name__ == '__main__':
+    __import__('unittest').main()
