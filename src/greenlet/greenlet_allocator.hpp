@@ -52,6 +52,9 @@ namespace greenlet
                 PyMem_Free(p);
         }
 
+        template <class U> struct rebind {
+            typedef PythonAllocator<U> other;
+        };
     };
 }
 
