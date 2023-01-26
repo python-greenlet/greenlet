@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 import sys
 import os
@@ -53,7 +54,7 @@ if (
     #
     # fails with:
     #
-    # src/greenlet/platform/switch_riscv_unix.h:30:1: error: s0 cannot be used in ‘asm’ here
+    # src/greenlet/platform/switch_riscv_unix.h:30:1: error: s0 cannot be used in 'asm' here
     #
     # Adding the -Os flag fixes the problem.
     or (is_linux and plat_machine == "riscv64")
