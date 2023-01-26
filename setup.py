@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 import sys
 import os
@@ -30,18 +31,41 @@ is_win = sys.platform.startswith("win")
 # https://github.com/python-greenlet/greenlet/issues/94
 # pylint:disable=too-many-boolean-expressions
 is_linux = sys.platform.startswith('linux') # could be linux or linux2
-if ((sys.platform == "openbsd4" and os.uname()[-1] == "i386")
-    or ("-with-redhat-3." in platform.platform() and platform.machine() == 'i686')
-    or (sys.platform == "sunos5" and os.uname()[-1] == "sun4v")
-    or ("SunOS" in platform.platform() and platform.machine() == "sun4v")
-    or (is_linux and platform.machine() == "ppc")):
+plat_platform = platform.platform()
+plat_machine = platform.machine()
+plat_compiler = platform.python_compiler()
+try:
+    # (sysname, nodename, release, version, machine)
+    unam_machine = os.uname()[-1]
+except AttributeError:
+    unam_machine = ''
+if (
+       (sys.platform == "openbsd4" and unam_machine == "i386")
+    or ("-with-redhat-3." in plat_platform and plat_machine == 'i686')
+    or (sys.platform == "sunos5" and unam_machine == "sun4v") # SysV-based Solaris
+    or ("SunOS" in plat_platform and plat_machine == "sun4v") # Old BSD-based SunOS
+    or (is_linux and plat_machine == "ppc")
+    # https://github.com/python-greenlet/greenlet/pull/300: When compiling for RISC-V the command
+    # ``riscv64-linux-gnu-gcc -pthread -fno-strict-aliasing -Wdate-time \
+    #   -D_FORTIFY_SOURCE=2 -g -ffile-prefix-map=/build/python2.7-7GU7VT/python2.7-2.7.18=. \
+    #   -fstack-protector-strong -Wformat -Werror=format-security -fPIC \
+    #   -I/usr/include/python2.7
+    #   -c src/greenlet/greenlet.cpp  -o build/temp.linux-riscv64-2.7/src/greenlet/greenlet.o``
+    #
+    # fails with:
+    #
+    # src/greenlet/platform/switch_riscv_unix.h:30:1: error: s0 cannot be used in 'asm' here
+    #
+    # Adding the -Os flag fixes the problem.
+    or (is_linux and plat_machine == "riscv64")
+):
     global_compile_args.append("-Os")
 
 
-if sys.platform == 'darwin':
+if sys.platform == 'darwin' or 'clang' in plat_compiler:
     # The clang compiler doesn't use --std=c++11 by default
     cpp_compile_args.append("--std=gnu++11")
-elif is_win and "MSC" in platform.python_compiler():
+elif is_win and "MSC" in plat_compiler:
     # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
     # correctly by default. While newer versions do handle exceptions by default,
     # they don't do it fully correctly. So we need an argument on all versions.
@@ -108,14 +132,14 @@ else:
     if is_win and '64 bit' in sys.version:
         # this works when building with msvc, not with 64 bit gcc
         # switch_<platform>_masm.obj can be created with setup_switch_<platform>_masm.cmd
-        obj_fn = 'switch_arm64_masm.obj' if platform.machine() == 'ARM64' else 'switch_x64_masm.obj'
+        obj_fn = 'switch_arm64_masm.obj' if plat_machine == 'ARM64' else 'switch_x64_masm.obj'
         extra_objects = [os.path.join(GREENLET_PLATFORM_DIR, obj_fn)]
     else:
         extra_objects = []
 
     if is_win and os.environ.get('GREENLET_STATIC_RUNTIME') in ('1', 'yes'):
         main_compile_args.append('/MT')
-    elif hasattr(os, 'uname') and os.uname()[4] in ['ppc64el', 'ppc64le']:
+    elif unam_machine in ('ppc64el', 'ppc64le'):
         main_compile_args.append('-fno-tree-dominator-opts')
 
     ext_modules = [
