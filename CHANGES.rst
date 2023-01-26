@@ -8,7 +8,7 @@
 - Fix calling ``greenlet.settrace()`` with the same tracer object that
   was currently active. See `issue 332
   <https://github.com/python-greenlet/greenlet/issues/332>`_.
-- Various compilation and standards conformance fixes. See #335, #336.
+- Various compilation and standards conformance fixes. See #335, #336, #300.
 
 
 2.0.1 (2022-11-07)
