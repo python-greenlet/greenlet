@@ -26,7 +26,10 @@ jobs:
     strategy:
       matrix:
         python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9, "3.10", "3.11"]
-        os: [ubuntu-latest, macos-latest]
+        # Jan 2023: We have pinned back from ubuntu-latest (which is
+        # now ubuntu 22.04) because older Python versions like
+        # 3.5, 3.6 and presumably 2.7 are not available in it.
+        os: [ubuntu-20.04, macos-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python
@@ -88,7 +91,7 @@ jobs:
     strategy:
       matrix:
         python-version: [2.7, 3.5, "3.11"]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-20.04, macos-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python
