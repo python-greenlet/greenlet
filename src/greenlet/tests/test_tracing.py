@@ -66,6 +66,15 @@ class TestGreenletTracing(TestCase):
             ('switch', (main, g)),
         ])
 
+    def test_set_same_tracer_twice(self):
+        # https://github.com/python-greenlet/greenlet/issues/332
+        # Our logic in asserting that the tracefunction should
+        # gain a reference was incorrect if the same tracefunction was set
+        # twice.
+        tracer = GreenletTracer()
+        with tracer:
+            greenlet.settrace(tracer)
+
 
 class PythonTracer(object):
     oldtrace = None

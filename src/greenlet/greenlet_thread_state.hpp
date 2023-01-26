@@ -307,11 +307,7 @@ public:
             this->tracefunc.CLEAR();
         }
         else {
-#ifndef NDEBUG
-            Py_ssize_t old_refs = Py_REFCNT(tracefunc);
-#endif
             this->tracefunc = tracefunc;
-            assert(this->tracefunc.REFCNT() == old_refs + 1);
         }
     }
 
