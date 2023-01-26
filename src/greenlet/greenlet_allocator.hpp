@@ -51,6 +51,11 @@ namespace greenlet
             else
                 PyMem_Free(p);
         }
+        // This member is deprecated in C++17 and removed in C++20
+        template< class U >
+        struct rebind {
+            typedef PythonAllocator<U> other;
+        };
 
     };
 }
