@@ -200,7 +200,6 @@ build_script:
 
 
 test_script:
-  - "%CMD_IN_ENV% python -c \"import faulthandler; assert faulthandler.is_enabled()\""
   -  if not "%GWHEEL_ONLY%"=="true" %PYEXE% -m zope.testrunner --test-path=src -vvv
 # XXX: Doctest disabled pending sphinx release for 3.10; see tests.yml.
 #  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"

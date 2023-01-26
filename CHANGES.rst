@@ -5,7 +5,10 @@
 2.0.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix calling ``greenlet.settrace()`` with the same tracer object that
+  was currently active. See `issue 332
+  <https://github.com/python-greenlet/greenlet/issues/332>`_.
+
 
 
 2.0.1 (2022-11-07)
