@@ -226,7 +226,8 @@ setup(
         ],
         'test': [
             'objgraph',
-            'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"',
+            # Sigh, all releases of this were yanked from PyPI.
+            #'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"',
             'psutil',
         ],
     },
