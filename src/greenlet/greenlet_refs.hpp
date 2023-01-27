@@ -225,7 +225,7 @@ namespace greenlet {
         inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const;
         inline OwnedObject PyCall(PyGreenlet* arg) const ;
-        inline OwnedObject PyCall(const PyObject* arg) const ;
+        inline OwnedObject PyCall(PyObject* arg) const ;
         // PyObject_Call(this, args, kwargs);
         inline OwnedObject PyCall(const BorrowedObject args,
                                   const BorrowedObject kwargs) const;
@@ -714,11 +714,11 @@ namespace greenlet {
     template<typename T, TypeChecker TC>
     inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyGreenlet* arg) const
     {
-        return this->PyCall(reinterpret_cast<const PyObject*>(arg));
+        return this->PyCall(reinterpret_cast<PyObject*>(arg));
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyCall(const PyObject* arg) const
+    inline OwnedObject PyObjectPointer<T, TC>::PyCall(PyObject* arg) const
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_CallFunctionObjArgs(this->p, arg, NULL));
@@ -845,16 +845,16 @@ namespace greenlet {
             this->PyAddObject(name, new_object.borrow());
         }
 
-        void PyAddObject(const char* name, const PyTypeObject& type)
+        void PyAddObject(const char* name, PyTypeObject& type)
         {
-            this->PyAddObject(name, reinterpret_cast<const PyObject*>(&type));
+            this->PyAddObject(name, reinterpret_cast<PyObject*>(&type));
         }
 
-        void PyAddObject(const char* name, const PyObject* new_object)
+        void PyAddObject(const char* name, PyObject* new_object)
         {
             Py_INCREF(new_object);
             try {
-                Require(PyModule_AddObject(this->p, name, const_cast<PyObject*>(new_object)));
+                Require(PyModule_AddObject(this->p, name, new_object));
             }
             catch (const PyErrOccurred&) {
                 Py_DECREF(p);
