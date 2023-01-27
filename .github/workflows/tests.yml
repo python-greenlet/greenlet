@@ -31,18 +31,13 @@ jobs:
         # 3.5, 3.6 and presumably 2.7 are not available in it.
         os: [ubuntu-20.04, macos-latest]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Pip cache
-      uses: actions/cache@v2
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.*') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        cache: 'pip'
+        cache-dependency-path: setup.py
     - name: Install dependencies
       run: |
         python -m pip install -U pip setuptools wheel
@@ -63,7 +58,7 @@ jobs:
         ls -l dist
         twine check dist/*
     - name: Store greenlet wheel
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: greenlet-${{ runner.os }}-${{ matrix.python-version }}.whl
         path: dist/*whl
@@ -91,18 +86,13 @@ jobs:
         python-version: [2.7, 3.5, "3.11"]
         os: [ubuntu-20.04, macos-latest]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Pip cache
-      uses: actions/cache@v2
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-ns-${{ hashFiles('setup.*') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-ns-
+        cache: 'pip'
+        cache-dependency-path: setup.py
     - name: Install dependencies
       run: |
         python -m pip install -U pip setuptools wheel
@@ -124,18 +114,13 @@ jobs:
       # required for all workflows
       security-events: write
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - name: Pip cache
-        uses: actions/cache@v2
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-ql-${{ hashFiles('setup.*') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-ql-
+          cache: 'pip'
+          cache-dependency-path: setup.py
       - name: Install dependencies
         run: |
           python -m pip install -U pip
@@ -177,12 +162,11 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Enable emulation
         run: |
           docker run --rm --privileged hypriot/qemu-register
@@ -206,7 +190,7 @@ jobs:
           DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
         run: bash ./make-manylinux
       - name: Store greenlet wheels
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           path: wheelhouse/*whl
           name: ${{ matrix.image }}_wheels.zip
