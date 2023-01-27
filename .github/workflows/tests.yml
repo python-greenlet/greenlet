@@ -42,7 +42,8 @@ jobs:
       run: |
         python -m pip install -U pip setuptools wheel
         python -m pip install -U twine
-    - name: Install greenlet
+    - name: Install greenlet (non-Mac)
+      if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
         python setup.py bdist_wheel
         python -m pip install -U -e ".[test,docs]"
@@ -53,6 +54,18 @@ jobs:
         # process-wide effects), we test with Ofast here, because we
         # expect that some people will compile it themselves with that setting.
         CPPFLAGS: "-Ofast -UNDEBUG"
+    - name: Install greenlet (Mac)
+      if: startsWith(runner.os, 'Mac')
+      run: |
+        python setup.py bdist_wheel
+        python -m pip install -U -e ".[test,docs]"
+      env:
+        # Unlike the above, we are actually distributing these
+        # wheels, so they need to be built for production use.
+        CPPFLAGS: "-O3"
+        # Build for both architectures
+        ARCHFLAGS: "-arch x86_64 -arch arm64"
+
     - name: Check greenlet build
       run: |
         ls -l dist

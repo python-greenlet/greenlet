@@ -26,7 +26,7 @@ slp_switch(void)
 {
 	int err;
 	void *fp;
-        register long *stackref, stsizediff;
+        long *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
 	__asm__ volatile ("str x29, %0" : "=m"(fp) : : );
         __asm__ ("mov %0, sp" : "=r" (stackref));
@@ -59,6 +59,15 @@ slp_switch(void)
 		   stack space), and the simplest is to call a function
 		   that returns an unknown value (which happens to be zero),
 		   so the saved/restored value is unused.  */
+                /* XXX: This line produces warnings:
+
+                   value size does not match register size specified by the
+                   constraint and modifier
+
+                   The suggested fix is to change %0 to %w0.
+
+                   TODO: Validate and change that.
+                 */
            __asm__ volatile ("mov %0, #0" : "=r" (err));
         }
         __asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
