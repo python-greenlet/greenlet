@@ -9,7 +9,7 @@
   was currently active. See `issue 332
   <https://github.com/python-greenlet/greenlet/issues/332>`_.
 - Various compilation and standards conformance fixes. See #335, #336,
-  #300, #302.
+  #300, #302, #334.
 
 
 
