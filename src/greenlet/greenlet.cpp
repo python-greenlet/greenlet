@@ -2506,6 +2506,9 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(cont
 #    define GREENLET_NO_CONTEXTVARS_REASON "This Python interpreter"
 #endif
 
+namespace greenlet
+{
+
 template<>
 const OwnedObject
 Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
@@ -2543,19 +2546,6 @@ Greenlet::context<GREENLET_WHEN_NOT_PY37>(GREENLET_WHEN_NOT_PY37::No) const
                          GREENLET_NO_CONTEXTVARS_REASON
                          "does not support context variables"
     );
-}
-
-static PyObject*
-green_getcontext(const PyGreenlet* self, void* UNUSED(context))
-{
-    const Greenlet *const g = self->pimpl;
-    try {
-        OwnedObject result(g->context<G_IS_PY37>());
-        return result.relinquish_ownership();
-    }
-    catch(const PyErrOccurred&) {
-        return nullptr;
-    }
 }
 
 template<>
@@ -2600,6 +2590,21 @@ Greenlet::context<GREENLET_WHEN_NOT_PY37>(BorrowedObject UNUSED(given), GREENLET
                          GREENLET_NO_CONTEXTVARS_REASON
                          "does not support context variables"
     );
+}
+
+};
+
+static PyObject*
+green_getcontext(const PyGreenlet* self, void* UNUSED(context))
+{
+    const Greenlet *const g = self->pimpl;
+    try {
+        OwnedObject result(g->context<G_IS_PY37>());
+        return result.relinquish_ownership();
+    }
+    catch(const PyErrOccurred&) {
+        return nullptr;
+    }
 }
 
 static int
