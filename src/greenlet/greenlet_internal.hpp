@@ -21,6 +21,7 @@
 #include "greenlet_allocator.hpp"
 
 #include <vector>
+#include <string>
 
 #define GREENLET_MODULE
 struct _greenlet;
@@ -45,7 +46,9 @@ greenlet::refs::MainGreenletExactChecker(void *p)
     }
     // We control the class of the main greenlet exactly.
     if (Py_TYPE(p) != &PyGreenlet_Type) {
-        throw greenlet::TypeError("Expected a greenlet");
+        std::string err("MainGreenlet: Expected exactly a greenlet, not a ");
+        err += Py_TYPE(p)->tp_name;
+        throw greenlet::TypeError(err);
     }
 
     // Greenlets from dead threads no longer respond to main() with a
@@ -56,7 +59,9 @@ greenlet::refs::MainGreenletExactChecker(void *p)
         return;
     }
     if (!dynamic_cast<MainGreenlet*>(g)) {
-        throw greenlet::TypeError("Expected a main greenlet");
+        std::string err("MainGreenlet: Expected exactly a main greenlet, not a ");
+        err += Py_TYPE(p)->tp_name;
+        throw greenlet::TypeError(err);
     }
 }
 

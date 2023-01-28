@@ -57,7 +57,9 @@ namespace greenlet
             }
 
             if (!PyObject_TypeCheck(p, &PyGreenlet_Type)) {
-                throw TypeError("Expected a greenlet");
+                std::string err("GreenletChecker: Expected any type of greenlet, not ");
+                err += Py_TYPE(p)->tp_name;
+                throw TypeError(err);
             }
         }
 

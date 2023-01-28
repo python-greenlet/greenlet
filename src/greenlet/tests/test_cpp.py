@@ -54,8 +54,17 @@ class CPPTests(TestCase):
         # https://devblogs.microsoft.com/oldnewthing/20110519-00/?p=10623
         # and
         # https://docs.microsoft.com/en-us/previous-versions/k089yyh0(v=vs.140)?redirectedfrom=MSDN
-        expected_exit = -signal.SIGABRT if not WIN else 3
-        self.assertEqual(p.exitcode, expected_exit)
+        expected_exit = (
+            -signal.SIGABRT,
+            # But beginning on Python 3.11, the faulthandler
+            # that prints the C backtraces sometimes segfaults after
+            # reporting the exception but before printing the stack.
+            # This has only been seen on linux/gcc.
+            -signal.SIGSEGV
+        ) if not WIN else (
+            3,
+        )
+        self.assertIn(p.exitcode, expected_exit)
 
     def test_unhandled_exception_aborts(self):
         # verify that plain unhandled throw aborts

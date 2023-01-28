@@ -972,7 +972,10 @@ class TestGreenletSetParentErrors(TestCase):
             for p in None, 1, self, "42":
                 with self.assertRaises(TypeError) as exc:
                     glet.parent = p
-                self.assertEqual(str(exc.exception), "Expected a greenlet")
+
+                self.assertEqual(
+                    str(exc.exception),
+                    "GreenletChecker: Expected any type of greenlet, not " + type(p).__name__)
 
         # First, not running
         g = greenlet(bg)

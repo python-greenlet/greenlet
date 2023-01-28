@@ -4,6 +4,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdexcept>
+#include <string>
 
 #ifdef __clang__
 #    pragma clang diagnostic push
@@ -25,12 +26,23 @@ namespace greenlet {
         {
             PyErr_SetString(exc_kind, msg);
         }
+        PyErrOccurred(PyObject* exc_kind, const std::string msg)
+            : std::runtime_error(msg)
+        {
+            // This copies the c_str, so we don't have any lifetime
+            // issues to worry about.
+            PyErr_SetString(exc_kind, msg.c_str());
+        }
     };
 
     class TypeError : public PyErrOccurred
     {
     public:
         TypeError(const char* const what)
+            : PyErrOccurred(PyExc_TypeError, what)
+        {
+        }
+        TypeError(const std::string what)
             : PyErrOccurred(PyExc_TypeError, what)
         {
         }
