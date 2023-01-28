@@ -2,7 +2,7 @@
  Changes
 =========
 
-2.0.2 (unreleased)
+2.0.2 (2023-01-28)
 ==================
 
 - Fix calling ``greenlet.settrace()`` with the same tracer object that
