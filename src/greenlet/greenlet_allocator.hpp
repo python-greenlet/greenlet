@@ -32,6 +32,11 @@ namespace greenlet
 
         PythonAllocator() : std::allocator<T>() {}
 
+        template <class U> struct rebind
+        {
+            typedef PythonAllocator<U> other;
+        };
+
         T* allocate(size_t number_objects, const void* UNUSED(hint)=0)
         {
             void* p;
