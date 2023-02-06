@@ -23,7 +23,7 @@ __attribute__((optimize("no-omit-frame-pointer")))
 #endif
 slp_switch(void)
 {
-        register int *stackref, stsizediff;
+        int *stackref, stsizediff;
         int result;
 
         __asm__ volatile ("" : : : REGS_TO_SAVE);
