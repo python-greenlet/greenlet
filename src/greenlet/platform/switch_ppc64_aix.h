@@ -74,8 +74,8 @@
 static int
 slp_switch(void)
 {
-    register int err;
-    register long *stackref, stsizediff;
+    int err;
+    long *stackref, stsizediff;
     void * toc;
     void * r30;
     __asm__ volatile ("" : : : REGS_TO_SAVE);

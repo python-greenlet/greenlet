@@ -51,8 +51,8 @@
 static int
 slp_switch(void)
 {
-    register int err;
-    register int *stackref, stsizediff;
+    int err;
+    int *stackref, stsizediff;
 
     /* Put current stack pointer into stackref.
      * Register spilling is done in save/restore.

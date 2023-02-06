@@ -51,7 +51,7 @@ slp_switch(void)
 #endif
     void *ebp, *ebx;
     unsigned short cw;
-    register int *stackref, stsizediff;
+    int *stackref, stsizediff;
     __asm__ volatile ("" : : : "esi", "edi");
     __asm__ volatile ("fstcw %0" : "=m" (cw));
     __asm__ volatile ("movl %%ebp, %0" : "=m" (ebp));

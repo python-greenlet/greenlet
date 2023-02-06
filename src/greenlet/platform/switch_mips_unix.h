@@ -19,8 +19,8 @@
 static int
 slp_switch(void)
 {
-    register int err;
-    register int *stackref, stsizediff;
+    int err;
+    int *stackref, stsizediff;
 #ifdef __mips64
     uint64_t gpsave;
 #endif

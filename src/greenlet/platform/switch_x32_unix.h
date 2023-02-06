@@ -22,8 +22,8 @@ slp_switch(void)
     void* ebx;
     unsigned int csr;
     unsigned short cw;
-    register int err;
-    register int *stackref, stsizediff;
+    int err;
+    int *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
     __asm__ volatile ("fstcw %0" : "=m" (cw));
     __asm__ volatile ("stmxcsr %0" : "=m" (csr));
