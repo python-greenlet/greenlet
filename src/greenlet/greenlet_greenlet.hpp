@@ -845,7 +845,11 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
     this->_top_frame.steal(frame);
+    #if GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
+    #else
+    this->trash_delete_nesting = tstate->trash_delete_nesting;
+    #endif
 #else
     this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
@@ -884,7 +888,11 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
+    #if GREENLET_PY312
     tstate->trash.delete_nesting = this->trash_delete_nesting;
+    #else
+    tstate->trash_delete_nesting = this->trash_delete_nesting;
+    #endif
 #else
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
