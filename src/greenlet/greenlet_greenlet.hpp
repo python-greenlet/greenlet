@@ -896,7 +896,7 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 #else
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
-    tstate->trash.delete_nesting = this->trash_delete_nesting;
+    tstate->trash_delete_nesting = this->trash_delete_nesting;
 #endif
 }
 
