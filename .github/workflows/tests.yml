@@ -80,6 +80,7 @@ jobs:
         path: dist/*whl
     - name: Test
       run: |
+        python -VV
         python -c 'import greenlet._greenlet as G; assert G.GREENLET_USE_STANDARD_THREADING'
         python -m unittest discover -v greenlet.tests
     - name: Doctest
