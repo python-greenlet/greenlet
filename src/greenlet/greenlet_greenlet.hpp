@@ -828,7 +828,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
       the switch, use `will_switch_from`.
     */
     this->cframe = tstate->cframe;
+    #if !GREENLET_PY312
     this->use_tracing = tstate->cframe->use_tracing;
+    #endif
 #endif
 #if GREENLET_PY311
     #if GREENLET_PY312
@@ -843,13 +845,12 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
     this->_top_frame.steal(frame);
+    this->trash_delete_nesting = tstate->trash.delete_nesting;
 #else
     this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
-#endif
-
-    // All versions of Python.
     this->trash_delete_nesting = tstate->trash_delete_nesting;
+#endif
 }
 
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
@@ -868,7 +869,9 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
       root_cframe here. See note above about why we can't
       just copy this from ``origin->cframe->use_tracing``.
     */
+    #if !GREENLET_PY312
     tstate->cframe->use_tracing = this->use_tracing;
+    #endif
 #endif
 #if GREENLET_PY311
     #if GREENLET_PY312
@@ -881,17 +884,17 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
+    tstate->trash.delete_nesting = this->trash_delete_nesting;
 #else
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
+    tstate->trash.delete_nesting = this->trash_delete_nesting;
 #endif
-    // All versions of Python.
-    tstate->trash_delete_nesting = this->trash_delete_nesting;
 }
 
 void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT
 {
-#if GREENLET_USE_CFRAME
+#if GREENLET_USE_CFRAME && !GREENLET_PY312
     // The weird thing is, we don't actually save this for an
     // effect on the current greenlet, it's saved for an
     // effect on the target greenlet. That is, we want
