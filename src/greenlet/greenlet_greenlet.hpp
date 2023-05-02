@@ -143,7 +143,12 @@ namespace greenlet
         _PyCFrame* cframe;
         int use_tracing;
 #endif
+#if GREENLET_PY312
+        int py_recursion_depth;
+        int c_recursion_depth;
+#else
         int recursion_depth;
+#endif
         int trash_delete_nesting;
 #if GREENLET_PY311
         _PyInterpreterFrame* current_frame;
@@ -748,7 +753,12 @@ PythonState::PythonState()
     ,cframe(nullptr)
     ,use_tracing(0)
 #endif
+#if GREENLET_PY312
+    ,py_recursion_depth(0)
+    ,c_recursion_depth(0)
+#else
     ,recursion_depth(0)
+#endif
     ,trash_delete_nesting(0)
 #if GREENLET_PY311
     ,current_frame(nullptr)
@@ -834,7 +844,8 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 #endif
 #if GREENLET_PY311
     #if GREENLET_PY312
-    this->recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    this->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
     #else
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
     #endif
@@ -879,7 +890,8 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
 #endif
 #if GREENLET_PY311
     #if GREENLET_PY312
-    tstate->py_recursion_remaining = tstate->py_recursion_limit - this->recursion_depth;
+    tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
+    tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
     #else
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
     #endif
@@ -915,7 +927,8 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEP
 {
     this->_top_frame = nullptr;
 #if GREENLET_PY312
-    this->recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    this->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
 #elif GREENLET_PY311
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
 #else
