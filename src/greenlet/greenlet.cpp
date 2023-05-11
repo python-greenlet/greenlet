@@ -299,9 +299,6 @@ public:
 // established at init time.
 // This is a step towards Python3 style module state that allows
 // reloading.
-// We play some tricks with placement new to be able to allocate this
-// object statically still, so that references to its members don't
-// incur an extra pointer indirection.
 class GreenletGlobals
 {
 public:
@@ -370,7 +367,7 @@ public:
     }
 };
 
-static const GreenletGlobals mod_globs(0);
+static const GreenletGlobals* mod_globs;
 
 // Protected by the GIL. Incremented when we create a main greenlet,
 // in a new thread, decremented when it is destroyed.
@@ -646,7 +643,7 @@ struct ThreadState_DestroyNoGIL
         // lock short.
         // TODO: On platforms that support it, use ``pthread_atfork`` to
         // drop this lock.
-        LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
+        LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
 
         if (state && state->has_main_greenlet()) {
             // Because we don't have the GIL, this is a race condition.
@@ -658,8 +655,8 @@ struct ThreadState_DestroyNoGIL
                 return;
             }
 
-            mod_globs.queue_to_destroy(state);
-            if (mod_globs.thread_states_to_destroy.size() == 1) {
+            mod_globs->queue_to_destroy(state);
+            if (mod_globs->thread_states_to_destroy.size() == 1) {
                 // We added the first item to the queue. We need to schedule
                 // the cleanup.
                 int result = ThreadState_DestroyNoGIL::AddPendingCall(
@@ -683,11 +680,11 @@ struct ThreadState_DestroyNoGIL
         while (1) {
             ThreadState* to_destroy;
             {
-                LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
-                if (mod_globs.thread_states_to_destroy.empty()) {
+                LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
+                if (mod_globs->thread_states_to_destroy.empty()) {
                     break;
                 }
-                to_destroy = mod_globs.take_next_to_destroy();
+                to_destroy = mod_globs->take_next_to_destroy();
             }
             // Drop the lock while we do the actual deletion.
             ThreadState_DestroyWithGIL::DestroyWithGIL(to_destroy);
@@ -980,7 +977,7 @@ Greenlet::throw_GreenletExit_during_dealloc(const ThreadState& UNUSED(current_th
     // If we're killed because we lost all references in the
     // middle of a switch, that's ok. Don't reset the args/kwargs,
     // we still want to pass them to the parent.
-    PyErr_SetString(mod_globs.PyExc_GreenletExit,
+    PyErr_SetString(mod_globs->PyExc_GreenletExit,
                     "Killing the greenlet because all references have vanished.");
     // To get here it had to have run before
     return this->g_switch();
@@ -1208,7 +1205,7 @@ UserGreenlet::g_initialstub(void* mark)
           self.run is the object to call in the new greenlet.
           This could run arbitrary python code and switch greenlets!
         */
-        run = this->_self.PyRequireAttr(mod_globs.str_run);
+        run = this->_self.PyRequireAttr(mod_globs->str_run);
 
         /* restore saved exception */
         saved.PyErrRestore();
@@ -1349,7 +1346,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
     if (OwnedObject tracefunc = this->thread_state()->get_tracefunc()) {
         try {
             g_calltrace(tracefunc,
-                        args ? mod_globs.event_switch : mod_globs.event_throw,
+                        args ? mod_globs->event_switch : mod_globs->event_throw,
                         origin_greenlet,
                         this->_self);
         }
@@ -1428,7 +1425,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
     Py_CLEAR(run);
 
     if (!result
-        && mod_globs.PyExc_GreenletExit.PyExceptionMatches()
+        && mod_globs->PyExc_GreenletExit.PyExceptionMatches()
         && (this->switch_args)) {
         // This can happen, for example, if our only reference
         // goes away after we switch back to the parent.
@@ -1558,12 +1555,12 @@ Greenlet::check_switch_allowed() const
     const BorrowedMainGreenlet main_greenlet = this->find_main_greenlet_in_lineage();
 
     if (!main_greenlet) {
-        throw PyErrOccurred(mod_globs.PyExc_GreenletError,
+        throw PyErrOccurred(mod_globs->PyExc_GreenletError,
                             "cannot switch to a garbage collected greenlet");
     }
 
     if (!main_greenlet->thread_state()) {
-        throw PyErrOccurred(mod_globs.PyExc_GreenletError,
+        throw PyErrOccurred(mod_globs->PyExc_GreenletError,
                             "cannot switch to a different thread (which happens to have exited)");
     }
 
@@ -1590,7 +1587,7 @@ Greenlet::check_switch_allowed() const
         // is bad, because we just accessed the thread state, which is
         // gone!)
         || (!current_main_greenlet->thread_state())) {
-        throw PyErrOccurred(mod_globs.PyExc_GreenletError,
+        throw PyErrOccurred(mod_globs->PyExc_GreenletError,
                             "cannot switch to a different thread");
     }
 }
@@ -1608,7 +1605,7 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
 
         if (OwnedObject tracefunc = state.get_tracefunc()) {
             g_calltrace(tracefunc,
-                        this->args() ? mod_globs.event_switch : mod_globs.event_throw,
+                        this->args() ? mod_globs->event_switch : mod_globs->event_throw,
                         err.origin_greenlet,
                         this->self());
         }
@@ -1730,7 +1727,7 @@ g_calltrace(const OwnedObject& tracefunc,
 static OwnedObject
 g_handle_exit(const OwnedObject& greenlet_result)
 {
-    if (!greenlet_result && mod_globs.PyExc_GreenletExit.PyExceptionMatches()) {
+    if (!greenlet_result && mod_globs->PyExc_GreenletExit.PyExceptionMatches()) {
         /* catch and ignore GreenletExit */
         PyErrFetchParam val;
         PyErr_Fetch(PyErrFetchParam(), val, PyErrFetchParam());
@@ -1759,7 +1756,7 @@ static PyGreenlet*
 green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
 {
     PyGreenlet* o =
-        (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs.empty_tuple, mod_globs.empty_dict);
+        (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs->empty_tuple, mod_globs->empty_dict);
     if (o) {
         new UserGreenlet(o, GET_THREAD_STATE().state().borrow_current());
         assert(Py_REFCNT(o) == 1);
@@ -2292,7 +2289,7 @@ PyDoc_STRVAR(
 static PyObject*
 green_throw(PyGreenlet* self, PyObject* args)
 {
-    PyArgParseParam typ(mod_globs.PyExc_GreenletExit);
+    PyArgParseParam typ(mod_globs->PyExc_GreenletExit);
     PyArgParseParam val;
     PyArgParseParam tb;
 
@@ -2735,13 +2732,13 @@ PyGreenlet_New(PyObject* run, PyGreenlet* parent)
     try {
         NewDictReference kwargs;
         if (run) {
-            kwargs.SetItem(mod_globs.str_run, run);
+            kwargs.SetItem(mod_globs->str_run, run);
         }
         if (parent) {
             kwargs.SetItem("parent", (PyObject*)parent);
         }
 
-        Require(green_init(g, mod_globs.empty_tuple, kwargs));
+        Require(green_init(g, mod_globs->empty_tuple, kwargs));
     }
     catch (const PyErrOccurred&) {
         return nullptr;
@@ -2761,7 +2758,7 @@ PyGreenlet_Switch(PyGreenlet* g, PyObject* args, PyObject* kwargs)
     }
 
     if (args == NULL) {
-        args = mod_globs.empty_tuple;
+        args = mod_globs->empty_tuple;
     }
 
     if (kwargs == NULL || !PyDict_Check(kwargs)) {
@@ -3007,8 +3004,8 @@ PyDoc_STRVAR(mod_get_pending_cleanup_count_doc,
 static PyObject*
 mod_get_pending_cleanup_count(PyObject* UNUSED(module))
 {
-    LockGuard cleanup_lock(*mod_globs.thread_states_to_destroy_lock);
-    return PyLong_FromSize_t(mod_globs.thread_states_to_destroy.size());
+    LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
+    return PyLong_FromSize_t(mod_globs->thread_states_to_destroy.size());
 }
 
 PyDoc_STRVAR(mod_get_total_main_greenlets_doc,
@@ -3145,12 +3142,12 @@ greenlet_internal_mod_init() G_NOEXCEPT
         Require(PyType_Ready(&PyGreenletCleanup_Type));
 #endif
 
-        new((void*)&mod_globs) GreenletGlobals;
+        mod_globs = new GreenletGlobals;
         ThreadState::init();
 
         m.PyAddObject("greenlet", PyGreenlet_Type);
-        m.PyAddObject("error", mod_globs.PyExc_GreenletError);
-        m.PyAddObject("GreenletExit", mod_globs.PyExc_GreenletExit);
+        m.PyAddObject("error", mod_globs->PyExc_GreenletError);
+        m.PyAddObject("GreenletExit", mod_globs->PyExc_GreenletExit);
 
         m.PyAddObject("GREENLET_USE_GC", 1);
         m.PyAddObject("GREENLET_USE_TRACING", 1);
@@ -3180,8 +3177,8 @@ greenlet_internal_mod_init() G_NOEXCEPT
         _PyGreenlet_API[PyGreenlet_Type_NUM] = (void*)&PyGreenlet_Type;
 
         /* exceptions */
-        _PyGreenlet_API[PyExc_GreenletError_NUM] = (void*)mod_globs.PyExc_GreenletError;
-        _PyGreenlet_API[PyExc_GreenletExit_NUM] = (void*)mod_globs.PyExc_GreenletExit;
+        _PyGreenlet_API[PyExc_GreenletError_NUM] = (void*)mod_globs->PyExc_GreenletError;
+        _PyGreenlet_API[PyExc_GreenletExit_NUM] = (void*)mod_globs->PyExc_GreenletExit;
 
         /* methods */
         _PyGreenlet_API[PyGreenlet_New_NUM] = (void*)PyGreenlet_New;
