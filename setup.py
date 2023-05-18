@@ -58,6 +58,7 @@ if (
     #
     # Adding the -Os flag fixes the problem.
     or (is_linux and plat_machine == "riscv64")
+    or (is_linux and plat_machine == "loongarch64")
 ):
     global_compile_args.append("-Os")
 
