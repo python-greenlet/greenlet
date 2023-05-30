@@ -3095,6 +3095,7 @@ static PyObject*
 mod_get_tstate_trash_delete_nesting(PyObject* UNUSED(module))
 {
     PyThreadState* tstate = PyThreadState_GET();
+
 #if GREENLET_PY312
     return PyLong_FromLong(tstate->trash.delete_nesting);
 #else
