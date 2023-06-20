@@ -69,11 +69,6 @@ environment:
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
 
-    - PYTHON: "C:\\Python27-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "2.7.x"
-      PYTHON_EXE: python
-
     # Tested 32-bit versions. A small, hand-picked selection covering
     # important variations. No need to include newer versions of
     # cpython here, 32-bit x86 windows is on the way out.
@@ -83,11 +78,6 @@ environment:
       PYTHON_VERSION: "3.9.x"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-
-    - PYTHON: "C:\\Python27"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "2.7.x"
-      PYTHON_EXE: python
 
 
     # Untested 64-bit versions. We don't expect any variance here from

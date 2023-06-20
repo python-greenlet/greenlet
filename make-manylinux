@@ -32,7 +32,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
     mkdir -p /greenlet/wheelhouse
     OPATH="$PATH"
     which auditwheel
-    for variant in `ls -d /opt/python/cp{27,35,36,37,38,39,310,311}*`; do
+    for variant in `ls -d /opt/python/cp{36,37,38,39,310,311}*`; do
         export PATH="$variant/bin:$OPATH"
         echo "Building $variant $(python --version)"
 
