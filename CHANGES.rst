@@ -23,6 +23,8 @@
   <https://github.com/python-greenlet/greenlet/pull/327>`_; thanks go
   to (at least) Michael Droettboom, Andreas Motl, Thomas A Caswell,
   raphaelauv, Hugo van Kemenade, Mark Shannon, and Petr Viktorin.
+- Remove support for end-of-life Python versions, including Python 2.7
+  and Python 3.5.
 
 
 2.0.2 (2023-01-28)

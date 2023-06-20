@@ -25,11 +25,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.5, 3.6, 3.7, 3.8, 3.9, "3.10", "3.11", "3.12-dev"]
-        # Jan 2023: We have pinned back from ubuntu-latest (which is
-        # now ubuntu 22.04) because older Python versions like
-        # 3.5, 3.6 and presumably 2.7 are not available in it.
-        os: [ubuntu-20.04, macos-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9, "3.10", "3.11", "3.12-dev"]
+        os: [ubuntu-latest, macos-latest]
         exclude:
           - os: macos-latest
             python-version: 3.12-dev
@@ -95,12 +92,12 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
       run: |
         twine upload --skip-existing dist/*
-
+  # XXX: Is non-standard thread mode even needed?
   test_non_standard_thread:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.5, "3.11"]
+        python-version: ["3.11"]
         os: [ubuntu-20.04, macos-latest]
     steps:
     - uses: actions/checkout@v3
