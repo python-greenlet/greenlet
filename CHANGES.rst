@@ -18,6 +18,11 @@
   compilers for some time. See `PR 347
   <https://github.com/python-greenlet/greenlet/pull/347>`_ from Khem
   Raj.
+- Add initial support for Python 3.12. See `issue
+  <https://github.com/python-greenlet/greenlet/issues/323>`_ and `PR
+  <https://github.com/python-greenlet/greenlet/pull/327>`_; thanks go
+  to (at least) Michael Droettboom, Andreas Motl, Thomas A Caswell,
+  raphaelauv, Hugo van Kemenade, Mark Shannon, and Petr Viktorin.
 
 
 2.0.2 (2023-01-28)
