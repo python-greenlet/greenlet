@@ -700,65 +700,16 @@ struct ThreadState_DestroyNoGIL
 
 };
 
-// The intent when GET_THREAD_STATE() is used multiple times in a function is to
-// take a reference to it in a local variable, to avoid the
-// thread-local indirection. On some platforms (macOS),
-// accessing a thread-local involves a function call (plus an initial
-// function call in each function that uses a thread local); in
-// contrast, static volatile variables are at some pre-computed offset.
-
-#if G_USE_STANDARD_THREADING == 1
+// The intent when GET_THREAD_STATE() is needed multiple times in a
+// function is to take a reference to its return value in a local
+// variable, to avoid the thread-local indirection. On some platforms
+// (macOS), accessing a thread-local involves a function call (plus an
+// initial function call in each function that uses a thread local);
+// in contrast, static volatile variables are at some pre-computed
+// offset.
 typedef greenlet::ThreadStateCreator<ThreadState_DestroyNoGIL> ThreadStateCreator;
-static G_THREAD_LOCAL_VAR ThreadStateCreator g_thread_state_global;
+static thread_local ThreadStateCreator g_thread_state_global;
 #define GET_THREAD_STATE() g_thread_state_global
-#else
-// if we're not using standard threading, we're using
-// the Python thread-local dictionary to perform our cleanup,
-// which means we're deallocated when holding the GIL. The
-// thread state is valid enough still for us to destroy
-// stuff.
-typedef greenlet::ThreadStateCreator<ThreadState_DestroyWithGIL> ThreadStateCreator;
-#define G_THREAD_STATE_DICT_CLEANUP_TYPE
-#include "greenlet_thread_state_dict_cleanup.hpp"
-typedef greenlet::refs::OwnedReference<PyGreenletCleanup> OwnedGreenletCleanup;
-// RECALL: legacy thread-local objects (__thread on GCC, __declspec(thread) on
-// MSVC) can't have constructors or destructors, they have to be
-// constant. So we indirect through a pointer and a function.
-static G_THREAD_LOCAL_VAR ThreadStateCreator* _g_thread_state_global_ptr = nullptr;
-static ThreadStateCreator& GET_THREAD_STATE()
-{
-    if (!_g_thread_state_global_ptr) {
-        // NOTE: If any of this fails, we'll probably go on to hard
-        // crash the process, because we're returning a reference to a
-        // null pointer. we've called Py_FatalError(), but have no way
-        // to communicate that to the caller. Since these should
-        // essentially never fail unless the entire process is borked,
-        // a hard crash with a decent C++ backtrace from the exception
-        // is much more useful.
-        _g_thread_state_global_ptr = new ThreadStateCreator();
-        if (!_g_thread_state_global_ptr) {
-            throw PyFatalError("greenlet: Failed to create greenlet thread state.");
-        }
-
-        OwnedGreenletCleanup cleanup(OwnedGreenletCleanup::consuming(PyType_GenericAlloc(&PyGreenletCleanup_Type, 0)));
-        if (!cleanup) {
-            throw PyFatalError("greenlet: Failed to create greenlet thread state cleanup.");
-        }
-
-        cleanup->thread_state_creator = _g_thread_state_global_ptr;
-        assert(PyObject_GC_IsTracked(cleanup.borrow_o()));
-
-        PyObject* ts_dict_w = PyThreadState_GetDict();
-        if (!ts_dict_w) {
-            throw PyFatalError("greenlet: Failed to get Python thread state.");
-        }
-        if (PyDict_SetItemString(ts_dict_w, "__greenlet_cleanup", cleanup.borrow_o()) < 0) {
-            throw PyFatalError("greenlet: Failed to save cleanup key in Python thread state.");
-        }
-    }
-    return *_g_thread_state_global_ptr;
-}
-#endif
 
 
 Greenlet::Greenlet(PyGreenlet* p)
@@ -3148,10 +3099,6 @@ greenlet_internal_mod_init() noexcept
 
         Require(PyType_Ready(&PyGreenlet_Type));
 
-#if G_USE_STANDARD_THREADING == 0
-        Require(PyType_Ready(&PyGreenletCleanup_Type));
-#endif
-
         mod_globs = new GreenletGlobals;
         ThreadState::init();
 
@@ -3164,7 +3111,7 @@ greenlet_internal_mod_init() noexcept
         // The macros are eithre 0 or 1; the 0 case can be interpreted
         // the same as NULL, which is ambiguous with a pointer.
         m.PyAddObject("GREENLET_USE_CONTEXT_VARS", (long)GREENLET_PY37);
-        m.PyAddObject("GREENLET_USE_STANDARD_THREADING", (long)G_USE_STANDARD_THREADING);
+        m.PyAddObject("GREENLET_USE_STANDARD_THREADING", 1L);
 
         OwnedObject clocks_per_sec = OwnedObject::consuming(PyLong_FromSsize_t(CLOCKS_PER_SEC));
         m.PyAddObject("CLOCKS_PER_SEC", clocks_per_sec);

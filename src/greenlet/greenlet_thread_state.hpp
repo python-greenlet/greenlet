@@ -532,30 +532,12 @@ public:
 
 };
 
-#if G_USE_STANDARD_THREADING == 1
+
 // We can't use the PythonAllocator for this, because we push to it
 // from the thread state destructor, which doesn't have the GIL,
 // and Python's allocators can only be called with the GIL.
 typedef std::vector<ThreadState*> cleanup_queue_t;
-#else
-class cleanup_queue_t {
-public:
-    inline ssize_t size() const { return 0; };
-    inline bool empty() const { return true; };
-    inline void pop_back()
-    {
-        throw std::out_of_range("empty queue.");
-    };
-    inline ThreadState* back()
-    {
-        throw std::out_of_range("empty queue.");
-    };
-    inline void push_back(ThreadState* g)
-    {
-        throw std::out_of_range("empty queue.");
-    };
-};
-#endif
+
 }; // namespace greenlet
 
 #endif
