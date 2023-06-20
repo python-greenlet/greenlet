@@ -8,6 +8,10 @@
 - Build binary wheels for S390x Linux. See `PR 358
   <https://github.com/python-greenlet/greenlet/pull/358>`_ from Steven
   Silvester.
+- Fix a rare crash on shutdown seen in uWSGI deployments. See `issue
+  330 <https://github.com/python-greenlet/greenlet/issues/330>`_ and `PR 356
+  <https://github.com/python-greenlet/greenlet/pull/356>`_ from Andrew
+  Wason.
 
 
 2.0.2 (2023-01-28)

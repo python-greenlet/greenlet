@@ -299,6 +299,12 @@ public:
 // established at init time.
 // This is a step towards Python3 style module state that allows
 // reloading.
+//
+// In an earlier iteration of this code, we used placement new to be
+// able to allocate this object statically still, so that references
+// to its members don't incur an extra pointer indirection.
+// But under some scenarios, that could result in crashes at
+// shutdown because apparently the destructor was getting run twice?
 class GreenletGlobals
 {
 public:
