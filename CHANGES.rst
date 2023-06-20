@@ -12,6 +12,12 @@
   330 <https://github.com/python-greenlet/greenlet/issues/330>`_ and `PR 356
   <https://github.com/python-greenlet/greenlet/pull/356>`_ from Andrew
   Wason.
+- Make the platform-specific low-level C/assembly snippets stop using
+  the ``register`` storage class. Newer versions of standards remove
+  this storage class, and it has been generally ignored by many
+  compilers for some time. See `PR 347
+  <https://github.com/python-greenlet/greenlet/pull/347>`_ from Khem
+  Raj.
 
 
 2.0.2 (2023-01-28)
