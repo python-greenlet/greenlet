@@ -68,13 +68,13 @@ greenlet::refs::MainGreenletExactChecker(void *p)
 
 
 template <typename T, greenlet::refs::TypeChecker TC>
-inline greenlet::Greenlet* greenlet::refs::_OwnedGreenlet<T, TC>::operator->() const G_NOEXCEPT
+inline greenlet::Greenlet* greenlet::refs::_OwnedGreenlet<T, TC>::operator->() const noexcept
 {
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }
 
 template <typename T, greenlet::refs::TypeChecker TC>
-inline greenlet::Greenlet* greenlet::refs::_BorrowedGreenlet<T, TC>::operator->() const G_NOEXCEPT
+inline greenlet::Greenlet* greenlet::refs::_BorrowedGreenlet<T, TC>::operator->() const noexcept
 {
     return reinterpret_cast<PyGreenlet*>(this->p)->pimpl;
 }

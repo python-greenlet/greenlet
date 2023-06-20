@@ -152,7 +152,7 @@ greenlet::refs::_BorrowedGreenlet<T, TC>& greenlet::refs::_BorrowedGreenlet<T, T
 }
 
 template <typename T, greenlet::refs::TypeChecker TC>
-inline greenlet::refs::_BorrowedGreenlet<T, TC>::operator Greenlet*() const G_NOEXCEPT
+inline greenlet::refs::_BorrowedGreenlet<T, TC>::operator Greenlet*() const noexcept
 {
     if (!this->p) {
         return nullptr;
@@ -169,7 +169,7 @@ greenlet::refs::_BorrowedGreenlet<T, TC>::_BorrowedGreenlet(const BorrowedObject
 }
 
 template <typename T, greenlet::refs::TypeChecker TC>
-inline greenlet::refs::_OwnedGreenlet<T, TC>::operator Greenlet*() const G_NOEXCEPT
+inline greenlet::refs::_OwnedGreenlet<T, TC>::operator Greenlet*() const noexcept
 {
     if (!this->p) {
         return nullptr;
@@ -790,26 +790,26 @@ MainGreenlet::MainGreenlet(PyGreenlet* p, ThreadState* state)
 }
 
 ThreadState*
-MainGreenlet::thread_state() const G_NOEXCEPT
+MainGreenlet::thread_state() const noexcept
 {
     return this->_thread_state;
 }
 
 void
-MainGreenlet::thread_state(ThreadState* t) G_NOEXCEPT
+MainGreenlet::thread_state(ThreadState* t) noexcept
 {
     assert(!t);
     this->_thread_state = t;
 }
 
 BorrowedGreenlet
-UserGreenlet::self() const G_NOEXCEPT
+UserGreenlet::self() const noexcept
 {
     return this->_self;
 }
 
 BorrowedGreenlet
-MainGreenlet::self() const G_NOEXCEPT
+MainGreenlet::self() const noexcept
 {
     return BorrowedGreenlet(this->_self.borrow());
 }
@@ -916,7 +916,7 @@ g_handle_exit(const OwnedObject& greenlet_result);
  * argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
  * return both.
  */
-OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) G_NOEXCEPT
+OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) noexcept
 {
     // Because this may invoke arbitrary Python code, which could
     // result in switching back to us, we need to get the
@@ -1005,7 +1005,7 @@ UserGreenlet::throw_GreenletExit_during_dealloc(const ThreadState& current_threa
 }
 
 ThreadState*
-UserGreenlet::thread_state() const G_NOEXCEPT
+UserGreenlet::thread_state() const noexcept
 {
     // TODO: maybe make this throw, if the thread state isn't there?
     // if (!this->main_greenlet) {
@@ -1020,19 +1020,19 @@ UserGreenlet::thread_state() const G_NOEXCEPT
 
 
 bool
-UserGreenlet::was_running_in_dead_thread() const G_NOEXCEPT
+UserGreenlet::was_running_in_dead_thread() const noexcept
 {
     return this->_main_greenlet && !this->thread_state();
 }
 
 bool
-MainGreenlet::was_running_in_dead_thread() const G_NOEXCEPT
+MainGreenlet::was_running_in_dead_thread() const noexcept
 {
     return !this->_thread_state;
 }
 
 inline void
-Greenlet::slp_restore_state() G_NOEXCEPT
+Greenlet::slp_restore_state() noexcept
 {
 #ifdef SLP_BEFORE_RESTORE_STATE
     SLP_BEFORE_RESTORE_STATE();
@@ -1043,7 +1043,7 @@ Greenlet::slp_restore_state() G_NOEXCEPT
 
 
 inline int
-Greenlet::slp_save_state(char *const stackref) G_NOEXCEPT
+Greenlet::slp_save_state(char *const stackref) noexcept
 {
     // XXX: This used to happen in the middle, before saving, but
     // after finding the next owner. Does that matter? This is
@@ -1175,7 +1175,7 @@ MainGreenlet::g_switch()
 
 
 OwnedGreenlet
-Greenlet::g_switchstack_success() G_NOEXCEPT
+Greenlet::g_switchstack_success() noexcept
 {
     PyThreadState* tstate = PyThreadState_GET();
     // restore the saved state
@@ -1413,7 +1413,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
             // It gets more complicated than that, though, on some
             // platforms, specifically at least Linux/gcc/libstdc++. They use
             // an exception to unwind the stack when a background
-            // thread exits. (See comments about G_NOEXCEPT.) So this
+            // thread exits. (See comments about noexcept.) So this
             // may not actually represent anything untoward. On those
             // platforms we allow throws of this to propagate, or
             // attempt to anyway.
@@ -3139,10 +3139,9 @@ static struct PyModuleDef greenlet_module_def = {
 
 
 static PyObject*
-greenlet_internal_mod_init() G_NOEXCEPT
+greenlet_internal_mod_init() noexcept
 {
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
-    GREENLET_NOINLINE_INIT();
 
     try {
         CreatedModule m(greenlet_module_def);

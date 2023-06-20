@@ -25,6 +25,8 @@
   raphaelauv, Hugo van Kemenade, Mark Shannon, and Petr Viktorin.
 - Remove support for end-of-life Python versions, including Python
   2.7, Python 3.5 and Python 3.6.
+- Require a compiler that supports ``noinline`` directives. See
+  `issue 271 <https://github.com/python-greenlet/greenlet/issues/266>`_
 
 
 2.0.2 (2023-01-28)
