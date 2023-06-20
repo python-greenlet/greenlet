@@ -32,7 +32,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
     mkdir -p /greenlet/wheelhouse
     OPATH="$PATH"
     which auditwheel
-    for variant in `ls -d /opt/python/cp{36,37,38,39,310,311}*`; do
+    for variant in `ls -d /opt/python/cp{37,38,39,310,311,312}*`; do
         export PATH="$variant/bin:$OPATH"
         echo "Building $variant $(python --version)"
 
@@ -53,5 +53,5 @@ fi
 
 # Mount the current directory as /greenlet
 # Can't use -i on Travis with arm64, "input device not a tty"
-docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-quay.io/pypa/manylinux2010_x86_64} /greenlet/$(basename $0)
+docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-quay.io/pypa/manylinux2014_x86_64} /greenlet/$(basename $0)
 ls -l wheelhouse
