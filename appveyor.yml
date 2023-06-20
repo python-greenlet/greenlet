@@ -83,11 +83,7 @@ environment:
     # Untested 64-bit versions. We don't expect any variance here from
     # the other tested 64-bit versions, OR they are very EOL
 
-    - PYTHON: "C:\\Python36-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.6.x"
-      PYTHON_EXE: python
-      GWHEEL_ONLY: true
+    # None right now.
 
     # Untested 32-bit versions. As above, we don't expect any variance
     # from the tested 32-bit versions, OR they are very EOL.
@@ -104,11 +100,6 @@ environment:
       PYTHON_EXE: python
       GWHEEL_ONLY: true
 
-    - PYTHON: "C:\\Python36"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.6.x"
-      PYTHON_EXE: python
-      GWHEEL_ONLY: true
 
 
 cache:
