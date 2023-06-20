@@ -143,7 +143,12 @@ namespace greenlet
         _PyCFrame* cframe;
         int use_tracing;
 #endif
+#if GREENLET_PY312
+        int py_recursion_depth;
+        int c_recursion_depth;
+#else
         int recursion_depth;
+#endif
         int trash_delete_nesting;
 #if GREENLET_PY311
         _PyInterpreterFrame* current_frame;
@@ -748,7 +753,12 @@ PythonState::PythonState()
     ,cframe(nullptr)
     ,use_tracing(0)
 #endif
+#if GREENLET_PY312
+    ,py_recursion_depth(0)
+    ,c_recursion_depth(0)
+#else
     ,recursion_depth(0)
+#endif
     ,trash_delete_nesting(0)
 #if GREENLET_PY311
     ,current_frame(nullptr)
@@ -828,10 +838,17 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
       the switch, use `will_switch_from`.
     */
     this->cframe = tstate->cframe;
+    #if !GREENLET_PY312
     this->use_tracing = tstate->cframe->use_tracing;
+    #endif
 #endif
 #if GREENLET_PY311
+    #if GREENLET_PY312
+    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    this->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
+    #else
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+    #endif
     this->current_frame = tstate->cframe->current_frame;
     this->datastack_chunk = tstate->datastack_chunk;
     this->datastack_top = tstate->datastack_top;
@@ -839,13 +856,16 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
     this->_top_frame.steal(frame);
+    #if GREENLET_PY312
+    this->trash_delete_nesting = tstate->trash.delete_nesting;
+    #else
+    this->trash_delete_nesting = tstate->trash_delete_nesting;
+    #endif
 #else
     this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
-#endif
-
-    // All versions of Python.
     this->trash_delete_nesting = tstate->trash_delete_nesting;
+#endif
 }
 
 void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
@@ -864,26 +884,37 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
       root_cframe here. See note above about why we can't
       just copy this from ``origin->cframe->use_tracing``.
     */
+    #if !GREENLET_PY312
     tstate->cframe->use_tracing = this->use_tracing;
+    #endif
 #endif
 #if GREENLET_PY311
+    #if GREENLET_PY312
+    tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
+    tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
+    #else
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
+    #endif
     tstate->cframe->current_frame = this->current_frame;
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
+    #if GREENLET_PY312
+    tstate->trash.delete_nesting = this->trash_delete_nesting;
+    #else
+    tstate->trash_delete_nesting = this->trash_delete_nesting;
+    #endif
 #else
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
-#endif
-    // All versions of Python.
     tstate->trash_delete_nesting = this->trash_delete_nesting;
+#endif
 }
 
 void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT
 {
-#if GREENLET_USE_CFRAME
+#if GREENLET_USE_CFRAME && !GREENLET_PY312
     // The weird thing is, we don't actually save this for an
     // effect on the current greenlet, it's saved for an
     // effect on the target greenlet. That is, we want
@@ -895,7 +926,10 @@ void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEP
 void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT
 {
     this->_top_frame = nullptr;
-#if GREENLET_PY311
+#if GREENLET_PY312
+    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    this->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+#elif GREENLET_PY311
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
 #else
     this->recursion_depth = tstate->recursion_depth;
