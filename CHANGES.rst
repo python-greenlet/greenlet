@@ -2,10 +2,12 @@
  Changes
 =========
 
-2.0.3 (unreleased)
+3.0.0 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Build binary wheels for S390x Linux. See `PR 358
+  <https://github.com/python-greenlet/greenlet/pull/358>`_ from Steven
+  Silvester.
 
 
 2.0.2 (2023-01-28)

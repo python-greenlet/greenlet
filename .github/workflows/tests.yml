@@ -168,6 +168,7 @@ jobs:
           - manylinux2010_x86_64
           - manylinux2014_aarch64
           - manylinux2014_ppc64le
+          - manylinux2014_s390x
           - manylinux2014_x86_64
           - musllinux_1_1_x86_64
           - musllinux_1_1_aarch64
@@ -180,13 +181,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Enable emulation
-        run: |
-          docker run --rm --privileged hypriot/qemu-register
-        # This one was seen in pyca/bcrypt. What's the difference?
-        # (Other than this one not working.)
-        #run: |
-        #  docker run --rm --privileged multiarch/qemu-user-static:register --reset
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: all
       - name: Build and test greenlet
         if: matrix.image == 'manylinux2010_x86_64'
         # An alternate way to do this is to run the container directly with a uses:
