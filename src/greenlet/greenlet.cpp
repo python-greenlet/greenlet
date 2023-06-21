@@ -152,7 +152,7 @@ greenlet::refs::_BorrowedGreenlet<T, TC>& greenlet::refs::_BorrowedGreenlet<T, T
 }
 
 template <typename T, greenlet::refs::TypeChecker TC>
-inline greenlet::refs::_BorrowedGreenlet<T, TC>::operator Greenlet*() const G_NOEXCEPT
+inline greenlet::refs::_BorrowedGreenlet<T, TC>::operator Greenlet*() const noexcept
 {
     if (!this->p) {
         return nullptr;
@@ -169,7 +169,7 @@ greenlet::refs::_BorrowedGreenlet<T, TC>::_BorrowedGreenlet(const BorrowedObject
 }
 
 template <typename T, greenlet::refs::TypeChecker TC>
-inline greenlet::refs::_OwnedGreenlet<T, TC>::operator Greenlet*() const G_NOEXCEPT
+inline greenlet::refs::_OwnedGreenlet<T, TC>::operator Greenlet*() const noexcept
 {
     if (!this->p) {
         return nullptr;
@@ -317,17 +317,6 @@ public:
     const ImmortalString str_run;
     Mutex* const thread_states_to_destroy_lock;
     greenlet::cleanup_queue_t thread_states_to_destroy;
-
-    GreenletGlobals(const int UNUSED(dummy)) :
-        event_switch(0),
-        event_throw(0),
-        PyExc_GreenletError(0),
-        PyExc_GreenletExit(0),
-        empty_tuple(0),
-        empty_dict(0),
-        str_run(0),
-        thread_states_to_destroy_lock(0)
-    {}
 
     GreenletGlobals() :
         event_switch("switch"),
@@ -700,65 +689,16 @@ struct ThreadState_DestroyNoGIL
 
 };
 
-// The intent when GET_THREAD_STATE() is used multiple times in a function is to
-// take a reference to it in a local variable, to avoid the
-// thread-local indirection. On some platforms (macOS),
-// accessing a thread-local involves a function call (plus an initial
-// function call in each function that uses a thread local); in
-// contrast, static volatile variables are at some pre-computed offset.
-
-#if G_USE_STANDARD_THREADING == 1
+// The intent when GET_THREAD_STATE() is needed multiple times in a
+// function is to take a reference to its return value in a local
+// variable, to avoid the thread-local indirection. On some platforms
+// (macOS), accessing a thread-local involves a function call (plus an
+// initial function call in each function that uses a thread local);
+// in contrast, static volatile variables are at some pre-computed
+// offset.
 typedef greenlet::ThreadStateCreator<ThreadState_DestroyNoGIL> ThreadStateCreator;
-static G_THREAD_LOCAL_VAR ThreadStateCreator g_thread_state_global;
+static thread_local ThreadStateCreator g_thread_state_global;
 #define GET_THREAD_STATE() g_thread_state_global
-#else
-// if we're not using standard threading, we're using
-// the Python thread-local dictionary to perform our cleanup,
-// which means we're deallocated when holding the GIL. The
-// thread state is valid enough still for us to destroy
-// stuff.
-typedef greenlet::ThreadStateCreator<ThreadState_DestroyWithGIL> ThreadStateCreator;
-#define G_THREAD_STATE_DICT_CLEANUP_TYPE
-#include "greenlet_thread_state_dict_cleanup.hpp"
-typedef greenlet::refs::OwnedReference<PyGreenletCleanup> OwnedGreenletCleanup;
-// RECALL: legacy thread-local objects (__thread on GCC, __declspec(thread) on
-// MSVC) can't have constructors or destructors, they have to be
-// constant. So we indirect through a pointer and a function.
-static G_THREAD_LOCAL_VAR ThreadStateCreator* _g_thread_state_global_ptr = nullptr;
-static ThreadStateCreator& GET_THREAD_STATE()
-{
-    if (!_g_thread_state_global_ptr) {
-        // NOTE: If any of this fails, we'll probably go on to hard
-        // crash the process, because we're returning a reference to a
-        // null pointer. we've called Py_FatalError(), but have no way
-        // to communicate that to the caller. Since these should
-        // essentially never fail unless the entire process is borked,
-        // a hard crash with a decent C++ backtrace from the exception
-        // is much more useful.
-        _g_thread_state_global_ptr = new ThreadStateCreator();
-        if (!_g_thread_state_global_ptr) {
-            throw PyFatalError("greenlet: Failed to create greenlet thread state.");
-        }
-
-        OwnedGreenletCleanup cleanup(OwnedGreenletCleanup::consuming(PyType_GenericAlloc(&PyGreenletCleanup_Type, 0)));
-        if (!cleanup) {
-            throw PyFatalError("greenlet: Failed to create greenlet thread state cleanup.");
-        }
-
-        cleanup->thread_state_creator = _g_thread_state_global_ptr;
-        assert(PyObject_GC_IsTracked(cleanup.borrow_o()));
-
-        PyObject* ts_dict_w = PyThreadState_GetDict();
-        if (!ts_dict_w) {
-            throw PyFatalError("greenlet: Failed to get Python thread state.");
-        }
-        if (PyDict_SetItemString(ts_dict_w, "__greenlet_cleanup", cleanup.borrow_o()) < 0) {
-            throw PyFatalError("greenlet: Failed to save cleanup key in Python thread state.");
-        }
-    }
-    return *_g_thread_state_global_ptr;
-}
-#endif
 
 
 Greenlet::Greenlet(PyGreenlet* p)
@@ -774,7 +714,7 @@ Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
     p->pimpl = this;
 }
 
-UserGreenlet::UserGreenlet(PyGreenlet* p,BorrowedGreenlet the_parent)
+UserGreenlet::UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
     : Greenlet(p), _parent(the_parent)
 {
     this->_self = p;
@@ -790,26 +730,26 @@ MainGreenlet::MainGreenlet(PyGreenlet* p, ThreadState* state)
 }
 
 ThreadState*
-MainGreenlet::thread_state() const G_NOEXCEPT
+MainGreenlet::thread_state() const noexcept
 {
     return this->_thread_state;
 }
 
 void
-MainGreenlet::thread_state(ThreadState* t) G_NOEXCEPT
+MainGreenlet::thread_state(ThreadState* t) noexcept
 {
     assert(!t);
     this->_thread_state = t;
 }
 
 BorrowedGreenlet
-UserGreenlet::self() const G_NOEXCEPT
+UserGreenlet::self() const noexcept
 {
     return this->_self;
 }
 
 BorrowedGreenlet
-MainGreenlet::self() const G_NOEXCEPT
+MainGreenlet::self() const noexcept
 {
     return BorrowedGreenlet(this->_self.borrow());
 }
@@ -916,7 +856,7 @@ g_handle_exit(const OwnedObject& greenlet_result);
  * argument dict. Otherwise, we'll create a tuple of (args, kwargs) and
  * return both.
  */
-OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) G_NOEXCEPT
+OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) noexcept
 {
     // Because this may invoke arbitrary Python code, which could
     // result in switching back to us, we need to get the
@@ -1005,7 +945,7 @@ UserGreenlet::throw_GreenletExit_during_dealloc(const ThreadState& current_threa
 }
 
 ThreadState*
-UserGreenlet::thread_state() const G_NOEXCEPT
+UserGreenlet::thread_state() const noexcept
 {
     // TODO: maybe make this throw, if the thread state isn't there?
     // if (!this->main_greenlet) {
@@ -1020,19 +960,19 @@ UserGreenlet::thread_state() const G_NOEXCEPT
 
 
 bool
-UserGreenlet::was_running_in_dead_thread() const G_NOEXCEPT
+UserGreenlet::was_running_in_dead_thread() const noexcept
 {
     return this->_main_greenlet && !this->thread_state();
 }
 
 bool
-MainGreenlet::was_running_in_dead_thread() const G_NOEXCEPT
+MainGreenlet::was_running_in_dead_thread() const noexcept
 {
     return !this->_thread_state;
 }
 
 inline void
-Greenlet::slp_restore_state() G_NOEXCEPT
+Greenlet::slp_restore_state() noexcept
 {
 #ifdef SLP_BEFORE_RESTORE_STATE
     SLP_BEFORE_RESTORE_STATE();
@@ -1043,7 +983,7 @@ Greenlet::slp_restore_state() G_NOEXCEPT
 
 
 inline int
-Greenlet::slp_save_state(char *const stackref) G_NOEXCEPT
+Greenlet::slp_save_state(char *const stackref) noexcept
 {
     // XXX: This used to happen in the middle, before saving, but
     // after finding the next owner. Does that matter? This is
@@ -1175,7 +1115,7 @@ MainGreenlet::g_switch()
 
 
 OwnedGreenlet
-Greenlet::g_switchstack_success() G_NOEXCEPT
+Greenlet::g_switchstack_success() noexcept
 {
     PyThreadState* tstate = PyThreadState_GET();
     // restore the saved state
@@ -1413,7 +1353,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
             // It gets more complicated than that, though, on some
             // platforms, specifically at least Linux/gcc/libstdc++. They use
             // an exception to unwind the stack when a background
-            // thread exits. (See comments about G_NOEXCEPT.) So this
+            // thread exits. (See comments about noexcept.) So this
             // may not actually represent anything untoward. On those
             // platforms we allow throws of this to propagate, or
             // attempt to anyway.
@@ -2503,18 +2443,12 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(cont
     return 0;
 }
 
-#ifdef Py_CONTEXT_H
-#    define GREENLET_NO_CONTEXTVARS_REASON "This build of greenlet"
-#else
-#    define GREENLET_NO_CONTEXTVARS_REASON "This Python interpreter"
-#endif
-
 namespace greenlet
 {
 
-template<>
+
 const OwnedObject
-Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
+Greenlet::context() const
 {
     using greenlet::PythonStateContext;
     OwnedObject result;
@@ -2523,7 +2457,7 @@ Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(this->self())) {
-            result = PythonStateContext<G_IS_PY37>::context(PyThreadState_GET());
+            result = PythonStateContext::context(PyThreadState_GET());
         }
         else {
             throw ValueError(
@@ -2541,18 +2475,8 @@ Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
     return result;
 }
 
-template<>
-const OwnedObject
-Greenlet::context<GREENLET_WHEN_NOT_PY37>(GREENLET_WHEN_NOT_PY37::No) const
-{
-    throw AttributeError(
-                         GREENLET_NO_CONTEXTVARS_REASON
-                         "does not support context variables"
-    );
-}
 
-template<>
-void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_PY37::Yes)
+void Greenlet::context(BorrowedObject given)
 {
     using greenlet::PythonStateContext;
     if (!given) {
@@ -2575,8 +2499,8 @@ void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_P
 
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
-        OwnedObject octx = OwnedObject::consuming(PythonStateContext<G_IS_PY37>::context(tstate));
-        PythonStateContext<G_IS_PY37>::context(tstate, context.relinquish_ownership());
+        OwnedObject octx = OwnedObject::consuming(PythonStateContext::context(tstate));
+        PythonStateContext::context(tstate, context.relinquish_ownership());
     }
     else {
         /* Greenlet is not running: just set context. Note that the
@@ -2585,24 +2509,14 @@ void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_P
     }
 }
 
-template<>
-void
-Greenlet::context<GREENLET_WHEN_NOT_PY37>(BorrowedObject UNUSED(given), GREENLET_WHEN_NOT_PY37::No)
-{
-    throw AttributeError(
-                         GREENLET_NO_CONTEXTVARS_REASON
-                         "does not support context variables"
-    );
-}
-
-};
+}; //namespace greenlet
 
 static PyObject*
 green_getcontext(const PyGreenlet* self, void* UNUSED(context))
 {
     const Greenlet *const g = self->pimpl;
     try {
-        OwnedObject result(g->context<G_IS_PY37>());
+        OwnedObject result(g->context());
         return result.relinquish_ownership();
     }
     catch(const PyErrOccurred&) {
@@ -2614,7 +2528,7 @@ static int
 green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 {
     try {
-        self->context<G_IS_PY37>(nctx, G_IS_PY37::IsIt());
+        self->context(nctx);
         return 0;
     }
     catch(const PyErrOccurred&) {
@@ -2622,7 +2536,6 @@ green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
     }
 }
 
-#undef GREENLET_NO_CONTEXTVARS_REASON
 
 static PyObject*
 green_getframe(BorrowedGreenlet self, void* UNUSED(context))
@@ -2678,7 +2591,7 @@ green_repr(BorrowedGreenlet self)
                 ? " current"
                 : (self->started() ? " suspended" : "");
         }
-        result = GNative_FromFormat(
+        result = PyUnicode_FromFormat(
             "<%s object at %p (otid=%p)%s%s%s%s>",
             tp_name,
             self.borrow_o(),
@@ -2690,7 +2603,7 @@ green_repr(BorrowedGreenlet self)
         );
     }
     else {
-        result = GNative_FromFormat(
+        result = PyUnicode_FromFormat(
             "<%s object at %p (otid=%p) %sdead>",
             tp_name,
             self.borrow_o(),
@@ -2864,9 +2777,6 @@ static PyNumberMethods green_as_number = {
     NULL, /* nb_add */
     NULL, /* nb_subtract */
     NULL, /* nb_multiply */
-#if PY_MAJOR_VERSION < 3
-    NULL, /* nb_divide */
-#endif
     NULL,                /* nb_remainder */
     NULL,                /* nb_divmod */
     NULL,                /* nb_power */
@@ -3139,19 +3049,14 @@ static struct PyModuleDef greenlet_module_def = {
 
 
 static PyObject*
-greenlet_internal_mod_init() G_NOEXCEPT
+greenlet_internal_mod_init() noexcept
 {
     static void* _PyGreenlet_API[PyGreenlet_API_pointers];
-    GREENLET_NOINLINE_INIT();
 
     try {
         CreatedModule m(greenlet_module_def);
 
         Require(PyType_Ready(&PyGreenlet_Type));
-
-#if G_USE_STANDARD_THREADING == 0
-        Require(PyType_Ready(&PyGreenletCleanup_Type));
-#endif
 
         mod_globs = new GreenletGlobals;
         ThreadState::init();
@@ -3162,10 +3067,8 @@ greenlet_internal_mod_init() G_NOEXCEPT
 
         m.PyAddObject("GREENLET_USE_GC", 1);
         m.PyAddObject("GREENLET_USE_TRACING", 1);
-        // The macros are eithre 0 or 1; the 0 case can be interpreted
-        // the same as NULL, which is ambiguous with a pointer.
-        m.PyAddObject("GREENLET_USE_CONTEXT_VARS", (long)GREENLET_PY37);
-        m.PyAddObject("GREENLET_USE_STANDARD_THREADING", (long)G_USE_STANDARD_THREADING);
+        m.PyAddObject("GREENLET_USE_CONTEXT_VARS", 1L);
+        m.PyAddObject("GREENLET_USE_STANDARD_THREADING", 1L);
 
         OwnedObject clocks_per_sec = OwnedObject::consuming(PyLong_FromSsize_t(CLOCKS_PER_SEC));
         m.PyAddObject("CLOCKS_PER_SEC", clocks_per_sec);
@@ -3242,20 +3145,14 @@ greenlet_internal_mod_init() G_NOEXCEPT
 }
 
 extern "C" {
-#if PY_MAJOR_VERSION >= 3
+
 PyMODINIT_FUNC
 PyInit__greenlet(void)
 {
     return greenlet_internal_mod_init();
 }
-#else
-PyMODINIT_FUNC
-init_greenlet(void)
-{
-    greenlet_internal_mod_init();
-}
-#endif
-};
+
+}; // extern C
 
 #ifdef __clang__
 #    pragma clang diagnostic pop

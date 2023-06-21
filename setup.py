@@ -229,8 +229,7 @@ setup(
         'Programming Language :: C',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3 :: Only',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
@@ -242,17 +241,12 @@ setup(
     extras_require={
         'docs': [
             'Sphinx',
-            # 0.18b1 breaks sphinx 1.8.5 which is the latest version that runs
-            # on Python 2. The version pin sphinx itself contains isn't specific enough.
-            'docutils < 0.18; python_version < "3"',
         ],
         'test': [
             'objgraph',
-            # Sigh, all releases of this were yanked from PyPI.
-            #'faulthandler; python_version == "2.7" and platform_python_implementation == "CPython"',
             'psutil',
         ],
     },
-    python_requires=">=3.5",
+    python_requires=">=3.7",
     zip_safe=False,
 )

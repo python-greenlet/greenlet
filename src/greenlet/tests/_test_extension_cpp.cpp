@@ -149,8 +149,6 @@ static PyMethodDef test_methods[] = {
      "Throws C++ exception. Calling this function directly should abort the process."},
     {NULL, NULL, 0, NULL}};
 
-#if PY_MAJOR_VERSION >= 3
-#    define INITERROR return NULL
 
 static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,
                                        "greenlet.tests._test_extension_cpp",
@@ -164,33 +162,22 @@ static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,
 
 PyMODINIT_FUNC
 PyInit__test_extension_cpp(void)
-#else
-#    define INITERROR return
-PyMODINIT_FUNC
-init_test_extension_cpp(void)
-#endif
 {
     PyObject* module = NULL;
 
-#if PY_MAJOR_VERSION >= 3
     module = PyModule_Create(&moduledef);
-#else
-    module = Py_InitModule("greenlet.tests._test_extension_cpp", test_methods);
-#endif
 
     if (module == NULL) {
-        INITERROR;
+        return NULL;
     }
 
     PyGreenlet_Import();
     if (_PyGreenlet_API == NULL) {
-        INITERROR;
+        return NULL;
     }
 
     p_test_exception_throw = test_exception_throw;
     p_test_exception_switch_recurse = test_exception_switch_recurse;
 
-#if PY_MAJOR_VERSION >= 3
     return module;
-#endif
 }

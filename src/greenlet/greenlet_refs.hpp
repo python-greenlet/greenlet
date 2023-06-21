@@ -98,13 +98,11 @@ namespace greenlet
             if (!p) {
                 return;
             }
-#if GREENLET_PY37
             if (!PyContext_CheckExact(p)) {
                 throw TypeError(
                     "greenlet context must be a contextvars.Context or None"
                 );
             }
-#endif
         }
 
         typedef OwnedReference<PyObject, ContextExactChecker> OwnedContext;
@@ -178,51 +176,51 @@ namespace greenlet {
         // TODO: This should probably not exist here, but be moved
         // down to relevant sub-types.
 
-        inline T* borrow() const G_NOEXCEPT
+        inline T* borrow() const noexcept
         {
             return this->p;
         }
 
-        PyObject* borrow_o() const G_NOEXCEPT
+        PyObject* borrow_o() const noexcept
         {
             return reinterpret_cast<PyObject*>(this->p);
         }
 
-        inline T* operator->() const G_NOEXCEPT
+        inline T* operator->() const noexcept
         {
             return this->p;
         }
 
-        bool is_None() const G_NOEXCEPT
+        bool is_None() const noexcept
         {
             return this->p == Py_None;
         }
 
-        inline PyObject* acquire_or_None() const G_NOEXCEPT
+        inline PyObject* acquire_or_None() const noexcept
         {
             PyObject* result = this->p ? reinterpret_cast<PyObject*>(this->p) : Py_None;
             Py_INCREF(result);
             return result;
         }
 
-        G_EXPLICIT_OP operator bool() const G_NOEXCEPT
+        explicit operator bool() const noexcept
         {
             return p != nullptr;
         }
 
-        inline Py_ssize_t REFCNT() const G_NOEXCEPT
+        inline Py_ssize_t REFCNT() const noexcept
         {
             return p ? Py_REFCNT(p) : -42;
         }
 
-        inline PyTypeObject* TYPE() const G_NOEXCEPT
+        inline PyTypeObject* TYPE() const noexcept
         {
             return p ? Py_TYPE(p) : nullptr;
         }
 
-        inline OwnedObject PyStr() const G_NOEXCEPT;
-        inline const std::string as_str() const G_NOEXCEPT;
-        inline OwnedObject PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT;
+        inline OwnedObject PyStr() const noexcept;
+        inline const std::string as_str() const noexcept;
+        inline OwnedObject PyGetAttr(const ImmortalObject& name) const noexcept;
         inline OwnedObject PyRequireAttr(const char* const name) const;
         inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const;
@@ -262,20 +260,20 @@ namespace greenlet {
 #endif
 
     template<typename T, TypeChecker TC>
-    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const void* const rhs) G_NOEXCEPT
+    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const void* const rhs) noexcept
     {
         return lhs.borrow_o() == rhs;
     }
 
     template<typename T, TypeChecker TC, typename X, TypeChecker XC>
-    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const PyObjectPointer<X, XC>& rhs) G_NOEXCEPT
+    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const PyObjectPointer<X, XC>& rhs) noexcept
     {
         return lhs.borrow_o() == rhs.borrow_o();
     }
 
     template<typename T, TypeChecker TC, typename X, TypeChecker XC>
     inline bool operator!=(const PyObjectPointer<T, TC>& lhs,
-                           const PyObjectPointer<X, XC>& rhs) G_NOEXCEPT
+                           const PyObjectPointer<X, XC>& rhs) noexcept
     {
         return lhs.borrow_o() != rhs.borrow_o();
     }
@@ -508,8 +506,8 @@ namespace greenlet {
             return reinterpret_cast<PyObject*>(relinquish_ownership());
         }
 
-        inline Greenlet* operator->() const G_NOEXCEPT;
-        inline operator Greenlet*() const G_NOEXCEPT;
+        inline Greenlet* operator->() const noexcept;
+        inline operator Greenlet*() const noexcept;
     };
 
     template <typename T=PyObject, TypeChecker TC=NoOpChecker>
@@ -564,8 +562,8 @@ namespace greenlet {
         {
             return reinterpret_cast<PyObject*>(this->p);
         }
-        inline Greenlet* operator->() const G_NOEXCEPT;
-        inline operator Greenlet*() const G_NOEXCEPT;
+        inline Greenlet* operator->() const noexcept;
+        inline operator Greenlet*() const noexcept;
     };
 
     typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
@@ -635,7 +633,7 @@ namespace greenlet {
         const char* str;
     public:
         ImmortalString(const char* const str) :
-            ImmortalObject(str ? Require(Greenlet_Intern(str)) : nullptr)
+            ImmortalObject(str ? Require(PyUnicode_InternFromString(str)) : nullptr)
         {
             this->str = str;
         }
@@ -643,7 +641,7 @@ namespace greenlet {
         inline ImmortalString& operator=(const char* const str)
         {
             if (!this->p) {
-                this->p = Require(Greenlet_Intern(str));
+                this->p = Require(PyUnicode_InternFromString(str));
                 this->str = str;
             }
             else {
@@ -655,7 +653,7 @@ namespace greenlet {
     };
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyStr() const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T, TC>::PyStr() const noexcept
     {
         if (!this->p) {
             return OwnedObject();
@@ -664,7 +662,7 @@ namespace greenlet {
     }
 
     template<typename T, TypeChecker TC>
-    inline const std::string PyObjectPointer<T, TC>::as_str() const G_NOEXCEPT
+    inline const std::string PyObjectPointer<T, TC>::as_str() const noexcept
     {
         // NOTE: This is not Python exception safe.
         if (this->p) {
@@ -675,17 +673,13 @@ namespace greenlet {
             if (!py_str) {
                 return "(nil)";
             }
-#if PY_MAJOR_VERSION >= 3
             return PyUnicode_AsUTF8(py_str.borrow());
-#else
-            return PyString_AsString(py_str.borrow());
-#endif
         }
         return "(nil)";
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyGetAttr(const ImmortalObject& name) const G_NOEXCEPT
+    inline OwnedObject PyObjectPointer<T, TC>::PyGetAttr(const ImmortalObject& name) const noexcept
     {
         assert(this->p);
         return OwnedObject::consuming(PyObject_GetAttr(reinterpret_cast<PyObject*>(this->p), name));

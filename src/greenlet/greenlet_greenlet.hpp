@@ -32,39 +32,26 @@ namespace greenlet
     private:
         G_NO_COPIES_OF_CLS(ExceptionState);
 
-#if PY_VERSION_HEX >= 0x030700A3
         // Even though these are borrowed objects, we actually own
         // them, when they're not null.
         // XXX: Express that in the API.
     private:
         _PyErr_StackItem* exc_info;
         _PyErr_StackItem exc_state;
-#else
-        OwnedObject exc_value;
-#if !GREENLET_PY311
-        OwnedObject exc_type;
-        OwnedObject exc_traceback;
-#endif
-#endif
     public:
         ExceptionState();
-        void operator<<(const PyThreadState *const tstate) G_NOEXCEPT;
-        void operator>>(PyThreadState* tstate) G_NOEXCEPT;
-        void clear() G_NOEXCEPT;
+        void operator<<(const PyThreadState *const tstate) noexcept;
+        void operator>>(PyThreadState* tstate) noexcept;
+        void clear() noexcept;
 
-        int tp_traverse(visitproc visit, void* arg) G_NOEXCEPT;
-        void tp_clear() G_NOEXCEPT;
+        int tp_traverse(visitproc visit, void* arg) noexcept;
+        void tp_clear() noexcept;
     };
 
     template<typename T>
     void operator<<(const PyThreadState *const tstate, T& exc);
 
-    template<typename IsPy37>
     class PythonStateContext
-    {};
-
-    template<>
-    class PythonStateContext<GREENLET_WHEN_PY37>
     {
     protected:
         greenlet::refs::OwnedContext _context;
@@ -97,37 +84,7 @@ namespace greenlet
         }
     };
 
-
-    template<>
-    class PythonStateContext<GREENLET_WHEN_NOT_PY37>
-    {
-    public:
-        inline const greenlet::refs::OwnedContext& context() const
-        {
-            throw AttributeError("no context");
-        }
-
-        inline greenlet::refs::OwnedContext& context()
-        {
-            throw AttributeError("no context");
-        }
-
-        inline void tp_clear(){};
-
-        template<typename T>
-        inline static PyObject* context(T* UNUSED(tstate))
-        {
-            throw PyFatalError("This should never be called.");
-        }
-
-        template<typename T>
-        inline static void context(T* UNUSED(tstate), PyObject* UNUSED(new_context))
-        {
-            throw PyFatalError("This should never be called.");
-        }
-    };
-
-    class PythonState : public PythonStateContext<G_IS_PY37>
+    class PythonState : public PythonStateContext
     {
     public:
         typedef greenlet::refs::OwnedReference<struct _frame> OwnedFrame;
@@ -161,21 +118,21 @@ namespace greenlet
         PythonState();
         // You can use this for testing whether we have a frame
         // or not. It returns const so they can't modify it.
-        const OwnedFrame& top_frame() const G_NOEXCEPT;
+        const OwnedFrame& top_frame() const noexcept;
 
 
-        void operator<<(const PyThreadState *const tstate) G_NOEXCEPT;
-        void operator>>(PyThreadState* tstate) G_NOEXCEPT;
-        void clear() G_NOEXCEPT;
+        void operator<<(const PyThreadState *const tstate) noexcept;
+        void operator>>(PyThreadState* tstate) noexcept;
+        void clear() noexcept;
 
-        int tp_traverse(visitproc visit, void* arg, bool visit_top_frame) G_NOEXCEPT;
-        void tp_clear(bool own_top_frame) G_NOEXCEPT;
-        void set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT;
+        int tp_traverse(visitproc visit, void* arg, bool visit_top_frame) noexcept;
+        void tp_clear(bool own_top_frame) noexcept;
+        void set_initial_state(const PyThreadState* const tstate) noexcept;
 #if GREENLET_USE_CFRAME
-        void set_new_cframe(_PyCFrame& frame) G_NOEXCEPT;
+        void set_new_cframe(_PyCFrame& frame) noexcept;
 #endif
-        void will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT;
-        void did_finish(PyThreadState* tstate) G_NOEXCEPT;
+        void will_switch_from(PyThreadState *const origin_tstate) noexcept;
+        void did_finish(PyThreadState* tstate) noexcept;
     };
 
     class StackState
@@ -193,8 +150,8 @@ namespace greenlet
         char* stack_copy;
         intptr_t _stack_saved;
         StackState* stack_prev;
-        inline int copy_stack_to_heap_up_to(const char* const stop) G_NOEXCEPT;
-        inline void free_stack_copy() G_NOEXCEPT;
+        inline int copy_stack_to_heap_up_to(const char* const stop) noexcept;
+        inline void free_stack_copy() noexcept;
 
     public:
         /**
@@ -209,16 +166,16 @@ namespace greenlet
         ~StackState();
         StackState(const StackState& other);
         StackState& operator=(const StackState& other);
-        inline void copy_heap_to_stack(const StackState& current) G_NOEXCEPT;
-        inline int copy_stack_to_heap(char* const stackref, const StackState& current) G_NOEXCEPT;
-        inline bool started() const G_NOEXCEPT;
-        inline bool main() const G_NOEXCEPT;
-        inline bool active() const G_NOEXCEPT;
-        inline void set_active() G_NOEXCEPT;
-        inline void set_inactive() G_NOEXCEPT;
-        inline intptr_t stack_saved() const G_NOEXCEPT;
-        inline char* stack_start() const G_NOEXCEPT;
-        static inline StackState make_main() G_NOEXCEPT;
+        inline void copy_heap_to_stack(const StackState& current) noexcept;
+        inline int copy_stack_to_heap(char* const stackref, const StackState& current) noexcept;
+        inline bool started() const noexcept;
+        inline bool main() const noexcept;
+        inline bool active() const noexcept;
+        inline void set_active() noexcept;
+        inline void set_inactive() noexcept;
+        inline intptr_t stack_saved() const noexcept;
+        inline char* stack_start() const noexcept;
+        static inline StackState make_main() noexcept;
 #ifdef GREENLET_USE_STDIO
         friend std::ostream& operator<<(std::ostream& os, const StackState& s);
 #endif
@@ -298,7 +255,7 @@ namespace greenlet
             return *this;
         }
 
-        G_EXPLICIT_OP operator bool() const G_NOEXCEPT
+        explicit operator bool() const noexcept
         {
             return this->_args || this->_kwargs;
         }
@@ -334,11 +291,9 @@ namespace greenlet
         Greenlet(PyGreenlet* p);
         virtual ~Greenlet();
 
-        template <typename IsPy37> // maybe we can use a value here?
-        const OwnedObject context(const typename IsPy37::IsIt=nullptr) const;
+        const OwnedObject context() const;
 
-        template <typename IsPy37>
-        inline void context(refs::BorrowedObject new_context, typename IsPy37::IsIt=nullptr);
+        inline void context(refs::BorrowedObject new_context);
 
         inline SwitchingArgs& args()
         {
@@ -347,7 +302,7 @@ namespace greenlet
 
         virtual const refs::BorrowedMainGreenlet main_greenlet() const = 0;
 
-        inline intptr_t stack_saved() const G_NOEXCEPT
+        inline intptr_t stack_saved() const noexcept
         {
             return this->stack_state.stack_saved();
         }
@@ -357,7 +312,7 @@ namespace greenlet
         // computation ourself, but the type of the result
         // varies by platform, so doing it in the macro is the
         // simplest way.
-        inline const char* stack_start() const G_NOEXCEPT
+        inline const char* stack_start() const noexcept
         {
             return this->stack_state.stack_start();
         }
@@ -391,8 +346,8 @@ namespace greenlet
         void deallocing_greenlet_in_thread(const ThreadState* current_state);
 
         // TODO: Figure out how to make these non-public.
-        inline void slp_restore_state() G_NOEXCEPT;
-        inline int slp_save_state(char *const stackref) G_NOEXCEPT;
+        inline void slp_restore_state() noexcept;
+        inline int slp_save_state(char *const stackref) noexcept;
 
         inline bool is_currently_running_in_some_thread() const;
         virtual bool belongs_to_thread(const ThreadState* state) const;
@@ -430,15 +385,15 @@ namespace greenlet
         // Return the thread state that the greenlet is running in, or
         // null if the greenlet is not running or the thread is known
         // to have exited.
-        virtual ThreadState* thread_state() const G_NOEXCEPT = 0;
+        virtual ThreadState* thread_state() const noexcept = 0;
 
         // Return true if the greenlet is known to have been running
         // (active) in a thread that has now exited.
-        virtual bool was_running_in_dead_thread() const G_NOEXCEPT = 0;
+        virtual bool was_running_in_dead_thread() const noexcept = 0;
 
         // Return a borrowed greenlet that is the Python object
         // this object represents.
-        virtual BorrowedGreenlet self() const G_NOEXCEPT = 0;
+        virtual BorrowedGreenlet self() const noexcept = 0;
 
     protected:
         inline void release_args();
@@ -492,7 +447,7 @@ namespace greenlet
         };
 
         // Returns the previous greenlet we just switched away from.
-        virtual OwnedGreenlet g_switchstack_success() G_NOEXCEPT;
+        virtual OwnedGreenlet g_switchstack_success() noexcept;
 
 
         // Check the preconditions for switching to this greenlet; if they
@@ -563,8 +518,8 @@ namespace greenlet
         virtual ~UserGreenlet();
 
         virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
-        virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
-        virtual ThreadState* thread_state() const G_NOEXCEPT;
+        virtual bool was_running_in_dead_thread() const noexcept;
+        virtual ThreadState* thread_state() const noexcept;
         virtual OwnedObject g_switch();
         virtual const OwnedObject& run() const
         {
@@ -580,7 +535,7 @@ namespace greenlet
 
         virtual const refs::BorrowedMainGreenlet main_greenlet() const;
 
-        virtual BorrowedGreenlet self() const G_NOEXCEPT;
+        virtual BorrowedGreenlet self() const noexcept;
         virtual void murder_in_place();
         virtual bool belongs_to_thread(const ThreadState* state) const;
         virtual int tp_traverse(visitproc visit, void* arg);
@@ -626,11 +581,11 @@ namespace greenlet
         virtual const refs::BorrowedMainGreenlet main_greenlet() const;
 
         virtual refs::BorrowedMainGreenlet find_main_greenlet_in_lineage() const;
-        virtual bool was_running_in_dead_thread() const G_NOEXCEPT;
-        virtual ThreadState* thread_state() const G_NOEXCEPT;
-        void thread_state(ThreadState*) G_NOEXCEPT;
+        virtual bool was_running_in_dead_thread() const noexcept;
+        virtual ThreadState* thread_state() const noexcept;
+        void thread_state(ThreadState*) noexcept;
         virtual OwnedObject g_switch();
-        virtual BorrowedGreenlet self() const G_NOEXCEPT;
+        virtual BorrowedGreenlet self() const noexcept;
         virtual int tp_traverse(visitproc visit, void* arg);
     };
 
@@ -651,13 +606,13 @@ ExceptionState::ExceptionState()
 
 #if PY_VERSION_HEX >= 0x030700A3
 // ******** Python 3.7 and above *********
-void ExceptionState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
+void ExceptionState::operator<<(const PyThreadState *const tstate) noexcept
 {
     this->exc_info = tstate->exc_info;
     this->exc_state = tstate->exc_state;
 }
 
-void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
+void ExceptionState::operator>>(PyThreadState *const tstate) noexcept
 {
     tstate->exc_state = this->exc_state;
     tstate->exc_info =
@@ -665,7 +620,7 @@ void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     this->clear();
 }
 
-void ExceptionState::clear() G_NOEXCEPT
+void ExceptionState::clear() noexcept
 {
     this->exc_info = nullptr;
     this->exc_state.exc_value = nullptr;
@@ -676,7 +631,7 @@ void ExceptionState::clear() G_NOEXCEPT
     this->exc_state.previous_item = nullptr;
 }
 
-int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
+int ExceptionState::tp_traverse(visitproc visit, void* arg) noexcept
 {
     Py_VISIT(this->exc_state.exc_value);
 #if !GREENLET_PY311
@@ -686,7 +641,7 @@ int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
     return 0;
 }
 
-void ExceptionState::tp_clear() G_NOEXCEPT
+void ExceptionState::tp_clear() noexcept
 {
     Py_CLEAR(this->exc_state.exc_value);
 #if !GREENLET_PY311
@@ -696,7 +651,7 @@ void ExceptionState::tp_clear() G_NOEXCEPT
 }
 #else
 // ********** Python 3.6 and below ********
-void ExceptionState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
+void ExceptionState::operator<<(const PyThreadState *const tstate) noexcept
 {
     this->exc_value.steal(tstate->exc_value);
 #if !GREENLET_PY311
@@ -705,7 +660,7 @@ void ExceptionState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
 #endif
 }
 
-void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
+void ExceptionState::operator>>(PyThreadState *const tstate) noexcept
 {
     tstate->exc_value <<= this->exc_value;
 #if !GREENLET_PY311
@@ -715,7 +670,7 @@ void ExceptionState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
     this->clear();
 }
 
-void ExceptionState::clear() G_NOEXCEPT
+void ExceptionState::clear() noexcept
 {
     this->exc_value = nullptr;
 #if !GREENLET_PY311
@@ -724,7 +679,7 @@ void ExceptionState::clear() G_NOEXCEPT
 #endif
 }
 
-int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
+int ExceptionState::tp_traverse(visitproc visit, void* arg) noexcept
 {
     Py_VISIT(this->exc_value.borrow());
 #if !GREENLET_PY311
@@ -734,7 +689,7 @@ int ExceptionState::tp_traverse(visitproc visit, void* arg) G_NOEXCEPT
     return 0;
 }
 
-void ExceptionState::tp_clear() G_NOEXCEPT
+void ExceptionState::tp_clear() noexcept
 {
     this->exc_value.CLEAR();
 #if !GREENLET_PY311
@@ -821,11 +776,9 @@ PythonState::PythonState()
 #endif
 }
 
-void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
+void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 {
-#if GREENLET_PY37
     this->_context.steal(tstate->context);
-#endif
 #if GREENLET_USE_CFRAME
     /*
       IMPORTANT: ``cframe`` is a pointer into the STACK. Thus, because
@@ -838,17 +791,17 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
       the switch, use `will_switch_from`.
     */
     this->cframe = tstate->cframe;
-    #if !GREENLET_PY312
+  #if !GREENLET_PY312
     this->use_tracing = tstate->cframe->use_tracing;
-    #endif
-#endif
+  #endif
+#endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     this->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
-    #else
+  #else // not 312
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
-    #endif
+  #endif // GREENLET_PY312
     this->current_frame = tstate->cframe->current_frame;
     this->datastack_chunk = tstate->datastack_chunk;
     this->datastack_top = tstate->datastack_top;
@@ -856,26 +809,24 @@ void PythonState::operator<<(const PyThreadState *const tstate) G_NOEXCEPT
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
     this->_top_frame.steal(frame);
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
-    #else
+  #else // not 312
     this->trash_delete_nesting = tstate->trash_delete_nesting;
-    #endif
-#else
+  #endif // GREENLET_PY312
+#else // Not 311
     this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
     this->trash_delete_nesting = tstate->trash_delete_nesting;
-#endif
+#endif // GREENLET_PY311
 }
 
-void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
+void PythonState::operator>>(PyThreadState *const tstate) noexcept
 {
-#if GREENLET_PY37
     tstate->context = this->_context.relinquish_ownership();
     /* Incrementing this value invalidates the contextvars cache,
        which would otherwise remain valid across switches */
     tstate->context_ver++;
-#endif
 #if GREENLET_USE_CFRAME
     tstate->cframe = this->cframe;
     /*
@@ -884,35 +835,35 @@ void PythonState::operator>>(PyThreadState *const tstate) G_NOEXCEPT
       root_cframe here. See note above about why we can't
       just copy this from ``origin->cframe->use_tracing``.
     */
-    #if !GREENLET_PY312
+  #if !GREENLET_PY312
     tstate->cframe->use_tracing = this->use_tracing;
-    #endif
-#endif
+  #endif
+#endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
-    #else
+  #else // not 3.12
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
-    #endif
+  #endif
     tstate->cframe->current_frame = this->current_frame;
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     tstate->trash.delete_nesting = this->trash_delete_nesting;
-    #else
+  #else // not 3.12
     tstate->trash_delete_nesting = this->trash_delete_nesting;
-    #endif
-#else
+  #endif // GREENLET_PY312
+#else // not 3.11
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
     tstate->trash_delete_nesting = this->trash_delete_nesting;
-#endif
+#endif // GREENLET_PY311
 }
 
-void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEPT
+void PythonState::will_switch_from(PyThreadState *const origin_tstate) noexcept
 {
 #if GREENLET_USE_CFRAME && !GREENLET_PY312
     // The weird thing is, we don't actually save this for an
@@ -923,11 +874,15 @@ void PythonState::will_switch_from(PyThreadState *const origin_tstate) G_NOEXCEP
 #endif
 }
 
-void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEPT
+void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 {
     this->_top_frame = nullptr;
 #if GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    // XXX: TODO: Comment from a reviewer:
+    //     Should this be ``C_RECURSION_LIMIT - tstate->c_recursion_remaining``?
+    // But to me it looks more like that might not be the right
+    // initialization either?
     this->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
 #elif GREENLET_PY311
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
@@ -936,18 +891,16 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) G_NOEXCEP
 #endif
 }
 // TODO: Better state management about when we own the top frame.
-int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) G_NOEXCEPT
+int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noexcept
 {
-#if GREENLET_PY37
     Py_VISIT(this->_context.borrow());
-#endif
     if (own_top_frame) {
         Py_VISIT(this->_top_frame.borrow());
     }
     return 0;
 }
 
-void PythonState::tp_clear(bool own_top_frame) G_NOEXCEPT
+void PythonState::tp_clear(bool own_top_frame) noexcept
 {
     PythonStateContext::tp_clear();
     // If we get here owning a frame,
@@ -959,7 +912,7 @@ void PythonState::tp_clear(bool own_top_frame) G_NOEXCEPT
 }
 
 #if GREENLET_USE_CFRAME
-void PythonState::set_new_cframe(_PyCFrame& frame) G_NOEXCEPT
+void PythonState::set_new_cframe(_PyCFrame& frame) noexcept
 {
     frame = *PyThreadState_GET()->cframe;
     /* Make the target greenlet refer to the stack value. */
@@ -972,12 +925,12 @@ void PythonState::set_new_cframe(_PyCFrame& frame) G_NOEXCEPT
 }
 #endif
 
-const PythonState::OwnedFrame& PythonState::top_frame() const G_NOEXCEPT
+const PythonState::OwnedFrame& PythonState::top_frame() const noexcept
 {
     return this->_top_frame;
 }
 
-void PythonState::did_finish(PyThreadState* tstate) G_NOEXCEPT
+void PythonState::did_finish(PyThreadState* tstate) noexcept
 {
 #if GREENLET_PY311
     // See https://github.com/gevent/gevent/issues/1924 and
@@ -1134,14 +1087,14 @@ StackState& StackState::operator=(const StackState& other)
     return *this;
 }
 
-inline void StackState::free_stack_copy() G_NOEXCEPT
+inline void StackState::free_stack_copy() noexcept
 {
     PyMem_Free(this->stack_copy);
     this->stack_copy = nullptr;
     this->_stack_saved = 0;
 }
 
-inline void StackState::copy_heap_to_stack(const StackState& current) G_NOEXCEPT
+inline void StackState::copy_heap_to_stack(const StackState& current) noexcept
 {
     // cerr << "copy_heap_to_stack" << endl
     //      << "\tFrom    : " << *this << endl
@@ -1164,7 +1117,7 @@ inline void StackState::copy_heap_to_stack(const StackState& current) G_NOEXCEPT
     // cerr << "\tFinished with: " << *this << endl;
 }
 
-inline int StackState::copy_stack_to_heap_up_to(const char* const stop) G_NOEXCEPT
+inline int StackState::copy_stack_to_heap_up_to(const char* const stop) noexcept
 {
     /* Save more of g's stack into the heap -- at least up to 'stop'
        g->stack_stop |________|
@@ -1193,7 +1146,7 @@ inline int StackState::copy_stack_to_heap_up_to(const char* const stop) G_NOEXCE
 }
 
 inline int StackState::copy_stack_to_heap(char* const stackref,
-                                          const StackState& current) G_NOEXCEPT
+                                          const StackState& current) noexcept
 {
     // cerr << "copy_stack_to_heap: " << endl
     //      << "\tstackref: " << (void*)stackref << endl
@@ -1229,28 +1182,28 @@ inline int StackState::copy_stack_to_heap(char* const stackref,
     return 0;
 }
 
-inline bool StackState::started() const G_NOEXCEPT
+inline bool StackState::started() const noexcept
 {
     return this->stack_stop != nullptr;
 }
 
-inline bool StackState::main() const G_NOEXCEPT
+inline bool StackState::main() const noexcept
 {
     return this->stack_stop == (char*)-1;
 }
 
-inline bool StackState::active() const G_NOEXCEPT
+inline bool StackState::active() const noexcept
 {
     return this->_stack_start != nullptr;
 }
 
-inline void StackState::set_active() G_NOEXCEPT
+inline void StackState::set_active() noexcept
 {
     assert(this->_stack_start == nullptr);
     this->_stack_start = (char*)1;
 }
 
-inline void StackState::set_inactive() G_NOEXCEPT
+inline void StackState::set_inactive() noexcept
 {
     this->_stack_start = nullptr;
     // XXX: What if we still have memory out there?
@@ -1268,18 +1221,18 @@ inline void StackState::set_inactive() G_NOEXCEPT
     }
 }
 
-inline intptr_t StackState::stack_saved() const G_NOEXCEPT
+inline intptr_t StackState::stack_saved() const noexcept
 {
     return this->_stack_saved;
 }
 
-inline char* StackState::stack_start() const G_NOEXCEPT
+inline char* StackState::stack_start() const noexcept
 {
     return this->_stack_start;
 }
 
 
-inline StackState StackState::make_main() G_NOEXCEPT
+inline StackState StackState::make_main() noexcept
 {
     StackState s;
     s._stack_start = (char*)1;
