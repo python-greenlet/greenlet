@@ -17,7 +17,6 @@ import greenlet
 from . import TestCase
 from .leakcheck import fails_leakcheck
 from .leakcheck import ignores_leakcheck
-from .leakcheck import RUNNING_ON_GITHUB_ACTIONS
 from .leakcheck import RUNNING_ON_MANYLINUX
 
 try:
@@ -309,11 +308,11 @@ class TestLeaks(TestCase):
         # and this set of tests is relatively fragile, depending on
         # OS and memory management details. So we want to run it on 3.11+
         # (obviously) but not every older 3.x version in order to reduce
-        # false negatives.
-        if sys.version_info[0] >= 3 and sys.version_info[:2] < (3, 8):
+        # false negatives. At the moment, those false results seem to have
+        # resolved, so we are actually running this on 3.8+
+        assert sys.version_info[0] >= 3
+        if sys.version_info[:2] < (3, 8):
             self.skipTest('Only observed on 3.11')
-        if sys.version_info[0] == 2 and RUNNING_ON_GITHUB_ACTIONS:
-            self.skipTest('Hard to get a stable pattern here')
         if RUNNING_ON_MANYLINUX:
             self.skipTest("Slow and not worth repeating here")
 

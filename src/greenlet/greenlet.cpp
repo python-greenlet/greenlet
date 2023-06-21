@@ -318,17 +318,6 @@ public:
     Mutex* const thread_states_to_destroy_lock;
     greenlet::cleanup_queue_t thread_states_to_destroy;
 
-    GreenletGlobals(const int UNUSED(dummy)) :
-        event_switch(0),
-        event_throw(0),
-        PyExc_GreenletError(0),
-        PyExc_GreenletExit(0),
-        empty_tuple(0),
-        empty_dict(0),
-        str_run(0),
-        thread_states_to_destroy_lock(0)
-    {}
-
     GreenletGlobals() :
         event_switch("switch"),
         event_throw("throw"),

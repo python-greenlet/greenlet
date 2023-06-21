@@ -27,17 +27,10 @@ implementation (like most of the rest of this package):
 """
 from __future__ import print_function, absolute_import, division
 
-import sys
 import unittest
-
-
 
 class TestTrashCanReEnter(unittest.TestCase):
 
-    @unittest.skipUnless(
-        sys.version_info[0] > 2,
-        "Python 2 tracks this slightly differently, so our test doesn't catch a problem there. "
-    )
     def test_it(self):
         # Try several times to trigger it, because it isn't 100%
         # reliable.
