@@ -32,20 +32,12 @@ namespace greenlet
     private:
         G_NO_COPIES_OF_CLS(ExceptionState);
 
-#if PY_VERSION_HEX >= 0x030700A3
         // Even though these are borrowed objects, we actually own
         // them, when they're not null.
         // XXX: Express that in the API.
     private:
         _PyErr_StackItem* exc_info;
         _PyErr_StackItem exc_state;
-#else
-        OwnedObject exc_value;
-#if !GREENLET_PY311
-        OwnedObject exc_type;
-        OwnedObject exc_traceback;
-#endif
-#endif
     public:
         ExceptionState();
         void operator<<(const PyThreadState *const tstate) noexcept;
@@ -59,12 +51,7 @@ namespace greenlet
     template<typename T>
     void operator<<(const PyThreadState *const tstate, T& exc);
 
-    template<typename IsPy37>
     class PythonStateContext
-    {};
-
-    template<>
-    class PythonStateContext<GREENLET_WHEN_PY37>
     {
     protected:
         greenlet::refs::OwnedContext _context;
@@ -97,37 +84,7 @@ namespace greenlet
         }
     };
 
-
-    template<>
-    class PythonStateContext<GREENLET_WHEN_NOT_PY37>
-    {
-    public:
-        inline const greenlet::refs::OwnedContext& context() const
-        {
-            throw AttributeError("no context");
-        }
-
-        inline greenlet::refs::OwnedContext& context()
-        {
-            throw AttributeError("no context");
-        }
-
-        inline void tp_clear(){};
-
-        template<typename T>
-        inline static PyObject* context(T* UNUSED(tstate))
-        {
-            throw PyFatalError("This should never be called.");
-        }
-
-        template<typename T>
-        inline static void context(T* UNUSED(tstate), PyObject* UNUSED(new_context))
-        {
-            throw PyFatalError("This should never be called.");
-        }
-    };
-
-    class PythonState : public PythonStateContext<G_IS_PY37>
+    class PythonState : public PythonStateContext
     {
     public:
         typedef greenlet::refs::OwnedReference<struct _frame> OwnedFrame;
@@ -334,11 +291,9 @@ namespace greenlet
         Greenlet(PyGreenlet* p);
         virtual ~Greenlet();
 
-        template <typename IsPy37> // maybe we can use a value here?
-        const OwnedObject context(const typename IsPy37::IsIt=nullptr) const;
+        const OwnedObject context() const;
 
-        template <typename IsPy37>
-        inline void context(refs::BorrowedObject new_context, typename IsPy37::IsIt=nullptr);
+        inline void context(refs::BorrowedObject new_context);
 
         inline SwitchingArgs& args()
         {
@@ -823,9 +778,7 @@ PythonState::PythonState()
 
 void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 {
-#if GREENLET_PY37
     this->_context.steal(tstate->context);
-#endif
 #if GREENLET_USE_CFRAME
     /*
       IMPORTANT: ``cframe`` is a pointer into the STACK. Thus, because
@@ -838,17 +791,17 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
       the switch, use `will_switch_from`.
     */
     this->cframe = tstate->cframe;
-    #if !GREENLET_PY312
+  #if !GREENLET_PY312
     this->use_tracing = tstate->cframe->use_tracing;
-    #endif
-#endif
+  #endif
+#endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     this->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
-    #else
+  #else // not 312
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
-    #endif
+  #endif // GREENLET_PY312
     this->current_frame = tstate->cframe->current_frame;
     this->datastack_chunk = tstate->datastack_chunk;
     this->datastack_top = tstate->datastack_top;
@@ -856,26 +809,24 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
     this->_top_frame.steal(frame);
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
-    #else
+  #else // not 312
     this->trash_delete_nesting = tstate->trash_delete_nesting;
-    #endif
-#else
+  #endif // GREENLET_PY312
+#else // Not 311
     this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
     this->trash_delete_nesting = tstate->trash_delete_nesting;
-#endif
+#endif // GREENLET_PY311
 }
 
 void PythonState::operator>>(PyThreadState *const tstate) noexcept
 {
-#if GREENLET_PY37
     tstate->context = this->_context.relinquish_ownership();
     /* Incrementing this value invalidates the contextvars cache,
        which would otherwise remain valid across switches */
     tstate->context_ver++;
-#endif
 #if GREENLET_USE_CFRAME
     tstate->cframe = this->cframe;
     /*
@@ -884,32 +835,32 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
       root_cframe here. See note above about why we can't
       just copy this from ``origin->cframe->use_tracing``.
     */
-    #if !GREENLET_PY312
+  #if !GREENLET_PY312
     tstate->cframe->use_tracing = this->use_tracing;
-    #endif
-#endif
+  #endif
+#endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
-    #else
+  #else // not 3.12
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
-    #endif
+  #endif
     tstate->cframe->current_frame = this->current_frame;
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
-    #if GREENLET_PY312
+  #if GREENLET_PY312
     tstate->trash.delete_nesting = this->trash_delete_nesting;
-    #else
+  #else // not 3.12
     tstate->trash_delete_nesting = this->trash_delete_nesting;
-    #endif
-#else
+  #endif // GREENLET_PY312
+#else // not 3.11
     tstate->frame = this->_top_frame.relinquish_ownership();
     tstate->recursion_depth = this->recursion_depth;
     tstate->trash_delete_nesting = this->trash_delete_nesting;
-#endif
+#endif // GREENLET_PY311
 }
 
 void PythonState::will_switch_from(PyThreadState *const origin_tstate) noexcept
@@ -942,9 +893,7 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 // TODO: Better state management about when we own the top frame.
 int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noexcept
 {
-#if GREENLET_PY37
     Py_VISIT(this->_context.borrow());
-#endif
     if (own_top_frame) {
         Py_VISIT(this->_top_frame.borrow());
     }

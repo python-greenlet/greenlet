@@ -98,13 +98,11 @@ namespace greenlet
             if (!p) {
                 return;
             }
-#if GREENLET_PY37
             if (!PyContext_CheckExact(p)) {
                 throw TypeError(
                     "greenlet context must be a contextvars.Context or None"
                 );
             }
-#endif
         }
 
         typedef OwnedReference<PyObject, ContextExactChecker> OwnedContext;
@@ -635,7 +633,7 @@ namespace greenlet {
         const char* str;
     public:
         ImmortalString(const char* const str) :
-            ImmortalObject(str ? Require(Greenlet_Intern(str)) : nullptr)
+            ImmortalObject(str ? Require(PyUnicode_InternFromString(str)) : nullptr)
         {
             this->str = str;
         }
@@ -643,7 +641,7 @@ namespace greenlet {
         inline ImmortalString& operator=(const char* const str)
         {
             if (!this->p) {
-                this->p = Require(Greenlet_Intern(str));
+                this->p = Require(PyUnicode_InternFromString(str));
                 this->str = str;
             }
             else {
@@ -675,11 +673,7 @@ namespace greenlet {
             if (!py_str) {
                 return "(nil)";
             }
-#if PY_MAJOR_VERSION >= 3
             return PyUnicode_AsUTF8(py_str.borrow());
-#else
-            return PyString_AsString(py_str.borrow());
-#endif
         }
         return "(nil)";
     }

@@ -2454,18 +2454,12 @@ green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(cont
     return 0;
 }
 
-#ifdef Py_CONTEXT_H
-#    define GREENLET_NO_CONTEXTVARS_REASON "This build of greenlet"
-#else
-#    define GREENLET_NO_CONTEXTVARS_REASON "This Python interpreter"
-#endif
-
 namespace greenlet
 {
 
-template<>
+
 const OwnedObject
-Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
+Greenlet::context() const
 {
     using greenlet::PythonStateContext;
     OwnedObject result;
@@ -2474,7 +2468,7 @@ Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
         if (GET_THREAD_STATE().state().is_current(this->self())) {
-            result = PythonStateContext<G_IS_PY37>::context(PyThreadState_GET());
+            result = PythonStateContext::context(PyThreadState_GET());
         }
         else {
             throw ValueError(
@@ -2492,18 +2486,8 @@ Greenlet::context<GREENLET_WHEN_PY37>(GREENLET_WHEN_PY37::Yes) const
     return result;
 }
 
-template<>
-const OwnedObject
-Greenlet::context<GREENLET_WHEN_NOT_PY37>(GREENLET_WHEN_NOT_PY37::No) const
-{
-    throw AttributeError(
-                         GREENLET_NO_CONTEXTVARS_REASON
-                         "does not support context variables"
-    );
-}
 
-template<>
-void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_PY37::Yes)
+void Greenlet::context(BorrowedObject given)
 {
     using greenlet::PythonStateContext;
     if (!given) {
@@ -2526,8 +2510,8 @@ void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_P
 
         /* Currently running greenlet: context is stored in the thread state,
            not the greenlet object. */
-        OwnedObject octx = OwnedObject::consuming(PythonStateContext<G_IS_PY37>::context(tstate));
-        PythonStateContext<G_IS_PY37>::context(tstate, context.relinquish_ownership());
+        OwnedObject octx = OwnedObject::consuming(PythonStateContext::context(tstate));
+        PythonStateContext::context(tstate, context.relinquish_ownership());
     }
     else {
         /* Greenlet is not running: just set context. Note that the
@@ -2536,24 +2520,14 @@ void Greenlet::context<GREENLET_WHEN_PY37>(BorrowedObject given, GREENLET_WHEN_P
     }
 }
 
-template<>
-void
-Greenlet::context<GREENLET_WHEN_NOT_PY37>(BorrowedObject UNUSED(given), GREENLET_WHEN_NOT_PY37::No)
-{
-    throw AttributeError(
-                         GREENLET_NO_CONTEXTVARS_REASON
-                         "does not support context variables"
-    );
-}
-
-};
+}; //namespace greenlet
 
 static PyObject*
 green_getcontext(const PyGreenlet* self, void* UNUSED(context))
 {
     const Greenlet *const g = self->pimpl;
     try {
-        OwnedObject result(g->context<G_IS_PY37>());
+        OwnedObject result(g->context());
         return result.relinquish_ownership();
     }
     catch(const PyErrOccurred&) {
@@ -2565,7 +2539,7 @@ static int
 green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 {
     try {
-        self->context<G_IS_PY37>(nctx, G_IS_PY37::IsIt());
+        self->context(nctx);
         return 0;
     }
     catch(const PyErrOccurred&) {
@@ -2573,7 +2547,6 @@ green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
     }
 }
 
-#undef GREENLET_NO_CONTEXTVARS_REASON
 
 static PyObject*
 green_getframe(BorrowedGreenlet self, void* UNUSED(context))
@@ -2629,7 +2602,7 @@ green_repr(BorrowedGreenlet self)
                 ? " current"
                 : (self->started() ? " suspended" : "");
         }
-        result = GNative_FromFormat(
+        result = PyUnicode_FromFormat(
             "<%s object at %p (otid=%p)%s%s%s%s>",
             tp_name,
             self.borrow_o(),
@@ -2641,7 +2614,7 @@ green_repr(BorrowedGreenlet self)
         );
     }
     else {
-        result = GNative_FromFormat(
+        result = PyUnicode_FromFormat(
             "<%s object at %p (otid=%p) %sdead>",
             tp_name,
             self.borrow_o(),
@@ -2815,9 +2788,6 @@ static PyNumberMethods green_as_number = {
     NULL, /* nb_add */
     NULL, /* nb_subtract */
     NULL, /* nb_multiply */
-#if PY_MAJOR_VERSION < 3
-    NULL, /* nb_divide */
-#endif
     NULL,                /* nb_remainder */
     NULL,                /* nb_divmod */
     NULL,                /* nb_power */
@@ -3108,9 +3078,7 @@ greenlet_internal_mod_init() noexcept
 
         m.PyAddObject("GREENLET_USE_GC", 1);
         m.PyAddObject("GREENLET_USE_TRACING", 1);
-        // The macros are eithre 0 or 1; the 0 case can be interpreted
-        // the same as NULL, which is ambiguous with a pointer.
-        m.PyAddObject("GREENLET_USE_CONTEXT_VARS", (long)GREENLET_PY37);
+        m.PyAddObject("GREENLET_USE_CONTEXT_VARS", 1L);
         m.PyAddObject("GREENLET_USE_STANDARD_THREADING", 1L);
 
         OwnedObject clocks_per_sec = OwnedObject::consuming(PyLong_FromSsize_t(CLOCKS_PER_SEC));
