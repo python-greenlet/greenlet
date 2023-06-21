@@ -725,7 +725,7 @@ Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
     p->pimpl = this;
 }
 
-UserGreenlet::UserGreenlet(PyGreenlet* p,BorrowedGreenlet the_parent)
+UserGreenlet::UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
     : Greenlet(p), _parent(the_parent)
 {
     this->_self = p;
@@ -3188,20 +3188,14 @@ greenlet_internal_mod_init() noexcept
 }
 
 extern "C" {
-#if PY_MAJOR_VERSION >= 3
+
 PyMODINIT_FUNC
 PyInit__greenlet(void)
 {
     return greenlet_internal_mod_init();
 }
-#else
-PyMODINIT_FUNC
-init_greenlet(void)
-{
-    greenlet_internal_mod_init();
-}
-#endif
-};
+
+}; // extern C
 
 #ifdef __clang__
 #    pragma clang diagnostic pop

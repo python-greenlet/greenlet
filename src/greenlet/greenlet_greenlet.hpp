@@ -928,6 +928,10 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
     this->_top_frame = nullptr;
 #if GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    // XXX: TODO: Comment from a reviewer:
+    //     Should this be ``C_RECURSION_LIMIT - tstate->c_recursion_remaining``?
+    // But to me it looks more like that might not be the right
+    // initialization either?
     this->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
 #elif GREENLET_PY311
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;

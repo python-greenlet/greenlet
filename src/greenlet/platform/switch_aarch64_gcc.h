@@ -21,6 +21,48 @@
                      "v8", "v9", "v10", "v11", \
                      "v12", "v13", "v14", "v15"
 
+/*
+ * Recall:
+   asm asm-qualifiers ( AssemblerTemplate
+                 : OutputOperands
+                 [ : InputOperands
+                 [ : Clobbers ] ])
+
+ or  (if asm-qualifiers contains 'goto')
+
+   asm asm-qualifiers ( AssemblerTemplate
+                      : OutputOperands
+                      : InputOperands
+                      : Clobbers
+                      : GotoLabels)
+
+ and OutputOperands are
+
+   [ [asmSymbolicName] ] constraint (cvariablename)
+
+ When a name is given, refer to it as ``%[the name]``.
+ When not given, ``%i`` where ``i`` is the zero-based index.
+
+ constraints starting with ``=`` means only writing; ``+`` means
+ reading and writing.
+
+ This is followed by ``r`` (must be register) or ``m`` (must be memory)
+ and these can be combined.
+
+ The ``cvariablename`` is actually an lvalue expression.
+
+ In AArch65, 31 general purpose registers. If named X0... they are
+ 64-bit. If named W0... they are the bottom 32 bits of the
+ corresponding 64 bit register.
+
+ XZR and WZR are hardcoded to 0, and ignore writes.
+
+ Arguments are in X0..X7. C++ uses X0 for ``this``. X0 holds simple return
+ values (?)
+
+ Whenever a W register is written, the top half of the X register is zeroed.
+ */
+
 static int
 slp_switch(void)
 {
@@ -58,17 +100,17 @@ slp_switch(void)
 		   (e.g. making err volatile, but that costs a little
 		   stack space), and the simplest is to call a function
 		   that returns an unknown value (which happens to be zero),
-		   so the saved/restored value is unused.  */
-                /* XXX: This line produces warnings:
+		   so the saved/restored value is unused.
 
-                   value size does not match register size specified by the
-                   constraint and modifier
-
-                   The suggested fix is to change %0 to %w0.
-
-                   TODO: Validate and change that.
-                 */
-           __asm__ volatile ("mov %0, #0" : "=r" (err));
+                   Thus, this line stores a 0 into the ``err`` variable
+                   (which must be held in a register for this instruction,
+                    of course). The ``w`` qualifier causes the instruction
+                    to use W0 instead of X0, otherwise we get a warning
+                    about a value size mismatch (because err is an int,
+                    and aarch64 platforms are LP64: 32-bit int, 64 bit long
+                   and pointer).
+                */
+           __asm__ volatile ("mov %w0, #0" : "=r" (err));
         }
         __asm__ volatile ("ldr x29, %0" : : "m" (fp) :);
         __asm__ volatile ("" : : : REGS_TO_SAVE);
