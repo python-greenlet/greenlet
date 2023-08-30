@@ -16,6 +16,8 @@
   the environment variable ``GREENLET_STATIC_RUNTIME=1`` at build time
   to change that.
 
+- Build binary wheels for Python 3.12 on macOS.
+
 - Now, greenlet *may* compile and work on Windows ARM64 using
   llvm-mingw, but this is untested and unsupported. See `PR
   <https://github.com/python-greenlet/greenlet/pull/224>`_ by Adrian
