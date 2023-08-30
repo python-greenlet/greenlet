@@ -68,7 +68,11 @@ slp_switch(void)
 {
 	int err;
 	void *fp;
-        long *stackref, stsizediff;
+        /* Windowz uses a 32-bit long on a 64-bit platform, unlike the rest of
+           the world, and in theory we can be compiled with GCC/llvm on 64-bit
+           windows. So we need a fixed-width type.
+        */
+        int64_t *stackref, stsizediff;
         __asm__ volatile ("" : : : REGS_TO_SAVE);
 	__asm__ volatile ("str x29, %0" : "=m"(fp) : : );
         __asm__ ("mov %0, sp" : "=r" (stackref));

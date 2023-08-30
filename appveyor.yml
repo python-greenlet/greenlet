@@ -22,6 +22,9 @@ environment:
     PYTHONDEVMODE: 1
     PYTHONFAULTHANDLER: 1
     PYTHONUNBUFFERED: 1
+    # Try to avoid pulling in the C runtime, as some users won't have the
+    # right package.
+    GREENLET_STATIC_RUNTIME: "1"
     # Don't get warnings about Python 2 support being deprecated. We
     # know.
     PIP_NO_PYTHON_VERSION_WARNING: 1

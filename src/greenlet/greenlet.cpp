@@ -17,6 +17,9 @@
 #include "structmember.h" // PyMemberDef
 
 #include "greenlet_internal.hpp"
+// Code after this point can assume access to things declared in stdint.h,
+// including the fixed-width types. This goes for the platform-specific switch functions
+// as well.
 #include "greenlet_refs.hpp"
 #include "greenlet_slp_switch.hpp"
 #include "greenlet_thread_state.hpp"

@@ -5,7 +5,24 @@
 3.0.0a2 (unreleased)
 ====================
 
-- Nothing changed yet.
+- Windows wheels are linked statically to the C runtime in an effort
+  to prevent import errors on systems without the correct C runtime
+  installed. It's not clear if this will make the situation better or
+  worse, so please share your experiences in `issue 346
+  <https://github.com/python-greenlet/greenlet/issues/346>`_.
+
+  Note that this only applies to the binary wheels found on PyPI.
+  Building greenlet from source defaults to the shared library. Set
+  the environment variable ``GREENLET_STATIC_RUNTIME=1`` at build time
+  to change that.
+
+- Now, greenlet *may* compile and work on Windows ARM64 using
+  llvm-mingw, but this is untested and unsupported. See `PR
+  <https://github.com/python-greenlet/greenlet/pull/224>`_ by Adrian
+  Vladu.
+- Now, greenlet *may* compile and work on LoongArch64 Linux systems,
+  but this is untested and unsupported. See `PR 257
+  <https://github.com/python-greenlet/greenlet/pull/257/files>`_ by merore.
 
 
 3.0.0a1 (2023-06-21)
