@@ -50,19 +50,30 @@ class CPPTests(TestCase):
         # ERROR_PATH_NOT_FOUND; BUT: the C runtime abort() function
         # also uses this code.
         #
+        # If we link to the static C library on Windows, the error
+        # code changes to '0xc0000409' (hex(3221226505)), which
+        # apparently is STATUS_STACK_BUFFER_OVERRUN; but "What this
+        # means is that nowadays when you get a
+        # STATUS_STACK_BUFFER_OVERRUN, it doesn’t actually mean that
+        # there is a stack buffer overrun. It just means that the
+        # application decided to terminate itself with great haste."
+        #
         # See
         # https://devblogs.microsoft.com/oldnewthing/20110519-00/?p=10623
         # and
         # https://docs.microsoft.com/en-us/previous-versions/k089yyh0(v=vs.140)?redirectedfrom=MSDN
+        # and
+        # https://devblogs.microsoft.com/oldnewthing/20190108-00/?p=100655
         expected_exit = (
             -signal.SIGABRT,
             # But beginning on Python 3.11, the faulthandler
             # that prints the C backtraces sometimes segfaults after
             # reporting the exception but before printing the stack.
             # This has only been seen on linux/gcc.
-            -signal.SIGSEGV
+            -signal.SIGSEGV,
         ) if not WIN else (
             3,
+            0xc0000409,
         )
         self.assertIn(p.exitcode, expected_exit)
 
