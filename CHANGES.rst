@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.0.0rc1 (unreleased)
+3.0.0rc1 (2023-09-01)
 =====================
 
 - Windows wheels are linked statically to the C runtime in an effort
