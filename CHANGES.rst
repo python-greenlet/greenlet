@@ -15,9 +15,14 @@
   Building greenlet from source defaults to the shared library. Set
   the environment variable ``GREENLET_STATIC_RUNTIME=1`` at build time
   to change that.
-
 - Build binary wheels for Python 3.12 on macOS.
+- Fix compiling greenlet on a debug build of CPython 3.12.
+- Python 3.12: Fix walking the frame stack of suspended greenlets.
+  Previously accessing ``glet.gr_frame.f_back`` would crash due to
+  `changes in CPython's undocumented internal frame handling <https://github.com/python/cpython/commit/1e197e63e21f77b102ff2601a549dda4b6439455>`_.
 
+Platforms
+---------
 - Now, greenlet *may* compile and work on Windows ARM64 using
   llvm-mingw, but this is untested and unsupported. See `PR
   <https://github.com/python-greenlet/greenlet/pull/224>`_ by Adrian
@@ -162,7 +167,7 @@
 ====================
 
 Platforms
----------
+~~~~~~~~~
 
 - Add experimental, untested support for 64-bit Windows on ARM using
   MSVC. See `PR 271 <https://github.com/python-greenlet/greenlet/pull/271>`_.
@@ -185,7 +190,7 @@ Platforms
   thanks to Brandt Bucher and the CPython developers.
 
 Fixes
------
+~~~~~
 
 - Fix several leaks that could occur when using greenlets from
   multiple threads. For example, it is no longer necessary to call
@@ -205,7 +210,7 @@ Fixes
   platforms. This work is ongoing.
 
 Changes
--------
+~~~~~~~
 
 - The repr of some greenlets has changed. In particular, if the
   greenlet object was running in a thread that has exited, the repr
@@ -312,7 +317,7 @@ Changes
 - (Documentation) Publish the change log to https://greenlet.readthedocs.io
 
 Supported Platforms
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 - Drop support for Python 2.4, 2.5, 2.6, 3.0, 3.1, 3.2 and 3.4.
   The project metadata now includes the ``python_requires`` data to
@@ -322,7 +327,7 @@ Supported Platforms
   <https://github.com/python-greenlet/greenlet/pull/197>`_.
 
 Packaging Changes
------------------
+~~~~~~~~~~~~~~~~~
 
 - Require setuptools to build from source.
 - Stop asking setuptools to build both .tar.gz and .zip

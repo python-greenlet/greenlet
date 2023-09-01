@@ -22,6 +22,10 @@ using greenlet::refs::BorrowedGreenlet;
 #  define _PyInterpreterFrame _interpreter_frame
 #endif
 
+#if GREENLET_PY312
+#  include "internal/pycore_frame.h"
+#endif
+
 // XXX: TODO: Work to remove all virtual functions
 // for speed of calling and size of objects (no vtable).
 // One pattern is the Curiously Recurring Template
@@ -112,6 +116,9 @@ namespace greenlet
         _PyStackChunk* datastack_chunk;
         PyObject** datastack_top;
         PyObject** datastack_limit;
+#endif
+#if GREENLET_PY312
+        _PyInterpreterFrame* _prev_frame;
 #endif
 
     public:
@@ -721,6 +728,9 @@ PythonState::PythonState()
     ,datastack_top(nullptr)
     ,datastack_limit(nullptr)
 #endif
+#if GREENLET_PY312
+    ,_prev_frame(nullptr)
+#endif
 {
 #if GREENLET_USE_CFRAME
     /*
@@ -810,6 +820,12 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
     this->_top_frame.steal(frame);
   #if GREENLET_PY312
+    if (frame) {
+        this->_prev_frame = frame->f_frame->previous;
+        frame->f_frame->previous = nullptr;
+    }
+  #endif
+  #if GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
   #else // not 312
     this->trash_delete_nesting = tstate->trash_delete_nesting;
@@ -843,9 +859,16 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
   #if GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
-  #else // not 3.12
+    // We're just going to throw this object away anyway, go ahead and
+    // do it now.
+    PyFrameObject* frame = this->_top_frame.relinquish_ownership();
+    if (frame && frame->f_frame) {
+      frame->f_frame->previous = this->_prev_frame;
+    }
+    this->_prev_frame = nullptr;
+  #else // \/ 3.11
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
-  #endif
+  #endif // GREENLET_PY312
     tstate->cframe->current_frame = this->current_frame;
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;

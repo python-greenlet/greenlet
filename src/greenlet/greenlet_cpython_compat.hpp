@@ -57,9 +57,15 @@ https://bugs.python.org/issue39573 */
 #ifndef _Py_DEC_REFTOTAL
 /* _Py_DEC_REFTOTAL macro has been removed from Python 3.9 by:
   https://github.com/python/cpython/commit/49932fec62c616ec88da52642339d83ae719e924
+
+  The symbol we use to replace it was removed by at least 3.12.
 */
 #    ifdef Py_REF_DEBUG
+#      if GREENLET_PY312
+#         define _Py_DEC_REFTOTAL
+#      else
 #        define _Py_DEC_REFTOTAL _Py_RefTotal--
+#      endif
 #    else
 #        define _Py_DEC_REFTOTAL
 #    endif

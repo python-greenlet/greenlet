@@ -276,3 +276,8 @@ class TestPythonTracing(TestCase):
             ('call', '__exit__'),
             ('c_call', '__exit__'),
         ])
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

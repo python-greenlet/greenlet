@@ -838,6 +838,25 @@ class TestGreenlet(TestCase):
         self.assertIsNone(result)
         self.assertEqual(seen, [42, 24])
 
+    def test_can_access_f_back_of_suspended_greenlet(self):
+        # On Python 3.12, they added a ->previous field to
+        # _PyInterpreterFrame that has to be cleared when a frame is inactive.
+        # If we got that wrong, this immediately crashes.
+        main = greenlet.getcurrent()
+
+        def Hub():
+            main.switch()
+
+        hub = greenlet(Hub)
+        # start it
+        hub.switch()
+        # now it is suspended
+        self.assertIsNotNone(hub.gr_frame)
+        # The next line is what would crash
+        self.assertIsNone(hub.gr_frame.f_back)
+
+
+
 
 class TestGreenletSetParentErrors(TestCase):
     def test_threaded_reparent(self):

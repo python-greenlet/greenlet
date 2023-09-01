@@ -2209,7 +2209,9 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
         // It's possible it's never been switched to.
         assert(!current->args());
 #endif
-        return result.relinquish_ownership();
+        PyObject* p = result.relinquish_ownership();
+        assert(p || PyErr_Occurred());
+        return p;
     }
     catch(const PyErrOccurred&) {
         return nullptr;
@@ -2760,6 +2762,7 @@ static PyMethodDef green_methods[] = {
 };
 
 static PyGetSetDef green_getsets[] = {
+    /* name, getter, setter, doc, context pointer */
     {"__dict__", (getter)green_getdict, (setter)green_setdict, /*XXX*/ NULL},
     {"run", (getter)green_getrun, (setter)green_setrun, /*XXX*/ NULL},
     {"parent", (getter)green_getparent, (setter)green_setparent, /*XXX*/ NULL},
