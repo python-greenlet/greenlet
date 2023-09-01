@@ -2,8 +2,8 @@
  Changes
 =========
 
-3.0.0a2 (unreleased)
-====================
+3.0.0rc1 (unreleased)
+=====================
 
 - Windows wheels are linked statically to the C runtime in an effort
   to prevent import errors on systems without the correct C runtime
@@ -16,7 +16,10 @@
   the environment variable ``GREENLET_STATIC_RUNTIME=1`` at build time
   to change that.
 - Build binary wheels for Python 3.12 on macOS.
-- Fix compiling greenlet on a debug build of CPython 3.12.
+- Fix compiling greenlet on a debug build of CPython 3.12. There is
+  `one known issue
+  <https://github.com/python-greenlet/greenlet/issues/368>`_ that
+  leads to an interpreter crash on debug builds.
 - Python 3.12: Fix walking the frame stack of suspended greenlets.
   Previously accessing ``glet.gr_frame.f_back`` would crash due to
   `changes in CPython's undocumented internal frame handling <https://github.com/python/cpython/commit/1e197e63e21f77b102ff2601a549dda4b6439455>`_.
@@ -31,6 +34,11 @@ Platforms
   but this is untested and unsupported. See `PR 257
   <https://github.com/python-greenlet/greenlet/pull/257/files>`_ by merore.
 
+Known Issues
+------------
+
+- There may be (very) subtle issues with tracing on Python 3.12, which
+  has redesigned the entire tracing infrastructure.
 
 3.0.0a1 (2023-06-21)
 ====================
