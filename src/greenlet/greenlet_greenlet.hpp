@@ -503,7 +503,7 @@ namespace greenlet
            should no longer be the case with thread-local variables.)
 
         */
-        switchstack_result_t g_switchstack(void);
+        virtual switchstack_result_t g_switchstack(void);
     private:
         OwnedObject g_switch_finish(const switchstack_result_t& err);
 
@@ -562,6 +562,28 @@ namespace greenlet
         virtual switchstack_result_t g_initialstub(void* mark);
     private:
         void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT_WIN32;
+    };
+
+    class BrokenGreenlet : public UserGreenlet
+    {
+    private:
+        static greenlet::PythonAllocator<BrokenGreenlet> allocator;
+    public:
+        bool force_switch_error = false;
+        static void* operator new(size_t UNUSED(count));
+        static void operator delete(void* ptr);
+        BrokenGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
+            : UserGreenlet(p, the_parent)
+        {}
+        virtual switchstack_result_t g_switchstack(void)
+        {
+            if (this->force_switch_error) {
+                return switchstack_result_t(-1);
+            }
+            return UserGreenlet::g_switchstack();
+        }
+        virtual ~BrokenGreenlet()
+        {}
     };
 
     class MainGreenlet : public Greenlet

@@ -36,6 +36,7 @@ using greenlet::PyFatalError;
 using greenlet::ExceptionState;
 using greenlet::StackState;
 using greenlet::Greenlet;
+using greenlet::BrokenGreenlet;
 
 
 // Helpers for reference counting.
@@ -919,6 +920,18 @@ void MainGreenlet::operator delete(void* ptr)
                                 1);
 }
 
+void* BrokenGreenlet::operator new(size_t UNUSED(count))
+{
+    return allocator.allocate(1);
+}
+
+
+void BrokenGreenlet::operator delete(void* ptr)
+{
+    return allocator.deallocate(static_cast<BrokenGreenlet*>(ptr),
+                                1);
+}
+
 
 OwnedObject
 Greenlet::throw_GreenletExit_during_dealloc(const ThreadState& UNUSED(current_thread_state))
@@ -1030,7 +1043,7 @@ UserGreenlet::g_switch()
     // is that we would be using more stack space.
     bool target_was_me = true;
     while (target) {
-
+        fprintf(stderr, "Searching for target %p\n", target);
         if (target->active()) {
             if (!target_was_me) {
                 target->args() <<= this->switch_args;
@@ -1055,6 +1068,7 @@ UserGreenlet::g_switch()
                 // This can only throw back to us while we're
                 // still in this greenlet. Once the new greenlet
                 // is bootstrapped, it has its own exception state.
+                fprintf(stderr, "Initialstub in %p\n", target);
                 err = real_target->g_initialstub(&dummymarker);
             }
             catch (const PyErrOccurred&) {
@@ -1083,8 +1097,15 @@ UserGreenlet::g_switch()
     // safe to throw an exception at this point.
 
     if (err.status < 0) {
-        // XXX: This code path is untested.
-        assert(PyErr_Occurred());
+        // If we get here, either g_initialstub()
+        // failed, or g_switchstack() failed. Either one of those
+        // cases SHOULD leave us in the original greenlet with a valid stack.
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_SystemError,
+                            "Switching stacks into a target greenlet failed.");
+        }
+        this->release_args();
+
         assert(!err.the_state_that_switched);
         assert(!err.origin_greenlet);
         return OwnedObject();
@@ -1238,10 +1259,10 @@ UserGreenlet::g_initialstub(void* mark)
     /* back in the parent */
     if (err.status < 0) {
         /* start failed badly, restore greenlet state */
-        // XXX: This code path is not tested.
         this->stack_state = StackState();
         this->_main_greenlet.CLEAR();
-        fprintf(stderr, "greenlet: g_initialstub: starting child failed.\n");
+        this->tp_clear();
+        fprintf(stderr, "greenlet: g_initialstub: starting child failed: %p.\n", this);
     }
     return err;
 }
@@ -1474,10 +1495,12 @@ Greenlet::g_switchstack(void)
 
     // But the global is volatile so we can reload it without the
     // compiler caching it from earlier.
-    Greenlet* after_switch = switching_thread_state;
-    OwnedGreenlet origin = after_switch->g_switchstack_success();
+    Greenlet* greenlet_that_switched_in = switching_thread_state;
+    // except that no stack variables are valid, we would:
+    // assert(this == greenlet_that_switched_in);
+    OwnedGreenlet origin = greenlet_that_switched_in->g_switchstack_success();
     switching_thread_state = nullptr;
-    return switchstack_result_t(err, after_switch, origin);
+    return switchstack_result_t(err, greenlet_that_switched_in, origin);
 }
 
 
@@ -1708,6 +1731,18 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs->empty_tuple, mod_globs->empty_dict);
     if (o) {
         new UserGreenlet(o, GET_THREAD_STATE().state().borrow_current());
+        assert(Py_REFCNT(o) == 1);
+    }
+    return o;
+}
+
+static PyGreenlet*
+green_unswitchable_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
+{
+    PyGreenlet* o =
+        (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs->empty_tuple, mod_globs->empty_dict);
+    if (o) {
+        new BrokenGreenlet(o, GET_THREAD_STATE().state().borrow_current());
         assert(Py_REFCNT(o) == 1);
     }
     return o;
@@ -2773,7 +2808,8 @@ static PyGetSetDef green_getsets[] = {
      /*XXX*/ NULL},
     {"dead", (getter)green_getdead, NULL, /*XXX*/ NULL},
     {"_stack_saved", (getter)green_get_stack_saved, NULL, /*XXX*/ NULL},
-    {NULL}};
+    {NULL}
+};
 
 static PyMemberDef green_members[] = {
     {NULL}
@@ -2841,6 +2877,76 @@ PyTypeObject PyGreenlet_Type = {
     (inquiry)green_is_gc,         /* tp_is_gc */
 };
 
+
+
+static PyObject*
+green_unswitchable_getforce(PyGreenlet* self, void* UNUSED(context))
+{
+    BrokenGreenlet* broken = dynamic_cast<BrokenGreenlet*>(self->pimpl);
+    return PyBool_FromLong(broken->force_switch_error);
+}
+
+static int
+green_unswitchable_setforce(PyGreenlet* self, BorrowedObject nforce, void* UNUSED(context))
+{
+    BrokenGreenlet* broken = dynamic_cast<BrokenGreenlet*>(self->pimpl);
+    int is_true = PyObject_IsTrue(nforce);
+    if (is_true == -1) {
+        return -1;
+    }
+    broken->force_switch_error = is_true;
+    return 0;
+}
+
+static PyGetSetDef green_unswitchable_getsets[] = {
+    /* name, getter, setter, doc, context pointer */
+    {"force_switch_error", (getter)green_unswitchable_getforce, (setter)green_unswitchable_setforce, /*XXX*/ NULL},
+    {NULL}
+};
+
+PyTypeObject PyGreenletUnswitchable_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "greenlet._greenlet.UnswitchableGreenlet",
+    0,  /* tp_basicsize */
+    0,                   /* tp_itemsize */
+    /* methods */
+    (destructor)green_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_compare */
+    0,      /* tp_repr */
+    0,          /* tp_as _number*/
+    0,                         /* tp_as _sequence*/
+    0,                         /* tp_as _mapping*/
+    0,                         /* tp_hash */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer*/
+    G_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+    "Undocumented internal class",                        /* tp_doc */
+    (traverseproc)green_traverse, /* tp_traverse */
+    (inquiry)green_clear,         /* tp_clear */
+    0,                                  /* tp_richcompare */
+    0,  /* tp_weaklistoffset */
+    0,                                  /* tp_iter */
+    0,                                  /* tp_iternext */
+    0,                      /* tp_methods */
+    0,                      /* tp_members */
+    green_unswitchable_getsets,                      /* tp_getset */
+    &PyGreenlet_Type,                                  /* tp_base */
+    0,                                  /* tp_dict */
+    0,                                  /* tp_descr_get */
+    0,                                  /* tp_descr_set */
+    0,         /* tp_dictoffset */
+    (initproc)green_init,               /* tp_init */
+    PyType_GenericAlloc,                  /* tp_alloc */
+    (newfunc)green_unswitchable_new,                          /* tp_new */
+    PyObject_GC_Del,                   /* tp_free */
+    (inquiry)green_is_gc,         /* tp_is_gc */
+};
 
 
 PyDoc_STRVAR(mod_getcurrent_doc,
@@ -3063,11 +3169,13 @@ greenlet_internal_mod_init() noexcept
         CreatedModule m(greenlet_module_def);
 
         Require(PyType_Ready(&PyGreenlet_Type));
+        Require(PyType_Ready(&PyGreenletUnswitchable_Type));
 
         mod_globs = new GreenletGlobals;
         ThreadState::init();
 
         m.PyAddObject("greenlet", PyGreenlet_Type);
+        m.PyAddObject("UnswitchableGreenlet", PyGreenletUnswitchable_Type);
         m.PyAddObject("error", mod_globs->PyExc_GreenletError);
         m.PyAddObject("GreenletExit", mod_globs->PyExc_GreenletExit);
 

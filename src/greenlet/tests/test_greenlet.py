@@ -9,7 +9,8 @@ import threading
 
 from abc import ABCMeta, abstractmethod
 
-from greenlet import greenlet
+import greenlet
+from greenlet import greenlet as RawGreenlet
 from . import TestCase
 from .leakcheck import fails_leakcheck
 
@@ -36,7 +37,7 @@ def send_exception(g, exc):
     # the purpose of this test is to explicitly check the propagation rules.
     def crasher(exc):
         raise exc
-    g1 = greenlet(crasher, parent=g)
+    g1 = RawGreenlet(crasher, parent=g)
     g1.switch(exc)
 
 
@@ -49,7 +50,7 @@ class TestGreenlet(TestCase):
             lst.append(1)
             greenlet.getcurrent().parent.switch()
             lst.append(3)
-        g = greenlet(f)
+        g = RawGreenlet(f)
         lst.append(0)
         g.switch()
         lst.append(2)
@@ -61,26 +62,26 @@ class TestGreenlet(TestCase):
         self._do_simple_test()
 
     def test_switch_no_run_raises_AttributeError(self):
-        g = greenlet()
+        g = RawGreenlet()
         with self.assertRaises(AttributeError) as exc:
             g.switch()
 
         self.assertIn("run", str(exc.exception))
 
     def test_throw_no_run_raises_AttributeError(self):
-        g = greenlet()
+        g = RawGreenlet()
         with self.assertRaises(AttributeError) as exc:
             g.throw(SomeError)
 
         self.assertIn("run", str(exc.exception))
 
     def test_parent_equals_None(self):
-        g = greenlet(parent=None)
+        g = RawGreenlet(parent=None)
         self.assertIsNotNone(g)
         self.assertIs(g.parent, greenlet.getcurrent())
 
     def test_run_equals_None(self):
-        g = greenlet(run=None)
+        g = RawGreenlet(run=None)
         self.assertIsNotNone(g)
         self.assertIsNone(g.run)
 
@@ -91,8 +92,8 @@ class TestGreenlet(TestCase):
             lst.append(1)
             greenlet.getcurrent().parent.switch()
             lst.extend([1, 1])
-        g = greenlet(f)
-        h = greenlet(f)
+        g = RawGreenlet(f)
+        h = RawGreenlet(f)
         g.switch()
         self.assertEqual(len(lst), 1)
         h.switch()
@@ -113,11 +114,11 @@ class TestGreenlet(TestCase):
 
         def g():
             lst.append('a')
-            g = greenlet(f)
+            g = RawGreenlet(f)
             g.switch()
             lst.append('c')
 
-        g = greenlet(g)
+        g = RawGreenlet(g)
         self.assertEqual(sys.getrefcount(g), 2)
         g.switch()
         self.assertEqual(lst, ['a', 'b', 'c'])
@@ -139,8 +140,8 @@ class TestGreenlet(TestCase):
 
     def test_exception(self):
         seen = []
-        g1 = greenlet(fmain)
-        g2 = greenlet(fmain)
+        g1 = RawGreenlet(fmain)
+        g2 = RawGreenlet(fmain)
         g1.switch(seen)
         g2.switch(seen)
         g2.parent = g1
@@ -167,15 +168,15 @@ class TestGreenlet(TestCase):
 
     def test_send_exception(self):
         seen = []
-        g1 = greenlet(fmain)
+        g1 = RawGreenlet(fmain)
         g1.switch(seen)
         self.assertRaises(KeyError, send_exception, g1, KeyError)
         self.assertEqual(seen, [KeyError])
 
     def test_dealloc(self):
         seen = []
-        g1 = greenlet(fmain)
-        g2 = greenlet(fmain)
+        g1 = RawGreenlet(fmain)
+        g2 = RawGreenlet(fmain)
         g1.switch(seen)
         g2.switch(seen)
         self.assertEqual(seen, [])
@@ -193,7 +194,7 @@ class TestGreenlet(TestCase):
             except greenlet.GreenletExit:
                 raise SomeError
 
-        g = greenlet(run)
+        g = RawGreenlet(run)
         g.switch()
         # Destroying the only reference to the greenlet causes it
         # to get GreenletExit; when it in turn raises, even though we're the parent
@@ -226,7 +227,7 @@ class TestGreenlet(TestCase):
         ok_to_exit_bg_thread = threading.Event()
 
         def f():
-            g1 = greenlet(fmain)
+            g1 = RawGreenlet(fmain)
             g1.switch(seen)
             someref.append(g1)
             del g1
@@ -235,10 +236,10 @@ class TestGreenlet(TestCase):
             bg_glet_created_running_and_no_longer_ref_in_bg.set()
             fg_ref_released.wait(3)
 
-            greenlet()   # trigger release
+            RawGreenlet()   # trigger release
             bg_should_be_clear.set()
             ok_to_exit_bg_thread.wait(3)
-            greenlet() # One more time
+            RawGreenlet() # One more time
 
         t = threading.Thread(target=f)
         t.start()
@@ -266,7 +267,7 @@ class TestGreenlet(TestCase):
             self.assertEqual(f.f_back, None)
             greenlet.getcurrent().parent.switch(f)
             return "meaning of life"
-        g = greenlet(f1)
+        g = RawGreenlet(f1)
         frame = g.switch()
         self.assertTrue(frame is g.gr_frame)
         self.assertTrue(g)
@@ -278,7 +279,7 @@ class TestGreenlet(TestCase):
 
     def test_thread_bug(self):
         def runner(x):
-            g = greenlet(lambda: time.sleep(x))
+            g = RawGreenlet(lambda: time.sleep(x))
             g.switch()
         t1 = threading.Thread(target=runner, args=(0.2,))
         t2 = threading.Thread(target=runner, args=(0.3,))
@@ -292,7 +293,7 @@ class TestGreenlet(TestCase):
             self.assertEqual(a, 4)
             self.assertEqual(b, 2)
             return 42
-        x = greenlet(run).switch(a=4, b=2)
+        x = RawGreenlet(run).switch(a=4, b=2)
         self.assertEqual(x, 42)
 
     def test_switch_kwargs_to_parent(self):
@@ -300,7 +301,7 @@ class TestGreenlet(TestCase):
             greenlet.getcurrent().parent.switch(x=x)
             greenlet.getcurrent().parent.switch(2, x=3)
             return x, x ** 2
-        g = greenlet(run)
+        g = RawGreenlet(run)
         self.assertEqual({'x': 3}, g.switch(3))
         self.assertEqual(((2,), {'x': 3}), g.switch())
         self.assertEqual((3, 9), g.switch())
@@ -311,7 +312,7 @@ class TestGreenlet(TestCase):
         done_event = threading.Event()
 
         def run():
-            data['g'] = greenlet(lambda: None)
+            data['g'] = RawGreenlet(lambda: None)
             created_event.set()
             done_event.wait(10)
         thread = threading.Thread(target=run)
@@ -330,13 +331,13 @@ class TestGreenlet(TestCase):
                 raise ValueError('fun')
             except: # pylint:disable=bare-except
                 exc_info = sys.exc_info()
-                greenlet(h).switch()
+                RawGreenlet(h).switch()
                 self.assertEqual(exc_info, sys.exc_info())
 
         def h():
             self.assertEqual(sys.exc_info(), (None, None, None))
 
-        greenlet(f).switch()
+        RawGreenlet(f).switch()
 
     def test_instance_dict(self):
         def f():
@@ -345,7 +346,7 @@ class TestGreenlet(TestCase):
             del g.__dict__
         def setdict(g, value):
             g.__dict__ = value
-        g = greenlet(f)
+        g = RawGreenlet(f)
         self.assertEqual(g.__dict__, {})
         g.switch()
         self.assertEqual(g.test, 42)
@@ -362,17 +363,17 @@ class TestGreenlet(TestCase):
                 hasattr(greenlet.getcurrent(), 'run')
             )
 
-        g = greenlet(func)
+        g = RawGreenlet(func)
         g.switch()
         self.assertEqual(has_run, [False])
 
     def test_deepcopy(self):
         import copy
-        self.assertRaises(TypeError, copy.copy, greenlet())
-        self.assertRaises(TypeError, copy.deepcopy, greenlet())
+        self.assertRaises(TypeError, copy.copy, RawGreenlet())
+        self.assertRaises(TypeError, copy.deepcopy, RawGreenlet())
 
     def test_parent_restored_on_kill(self):
-        hub = greenlet(lambda: None)
+        hub = RawGreenlet(lambda: None)
         main = greenlet.getcurrent()
         result = []
         def worker():
@@ -384,7 +385,7 @@ class TestGreenlet(TestCase):
                 result.append(greenlet.getcurrent().parent)
                 result.append(greenlet.getcurrent())
                 hub.switch()
-        g = greenlet(worker, parent=hub)
+        g = RawGreenlet(worker, parent=hub)
         g.switch()
         # delete the only reference, thereby raising GreenletExit
         del g
@@ -400,21 +401,21 @@ class TestGreenlet(TestCase):
 
     def test_parent_return_failure(self):
         # No run causes AttributeError on switch
-        g1 = greenlet()
+        g1 = RawGreenlet()
         # Greenlet that implicitly switches to parent
-        g2 = greenlet(lambda: None, parent=g1)
+        g2 = RawGreenlet(lambda: None, parent=g1)
         # AttributeError should propagate to us, no fatal errors
         with self.assertRaises(AttributeError):
             g2.switch()
 
     def test_throw_exception_not_lost(self):
-        class mygreenlet(greenlet):
+        class mygreenlet(RawGreenlet):
             def __getattribute__(self, name):
                 try:
                     raise Exception()
                 except: # pylint:disable=bare-except
                     pass
-                return greenlet.__getattribute__(self, name)
+                return RawGreenlet.__getattribute__(self, name)
         g = mygreenlet(lambda: None)
         self.assertRaises(SomeError, g.throw, SomeError())
 
@@ -425,7 +426,7 @@ class TestGreenlet(TestCase):
             greenlet.getcurrent().parent.switch()
 
         def creator():
-            g = greenlet(worker)
+            g = RawGreenlet(worker)
             g.switch()
             result.append(g)
             if wait_for_cleanup:
@@ -484,15 +485,15 @@ class TestGreenlet(TestCase):
 
     @fails_leakcheck
     def test_recursive_startup(self):
-        class convoluted(greenlet):
+        class convoluted(RawGreenlet):
             def __init__(self):
-                greenlet.__init__(self)
+                RawGreenlet.__init__(self)
                 self.count = 0
             def __getattribute__(self, name):
                 if name == 'run' and self.count == 0:
                     self.count = 1
                     self.switch(43)
-                return greenlet.__getattribute__(self, name)
+                return RawGreenlet.__getattribute__(self, name)
             def run(self, value):
                 while True:
                     self.parent.switch(value)
@@ -530,7 +531,7 @@ class TestGreenlet(TestCase):
             greenlet.getcurrent()
             lock1.release()
         main = greenlet.getcurrent()
-        g = [greenlet(deallocator)]
+        g = [RawGreenlet(deallocator)]
         g[0].bomb = finalized()
         g[0].switch()
         t = threading.Thread(target=fthread)
@@ -569,10 +570,10 @@ class TestGreenlet(TestCase):
         def initiator():
             return 42 # implicitly falls thru to parent
 
-        worker = [greenlet(worker)]
+        worker = [RawGreenlet(worker)]
 
         worker[0].switch() # prime worker
-        initiator = greenlet(initiator, worker[0])
+        initiator = RawGreenlet(initiator, worker[0])
         value = initiator.switch()
         self.assertTrue(seen)
         self.assertEqual(value, 42)
@@ -602,13 +603,13 @@ class TestGreenlet(TestCase):
         kwargs = dict(a=42)
         def switchapply():
             _apply(greenlet.getcurrent().parent.switch, args, kwargs)
-        g = greenlet(switchapply)
+        g = RawGreenlet(switchapply)
         self.assertEqual(g.switch(), kwargs)
 
     def test_abstract_subclasses(self):
         AbstractSubclass = ABCMeta(
             'AbstractSubclass',
-            (greenlet,),
+            (RawGreenlet,),
             {'run': abstractmethod(lambda self: None)})
 
         class BadSubclass(AbstractSubclass):
@@ -658,7 +659,7 @@ class TestGreenlet(TestCase):
                     # gc callback called prematurely
                     t.join(10)
                     return False
-                last = greenlet()
+                last = RawGreenlet()
                 if recycled[0]:
                     break # yes! gc called in green_new
                 l.append(last) # increase allocation counter
@@ -685,7 +686,7 @@ class TestGreenlet(TestCase):
         from greenlet import getcurrent
         from greenlet import GreenletExit
 
-        class Greenlet(greenlet):
+        class Greenlet(RawGreenlet):
             pass
 
         initial_refs = sys.getrefcount(Greenlet)
@@ -714,7 +715,7 @@ class TestGreenlet(TestCase):
 
         from greenlet import getcurrent
 
-        class MyGreenlet(greenlet):
+        class MyGreenlet(RawGreenlet):
             pass
 
         glets = []
@@ -778,12 +779,12 @@ class TestGreenlet(TestCase):
         def no_args():
             return 13
 
-        parent_never_started = greenlet(no_args)
+        parent_never_started = RawGreenlet(no_args)
 
         def leaf():
             return 42
 
-        child = greenlet(leaf, parent_never_started)
+        child = RawGreenlet(leaf, parent_never_started)
 
         # Because the run function takes to arguments
         with self.assertRaises(TypeError):
@@ -793,18 +794,18 @@ class TestGreenlet(TestCase):
         def one_arg(x):
             return (x, 24)
 
-        parent_never_started = greenlet(one_arg)
+        parent_never_started = RawGreenlet(one_arg)
 
         def leaf():
             return 42
 
-        child = greenlet(leaf, parent_never_started)
+        child = RawGreenlet(leaf, parent_never_started)
 
         result = child.switch()
         self.assertEqual(result, (42, 24))
 
     def test_switch_to_dead_greenlet_with_unstarted_perverse_parent(self):
-        class Parent(greenlet):
+        class Parent(RawGreenlet):
             def __getattribute__(self, name):
                 if name == 'run':
                     raise SomeError
@@ -812,7 +813,7 @@ class TestGreenlet(TestCase):
 
         parent_never_started = Parent()
         seen = []
-        child = greenlet(lambda: seen.append(42), parent_never_started)
+        child = RawGreenlet(lambda: seen.append(42), parent_never_started)
         # Because we automatically start the parent when the child is
         # finished
         with self.assertRaises(SomeError):
@@ -826,8 +827,8 @@ class TestGreenlet(TestCase):
 
     def test_switch_to_dead_greenlet_reparent(self):
         seen = []
-        parent_never_started = greenlet(lambda: seen.append(24))
-        child = greenlet(lambda: seen.append(42))
+        parent_never_started = RawGreenlet(lambda: seen.append(24))
+        child = RawGreenlet(lambda: seen.append(42))
 
         child.switch()
         self.assertEqual(seen, [42])
@@ -847,7 +848,7 @@ class TestGreenlet(TestCase):
         def Hub():
             main.switch()
 
-        hub = greenlet(Hub)
+        hub = RawGreenlet(Hub)
         # start it
         hub.switch()
         # now it is suspended
@@ -865,7 +866,7 @@ class TestGreenletSetParentErrors(TestCase):
         done_event = threading.Event()
 
         def run():
-            data['g'] = greenlet(lambda: None)
+            data['g'] = RawGreenlet(lambda: None)
             created_event.set()
             done_event.wait(10)
 
@@ -875,7 +876,7 @@ class TestGreenletSetParentErrors(TestCase):
         thread = threading.Thread(target=run)
         thread.start()
         created_event.wait(10)
-        g = greenlet(blank)
+        g = RawGreenlet(blank)
         g.switch()
         with self.assertRaises(ValueError) as exc:
             g.parent = data['g']
@@ -887,7 +888,7 @@ class TestGreenletSetParentErrors(TestCase):
     def test_unexpected_reparenting(self):
         another = []
         def worker():
-            g = greenlet(lambda: None)
+            g = RawGreenlet(lambda: None)
             another.append(g)
             g.switch()
         t = threading.Thread(target=worker)
@@ -913,11 +914,11 @@ class TestGreenletSetParentErrors(TestCase):
         # deliberately leaking a main greenlet here.
         self.wait_for_pending_cleanups(initial_main_greenlets=self.main_greenlets_before_test + 1)
 
-        class convoluted(greenlet):
+        class convoluted(RawGreenlet):
             def __getattribute__(self, name):
                 if name == 'run':
                     self.parent = another[0] # pylint:disable=attribute-defined-outside-init
-                return greenlet.__getattribute__(self, name)
+                return RawGreenlet.__getattribute__(self, name)
         g = convoluted(lambda: None)
         with self.assertRaises(greenlet.error) as exc:
             g.switch()
@@ -932,16 +933,16 @@ class TestGreenletSetParentErrors(TestCase):
         switched_to_greenlet = threading.Event()
         keep_main_alive = threading.Event()
         def worker():
-            g = greenlet(lambda: None)
+            g = RawGreenlet(lambda: None)
             another.append(g)
             g.switch()
             switched_to_greenlet.set()
             keep_main_alive.wait(10)
-        class convoluted(greenlet):
+        class convoluted(RawGreenlet):
             def __getattribute__(self, name):
                 if name == 'run':
                     self.parent = another[0] # pylint:disable=attribute-defined-outside-init
-                return greenlet.__getattribute__(self, name)
+                return RawGreenlet.__getattribute__(self, name)
 
         t = threading.Thread(target=worker)
         t.start()
@@ -960,7 +961,7 @@ class TestGreenletSetParentErrors(TestCase):
             del another[:]
 
     def test_cannot_delete_parent(self):
-        worker = greenlet(lambda: None)
+        worker = RawGreenlet(lambda: None)
         self.assertIs(worker.parent, greenlet.getcurrent())
 
         with self.assertRaises(AttributeError) as exc:
@@ -992,7 +993,7 @@ class TestGreenletSetParentErrors(TestCase):
                     "GreenletChecker: Expected any type of greenlet, not " + type(p).__name__)
 
         # First, not running
-        g = greenlet(bg)
+        g = RawGreenlet(bg)
         self.assertFalse(g)
         check(g)
 
@@ -1006,7 +1007,7 @@ class TestGreenletSetParentErrors(TestCase):
 
 
     def test_trivial_cycle(self):
-        glet = greenlet(lambda: None)
+        glet = RawGreenlet(lambda: None)
         with self.assertRaises(ValueError) as exc:
             glet.parent = glet
         self.assertEqual(str(exc.exception), "cyclic parent chain")
@@ -1018,9 +1019,9 @@ class TestGreenletSetParentErrors(TestCase):
         self.assertEqual(str(exc.exception), "cannot set the parent of a main greenlet")
 
     def test_deeper_cycle(self):
-        g1 = greenlet(lambda: None)
-        g2 = greenlet(lambda: None)
-        g3 = greenlet(lambda: None)
+        g1 = RawGreenlet(lambda: None)
+        g2 = RawGreenlet(lambda: None)
+        g3 = RawGreenlet(lambda: None)
 
         g1.parent = g2
         g2.parent = g3
@@ -1043,12 +1044,12 @@ class TestRepr(TestCase):
         def run():
             return repr(main)
 
-        g = greenlet(run)
+        g = RawGreenlet(run)
         r = g.switch()
         self.assertEndsWith(r, ' suspended active started main>')
 
     def test_initial(self):
-        r = repr(greenlet())
+        r = repr(RawGreenlet())
         self.assertEndsWith(r, ' pending>')
 
     def test_main_from_other_thread(self):
@@ -1087,7 +1088,7 @@ class TestRepr(TestCase):
             self.assertEndsWith(r, ' (thread exited) dead>')
 
     def test_dead(self):
-        g = greenlet(lambda: None)
+        g = RawGreenlet(lambda: None)
         g.switch()
         self.assertEndsWith(repr(g), ' dead>')
         self.assertNotIn('suspended', repr(g))
@@ -1098,8 +1099,8 @@ class TestRepr(TestCase):
         # https://github.com/python-greenlet/greenlet/issues/218
         # %s formatting on Python 2 was producing unicode, not str.
 
-        g_dead = greenlet(lambda: None)
-        g_not_started = greenlet(lambda: None)
+        g_dead = RawGreenlet(lambda: None)
+        g_not_started = RawGreenlet(lambda: None)
         g_cur = greenlet.getcurrent()
 
         for g in g_dead, g_not_started, g_cur:
@@ -1133,7 +1134,33 @@ class TestMainGreenlet(TestCase):
 
     def test_main_greenlet_is_greenlet(self):
         self._check_current_is_main()
-        self.assertIsInstance(greenlet.getcurrent(), greenlet)
+        self.assertIsInstance(greenlet.getcurrent(), RawGreenlet)
+
+
+
+class TestBrokenGreenlets(TestCase):
+
+    def test_failed_to_initialstub(self):
+        self.skipTest('Not ready.')
+        import gc
+        def func():
+            raise AssertionError("Never get here")
+
+        for _ in range(100):
+            g = greenlet._greenlet.UnswitchableGreenlet(func)
+            g.force_switch_error = True
+
+            with self.assertRaisesRegex(SystemError,
+                                        'Switching stacks into a target greenlet failed.'):
+                g.switch()
+
+            gc.collect()
+            print(sys.getrefcount(func))
+            # TODO: references on 'func' are leaking, but
+            # no greenlets are leaking.
+            print('GLETS:', len([x for x in gc.get_objects() if isinstance(x, RawGreenlet)]))
+
+
 
 if __name__ == '__main__':
     import unittest
