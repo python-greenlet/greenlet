@@ -20,8 +20,6 @@ class CPPTests(TestCase):
             self.assertEqual(g.switch(), i)
 
     def _do_test_unhandled_exception(self, target):
-        # TODO: On some versions of Python with some settings, this
-        # spews a lot of garbage to stderr. It would be nice to capture and ignore that.
         import os
         import sys
         script = os.path.join(

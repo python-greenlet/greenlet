@@ -1213,7 +1213,17 @@ class TestBrokenGreenlets(TestCase):
         # but it didn't.
         #
         # I think the fixes for the above test also kicked in here.
-        self.run_script('fail_switch_three_greenlets2.py')
+        output = self.run_script('fail_switch_three_greenlets2.py')
+        self.assertIn(
+            "RESULTS: [('trace', 'switch'), "
+            "('trace', 'switch'), ('g2 arg', 'g2 from tracefunc'), "
+            "('trace', 'switch'), ('main g1', 'from g2_run'), ('trace', 'switch'), "
+            "('g1 arg', 'g1 from main'), ('trace', 'switch'), ('main g2', 'from g1_run'), "
+            "('trace', 'switch'), ('g1 from parent', 'g1 from main 2'), ('trace', 'switch'), "
+            "('main g1.2', 'g1 done'), ('trace', 'switch'), ('g2 from parent', ()), "
+            "('trace', 'switch'), ('main g2.2', 'g2 done')]",
+            output
+        )
 
 if __name__ == '__main__':
     import unittest
