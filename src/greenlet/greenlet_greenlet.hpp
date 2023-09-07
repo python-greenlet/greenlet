@@ -463,6 +463,12 @@ namespace greenlet
             }
         };
 
+        OwnedObject on_switchstack_or_initialstub_failure(
+            Greenlet* target,
+            const switchstack_result_t& err,
+            const bool target_was_me=false,
+            const bool was_initial_stub=false);
+
         // Returns the previous greenlet we just switched away from.
         virtual OwnedGreenlet g_switchstack_success() noexcept;
 

@@ -21,6 +21,11 @@ namespace greenlet {
             assert(PyErr_Occurred());
         }
 
+        PyErrOccurred(const std::string& msg) : std::runtime_error(msg)
+        {
+            assert(PyErr_Occurred());
+        }
+
         PyErrOccurred(PyObject* exc_kind, const char* const msg)
             : std::runtime_error(msg)
         {
@@ -81,10 +86,10 @@ namespace greenlet {
     };
 
     static inline PyObject*
-    Require(PyObject* p)
+    Require(PyObject* p, const std::string& msg="")
     {
         if (!p) {
-            throw PyErrOccurred();
+            throw PyErrOccurred(msg);
         }
         return p;
     };

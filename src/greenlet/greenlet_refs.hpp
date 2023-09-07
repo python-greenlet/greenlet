@@ -80,6 +80,7 @@ namespace greenlet
         typedef OwnedReference<PyObject, NoOpChecker> OwnedObject;
 
         class ImmortalObject;
+        class ImmortalString;
 
         template<typename T, TypeChecker TC>
         class _OwnedGreenlet;
@@ -222,7 +223,7 @@ namespace greenlet {
         inline const std::string as_str() const noexcept;
         inline OwnedObject PyGetAttr(const ImmortalObject& name) const noexcept;
         inline OwnedObject PyRequireAttr(const char* const name) const;
-        inline OwnedObject PyRequireAttr(const ImmortalObject& name) const;
+        inline OwnedObject PyRequireAttr(const ImmortalString& name) const;
         inline OwnedObject PyCall(const BorrowedObject& arg) const;
         inline OwnedObject PyCall(PyGreenlet* arg) const ;
         inline OwnedObject PyCall(PyObject* arg) const ;
@@ -650,6 +651,11 @@ namespace greenlet {
             return *this;
         }
 
+        inline operator std::string() const
+        {
+            return this->str;
+        }
+
     };
 
     template<typename T, TypeChecker TC>
@@ -689,16 +695,20 @@ namespace greenlet {
     inline OwnedObject PyObjectPointer<T, TC>::PyRequireAttr(const char* const name) const
     {
         assert(this->p);
-        return OwnedObject::consuming(Require(PyObject_GetAttrString(this->p, name)));
+        return OwnedObject::consuming(Require(PyObject_GetAttrString(this->p, name), name));
     }
 
     template<typename T, TypeChecker TC>
-    inline OwnedObject PyObjectPointer<T, TC>::PyRequireAttr(const ImmortalObject& name) const
+    inline OwnedObject PyObjectPointer<T, TC>::PyRequireAttr(const ImmortalString& name) const
     {
         assert(this->p);
         return OwnedObject::consuming(Require(
-                   PyObject_GetAttr(reinterpret_cast<PyObject*>(this->p),
-                                    name)));
+                   PyObject_GetAttr(
+                      reinterpret_cast<PyObject*>(this->p),
+                      name
+                   ),
+                   name
+               ));
     }
 
     template<typename T, TypeChecker TC>

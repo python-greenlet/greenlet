@@ -1025,6 +1025,34 @@ Greenlet::slp_save_state(char *const stackref) noexcept
                                                 this->thread_state()->borrow_current()->stack_state);
 }
 
+OwnedObject
+Greenlet::on_switchstack_or_initialstub_failure(
+    Greenlet* target,
+    const Greenlet::switchstack_result_t& err,
+    const bool target_was_me,
+    const bool was_initial_stub)
+{
+    // If we get here, either g_initialstub()
+    // failed, or g_switchstack() failed. Either one of those
+    // cases SHOULD leave us in the original greenlet with a valid stack.
+    if (!PyErr_Occurred()) {
+        PyErr_SetString(
+            PyExc_SystemError,
+            was_initial_stub
+            ? "Failed to switch stacks into a greenlet for the first time."
+            : "Failed to switch stacks into a running greenlet.");
+    }
+    this->release_args();
+
+    if (target && !target_was_me) {
+        target->murder_in_place();
+    }
+
+    assert(!err.the_state_that_switched);
+    assert(!err.origin_greenlet);
+    return OwnedObject();
+
+}
 
 OwnedObject
 UserGreenlet::g_switch()
@@ -1059,8 +1087,8 @@ UserGreenlet::g_switch()
     while (target) {
         if (target->active()) {
             if (!target_was_me) {
-                target->args() <<= this->switch_args;
-                assert(!this->switch_args);
+                target->args() <<= this->args();
+                assert(!this->args());
             }
             err = target->g_switchstack();
             break;
@@ -1073,10 +1101,9 @@ UserGreenlet::g_switch()
             void* dummymarker;
             was_initial_stub = true;
             if (!target_was_me) {
-                target->args() <<= this->switch_args;
-                assert(!this->switch_args);
+                target->args() <<= this->args();
+                assert(!this->args());
             }
-
             try {
                 // This can only throw back to us while we're
                 // still in this greenlet. Once the new greenlet
@@ -1111,23 +1138,9 @@ UserGreenlet::g_switch()
     if (err.status < 0) {
         // If we get here, either g_initialstub()
         // failed, or g_switchstack() failed. Either one of those
-        // cases SHOULD leave us in the original greenlet with a valid stack.
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(
-                PyExc_SystemError,
-                was_initial_stub
-                ? "Failed to switch stacks into a greenlet for the first time."
-                : "Failed to switch stacks into a running greenlet.");
-        }
-        this->release_args();
-
-        if (target && !target_was_me) {
-            target->murder_in_place();
-        }
-
-        assert(!err.the_state_that_switched);
-        assert(!err.origin_greenlet);
-        return OwnedObject();
+        // cases SHOULD leave us in the original greenlet with a valid
+        // stack.
+        return this->on_switchstack_or_initialstub_failure(target, err, target_was_me, was_initial_stub);
     }
 
     return err.the_state_that_switched->g_switch_finish(err);
@@ -1139,18 +1152,21 @@ MainGreenlet::g_switch()
     try {
         this->check_switch_allowed();
     }
-    catch(const PyErrOccurred&) {
+    catch (const PyErrOccurred&) {
         this->release_args();
         throw;
     }
 
     switchstack_result_t err = this->g_switchstack();
     if (err.status < 0) {
-        // XXX: This code path is untested.
-        assert(PyErr_Occurred());
-        assert(!err.the_state_that_switched);
-        assert(!err.origin_greenlet);
-        return OwnedObject();
+        // XXX: This code path is untested, but it is shared
+        // with the UserGreenlet path that is tested.
+        return this->on_switchstack_or_initialstub_failure(
+            this,
+            err,
+            true, // target was me
+            false // was initial stub
+        );
     }
 
     return err.the_state_that_switched->g_switch_finish(err);
@@ -1185,7 +1201,7 @@ UserGreenlet::g_initialstub(void* mark)
     // We'll restore them when we return in that case.
     // Scope them tightly to avoid ref leaks.
     {
-        SwitchingArgs args(this->switch_args);
+        SwitchingArgs args(this->args());
 
         /* save exception in case getattr clears it */
         PyErrPieces saved;
@@ -1211,10 +1227,10 @@ UserGreenlet::g_initialstub(void* mark)
          */
         if (this->stack_state.started()) {
             // the successful switch cleared these out, we need to
-            // restore our version.
-            assert(!this->switch_args);
-            this->switch_args <<= args;
-
+            // restore our version. They will be copied on up to the
+            // next target.
+            assert(!this->args());
+            this->args() <<= args;
             throw GreenletStartedWhileInPython();
         }
     }
@@ -1345,8 +1361,8 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
     // could switch back to us, so we need to grab the
     // arguments locally.
     SwitchingArgs args;
-    args <<= this->switch_args;
-    assert(!this->switch_args);
+    args <<= this->args();
+    assert(!this->args());
 
     // The first switch we need to manually call the trace
     // function here instead of in g_switch_finish, because we
@@ -1435,12 +1451,12 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
 
     if (!result
         && mod_globs->PyExc_GreenletExit.PyExceptionMatches()
-        && (this->switch_args)) {
+        && (this->args())) {
         // This can happen, for example, if our only reference
         // goes away after we switch back to the parent.
         // See test_dealloc_switch_args_not_lost
         PyErrPieces clear_error;
-        result <<= this->switch_args;
+        result <<= this->args();
         result = single_result(result);
     }
     this->release_args();
