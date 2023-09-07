@@ -272,6 +272,19 @@ namespace greenlet
             this->_args.CLEAR();
             this->_kwargs.CLEAR();
         }
+
+        const std::string as_str() const noexcept
+        {
+            return PyUnicode_AsUTF8(
+                OwnedObject::consuming(
+                    PyUnicode_FromFormat(
+                        "SwitchingArgs(args=%R, kwargs=%R)",
+                        this->_args.borrow(),
+                        this->_kwargs.borrow()
+                    )
+                ).borrow()
+            );
+        }
     };
 
     class ThreadState;
@@ -578,7 +591,9 @@ namespace greenlet
     protected:
         virtual switchstack_result_t g_initialstub(void* mark);
     private:
-        void inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& run) G_NOEXCEPT_WIN32;
+        // This accepts raw pointers and the ownership of them at the
+        // same time. The caller should use ``inner_bootstrap(origin.relinquish_ownership())``.
+        void GREENLET_NOINLINE(inner_bootstrap)(PyGreenlet* origin_greenlet, PyObject* run);
     };
 
     class BrokenGreenlet : public UserGreenlet

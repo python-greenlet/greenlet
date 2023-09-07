@@ -11,8 +11,15 @@
   trouble when previously the process might have continued for some
   time with a corrupt state. It is unlikely those errors occurred in
   practice.
-- Fix some assertion errors and potential bugs with re-entrant switches.
-
+- Fix some assertion errors and potential bugs with re-entrant
+  switches.
+- Fix a potential crash when certain compilers compile greenlet with
+  high levels of optimization. The symptom would be that switching to
+  a greenlet for the first time immediately crashes.
+- Fix a potential crash when the callable object passed to the
+  greenlet constructor (or set as the ``greenlet.run`` attribute) has
+  a destructor attached to it that switches. Typically, triggering
+  this issue would require an unlikely subclass of ``greenlet.greenlet``.
 
 3.0.0rc1 (2023-09-01)
 =====================

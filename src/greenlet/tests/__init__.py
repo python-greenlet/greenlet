@@ -186,9 +186,9 @@ class TestCase(TestCaseMetaClass(
         )
 
         try:
-            subprocess.check_output([sys.executable, script],
-                                    encoding='utf-8',
-                                    stderr=subprocess.STDOUT)
+            return subprocess.check_output([sys.executable, script],
+                                           encoding='utf-8',
+                                           stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as ex:
             if show_output:
                 print('-----')

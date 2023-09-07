@@ -1279,7 +1279,8 @@ UserGreenlet::g_initialstub(void* mark)
         // the contents of our run object within this stack frame, so
         // it is not valid to do anything with it.
         try {
-            this->inner_bootstrap(err.origin_greenlet, run);
+            this->inner_bootstrap(err.origin_greenlet.relinquish_ownership(),
+                                  run.relinquish_ownership());
         }
         // Getting a C++ exception here isn't good. It's probably a
         // bug in the underlying greenlet, meaning it's probably a
@@ -1325,7 +1326,7 @@ UserGreenlet::g_initialstub(void* mark)
 
 
 void
-UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run) G_NOEXCEPT_WIN32
+GREENLET_NOINLINE(UserGreenlet::inner_bootstrap)(PyGreenlet* origin_greenlet, PyObject* run)
 {
     // The arguments here would be another great place for move.
     // As it is, we take them as a reference so that when we clear
@@ -1334,7 +1335,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
     // so there's no way that exiting the parent frame can clear it,
     // or we clear it unexpectedly. This arises in the context of the
     // interpreter shutting down. See https://github.com/python-greenlet/greenlet/issues/325
-    PyObject* run = _run.relinquish_ownership();
+    //PyObject* run = _run.relinquish_ownership();
 
     /* in the new greenlet */
     assert(this->thread_state()->borrow_current() == this->_self);
@@ -1352,28 +1353,29 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
 
     this->stack_state.set_active(); /* running */
 
+    // We're about to possibly run Python code again, which
+    // could switch back/away to/from us, so we need to grab the
+    // arguments locally.
+    SwitchingArgs args;
+    args <<= this->args();
+    assert(!this->args());
+
     // XXX: We could clear this much earlier, right?
     // Or would that introduce the possibility of running Python
     // code when we don't want to?
     this->_run_callable.CLEAR();
 
 
-    // We're about to possibly run Python code again, which
-    // could switch back to us, so we need to grab the
-    // arguments locally.
-    SwitchingArgs args;
-    args <<= this->args();
-    assert(!this->args());
-
     // The first switch we need to manually call the trace
     // function here instead of in g_switch_finish, because we
     // never return there.
-
     if (OwnedObject tracefunc = this->thread_state()->get_tracefunc()) {
+        OwnedGreenlet trace_origin;
+        trace_origin = origin_greenlet;
         try {
             g_calltrace(tracefunc,
                         args ? mod_globs->event_switch : mod_globs->event_throw,
-                        origin_greenlet,
+                        trace_origin,
                         this->_self);
         }
         catch (const PyErrOccurred&) {
@@ -1387,7 +1389,7 @@ UserGreenlet::inner_bootstrap(OwnedGreenlet& origin_greenlet, OwnedObject& _run)
     // We may never actually exit this stack frame so we need
     // to explicitly clear it.
     // This could run Python code and switch.
-    origin_greenlet.CLEAR();
+    Py_CLEAR(origin_greenlet);
 
     OwnedObject result;
     if (!args) {
@@ -2276,7 +2278,6 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
     using greenlet::SwitchingArgs;
     SwitchingArgs switch_args(OwnedObject::owning(args), OwnedObject::owning(kwargs));
     self->pimpl->args() <<= switch_args;
-
 
     // If we're switching out of a greenlet, and that switch is the
     // last thing the greenlet does, the greenlet ought to be able to

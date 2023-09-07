@@ -1237,6 +1237,16 @@ class TestBrokenGreenlets(TestCase):
             output
         )
 
+    def test_reentrant_switch_run_callable_has_del(self):
+        output = self.run_script('fail_clearing_run_switches.py')
+        self.assertIn(
+             "RESULTS ["
+            "('G.__getattribute__', 'run'), ('RunCallable', '__del__'), "
+            "('main: g.switch()', 'from RunCallable'), ('run_func', 'enter')"
+            "]",
+            output
+        )
+
 if __name__ == '__main__':
     import unittest
     unittest.main()
