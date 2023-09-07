@@ -1651,6 +1651,7 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
 
 greenlet::PythonAllocator<UserGreenlet> UserGreenlet::allocator;
 greenlet::PythonAllocator<MainGreenlet> MainGreenlet::allocator;
+greenlet::PythonAllocator<BrokenGreenlet> BrokenGreenlet::allocator;
 
 
 extern "C" {
