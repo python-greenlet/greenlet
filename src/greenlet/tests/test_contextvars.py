@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import gc
 import sys
+import unittest
 
 from functools import partial
 from unittest import skipUnless
@@ -302,3 +303,7 @@ class NoContextVarsTests(TestCase):
             let1.gr_context = None
 
         del let1
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -176,3 +176,28 @@ class TestCase(TestCaseMetaClass(
             0xc0000409,
         )
         return expected_exit
+
+    def run_script(self, script_name):
+        import subprocess
+        import os
+        script = os.path.join(
+            os.path.dirname(__file__),
+            script_name,
+        )
+
+        return subprocess.check_output([sys.executable, script],
+                                       encoding='utf-8',
+                                       stderr=subprocess.STDOUT)
+
+    def assertScriptRaises(self, script_name, exitcodes=None):
+        import subprocess
+        with self.assertRaises(subprocess.CalledProcessError) as exc:
+            output = self.run_script(script_name)
+            __traceback_info__ = output
+            # We're going to fail the assertion if we get here, at least
+            # preserve the output in the traceback.
+
+        if exitcodes is None:
+            exitcodes = self.get_expected_returncodes_for_aborted_process()
+        self.assertIn(exc.exception.returncode, exitcodes)
+        return exc.exception

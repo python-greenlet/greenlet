@@ -1139,6 +1139,8 @@ class TestMainGreenlet(TestCase):
 
 
 class TestBrokenGreenlets(TestCase):
+    # Tests for things that used to, or still do, terminate the interpreter.
+    # This often means doing unsavory things.
 
     def test_failed_to_initialstub(self):
         def func():
@@ -1181,23 +1183,37 @@ class TestBrokenGreenlets(TestCase):
         self.assertEqual(runs, [1, 2, 3])
 
     def test_failed_to_slp_switch_into_running(self):
-        import subprocess
-        import os.path
+        ex = self.assertScriptRaises('fail_slp_switch.py')
 
-        script = os.path.join(
-            os.path.dirname(__file__),
-            'fail_slp_switch.py'
-        )
-
-        with self.assertRaises(subprocess.CalledProcessError) as exc:
-            subprocess.check_output([sys.executable, script],
-                                    encoding='utf-8',
-                                    stderr=subprocess.STDOUT)
-
-        ex = exc.exception
         self.assertIn('fail_slp_switch is running', ex.output)
         self.assertIn(ex.returncode, self.get_expected_returncodes_for_aborted_process())
 
+    def test_reentrant_switch_two_greenlets(self):
+        # Before we started capturing the arguments in g_switch_finish, this could crash.
+        output = self.run_script('fail_switch_two_greenlets.py')
+        self.assertIn('In g1_run', output)
+        self.assertIn('TRACE', output)
+        self.assertIn('LEAVE TRACE', output)
+        self.assertIn('Falling off end of main', output)
+        self.assertIn('Falling off end of g1_run', output)
+        self.assertIn('Falling off end of g2', output)
+
+    def test_reentrant_switch_three_greenlets(self):
+        # On debug builds of greenlet, this used to crash with an assertion error;
+        # on non-debug versions, it ran fine (which it should not do!).
+        # Now it always crashes correctly with a TypeError
+        ex = self.assertScriptRaises('fail_switch_three_greenlets.py', exitcodes=(1,))
+
+        self.assertIn('TypeError', ex.output)
+        self.assertIn('positional arguments', ex.output)
+
+    def test_reentrant_switch_three_greenlets2(self):
+        # This actually passed on debug and non-debug builds. It
+        # should probably have been triggering some debug assertions
+        # but it didn't.
+        #
+        # I think the fixes for the above test also kicked in here.
+        self.run_script('fail_switch_three_greenlets2.py')
 
 if __name__ == '__main__':
     import unittest

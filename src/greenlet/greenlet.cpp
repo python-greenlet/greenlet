@@ -1605,12 +1605,22 @@ Greenlet::check_switch_allowed() const
     }
 }
 
-
+/**
+ * May run arbitrary Python code.
+ */
 OwnedObject
 Greenlet::g_switch_finish(const switchstack_result_t& err)
 {
-
     ThreadState& state = *this->thread_state();
+    // Because calling the trace function could do arbitrary things,
+    // including switching away from this greenlet and then maybe
+    // switching back, we need to capture the arguments now so that
+    // they don't change.
+    OwnedObject result;
+    if (this->args()) {
+        result <<= this->args();
+    }
+    assert(!this->args());
     try {
         // Our only caller handles the bad error case
         assert(err.status >= 0);
@@ -1618,7 +1628,7 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
 
         if (OwnedObject tracefunc = state.get_tracefunc()) {
             g_calltrace(tracefunc,
-                        this->args() ? mod_globs->event_switch : mod_globs->event_throw,
+                        result ? mod_globs->event_switch : mod_globs->event_throw,
                         err.origin_greenlet,
                         this->self());
         }
@@ -1635,9 +1645,6 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
             throw PyErrOccurred();
         }
 
-        OwnedObject result;
-        result <<= this->switch_args;
-        assert(!this->switch_args);
         return result;
     }
     catch (const PyErrOccurred&) {
