@@ -718,6 +718,12 @@ Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
     p->pimpl = this;
 }
 
+bool
+Greenlet::force_slp_switch_error() const noexcept
+{
+    return false;
+}
+
 UserGreenlet::UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
     : Greenlet(p), _parent(the_parent)
 {
@@ -932,6 +938,13 @@ void BrokenGreenlet::operator delete(void* ptr)
                                 1);
 }
 
+bool
+BrokenGreenlet::force_slp_switch_error() const noexcept
+{
+    return this->_force_slp_switch_error;
+}
+
+
 
 OwnedObject
 Greenlet::throw_GreenletExit_during_dealloc(const ThreadState& UNUSED(current_thread_state))
@@ -1042,8 +1055,8 @@ UserGreenlet::g_switch()
     // into g_switch() if it's not ourself. The main problem with that
     // is that we would be using more stack space.
     bool target_was_me = true;
+    bool was_initial_stub = false;
     while (target) {
-        fprintf(stderr, "Searching for target %p\n", target);
         if (target->active()) {
             if (!target_was_me) {
                 target->args() <<= this->switch_args;
@@ -1058,7 +1071,7 @@ UserGreenlet::g_switch()
             UserGreenlet* real_target = static_cast<UserGreenlet*>(target);
             assert(real_target);
             void* dummymarker;
-
+            was_initial_stub = true;
             if (!target_was_me) {
                 target->args() <<= this->switch_args;
                 assert(!this->switch_args);
@@ -1068,7 +1081,6 @@ UserGreenlet::g_switch()
                 // This can only throw back to us while we're
                 // still in this greenlet. Once the new greenlet
                 // is bootstrapped, it has its own exception state.
-                fprintf(stderr, "Initialstub in %p\n", target);
                 err = real_target->g_initialstub(&dummymarker);
             }
             catch (const PyErrOccurred&) {
@@ -1101,10 +1113,17 @@ UserGreenlet::g_switch()
         // failed, or g_switchstack() failed. Either one of those
         // cases SHOULD leave us in the original greenlet with a valid stack.
         if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_SystemError,
-                            "Switching stacks into a target greenlet failed.");
+            PyErr_SetString(
+                PyExc_SystemError,
+                was_initial_stub
+                ? "Failed to switch stacks into a greenlet for the first time."
+                : "Failed to switch stacks into a running greenlet.");
         }
         this->release_args();
+
+        if (target && !target_was_me) {
+            target->murder_in_place();
+        }
 
         assert(!err.the_state_that_switched);
         assert(!err.origin_greenlet);
@@ -1176,7 +1195,6 @@ UserGreenlet::g_initialstub(void* mark)
           This could run arbitrary python code and switch greenlets!
         */
         run = this->_self.PyRequireAttr(mod_globs->str_run);
-
         /* restore saved exception */
         saved.PyErrRestore();
 
@@ -1243,11 +1261,26 @@ UserGreenlet::g_initialstub(void* mark)
         // This never returns! Calling inner_bootstrap steals
         // the contents of our run object within this stack frame, so
         // it is not valid to do anything with it.
-        this->inner_bootstrap(err.origin_greenlet, run);
+        try {
+            this->inner_bootstrap(err.origin_greenlet, run);
+        }
+        // Getting a C++ exception here isn't good. It's probably a
+        // bug in the underlying greenlet, meaning it's probably a
+        // C++ extension. We're going to abort anyway, but try to
+        // display some nice information if possible.
+        //
+        // The catching is tested by ``test_cpp.CPPTests.test_unhandled_exception_in_greenlet_aborts``.
+        catch (const std::exception& e) {
+            std::string base = "greenlet: Unhandled C++ exception: ";
+            base += e.what();
+            Py_FatalError(base.c_str());
+        }
+        catch (...) {
+            Py_FatalError("greenlet: inner_bootstrap terminated with unknown C++ exception\n");
+        }
         Py_FatalError("greenlet: inner_bootstrap returned\n");
     }
-    // The child will take care of decrefing this.
-    run.relinquish_ownership();
+
 
     // In contrast, notice that we're keeping the origin greenlet
     // around as an owned reference; we need it to call the trace
@@ -1261,9 +1294,15 @@ UserGreenlet::g_initialstub(void* mark)
         /* start failed badly, restore greenlet state */
         this->stack_state = StackState();
         this->_main_greenlet.CLEAR();
-        this->tp_clear();
-        fprintf(stderr, "greenlet: g_initialstub: starting child failed: %p.\n", this);
+        run.CLEAR(); // inner_bootstrap didn't run, we own the reference.
     }
+
+    // In the success case, the spawned code (inner_bootstrap) will
+    // take care of decrefing this, so we relinquish ownership so as
+    // to not double-decref.
+
+    run.relinquish_ownership();
+
     return err;
 }
 
@@ -1472,23 +1511,25 @@ Greenlet::g_switchstack(void)
     // If this is the first switch into a greenlet, this will
     // return twice, once with 1 in the new greenlet, once with 0
     // in the origin.
-    int err = slp_switch();
+    int err;
+    if (this->force_slp_switch_error()) {
+        err = -1;
+    }
+    else {
+        err = slp_switch();
+    }
 
     if (err < 0) { /* error */
-        // XXX: This code path is not tested.
-        BorrowedGreenlet current(GET_THREAD_STATE().state().borrow_current());
-        //current->top_frame = NULL; // This probably leaks?
-        current->exception_state.clear();
-
-        switching_thread_state = nullptr;
-        //GET_THREAD_STATE().state().wref_target(NULL);
-        this->release_args();
-        // It's important to make sure not to actually return an
-        // owned greenlet here, no telling how long before it
-        // could be cleaned up.
-        // TODO: Can this be a throw? How stable is the stack in
-        // an error case like this?
-        return switchstack_result_t(err);
+        // Tested by
+        // test_greenlet.TestBrokenGreenlets.test_failed_to_slp_switch_into_running
+        //
+        // It's not clear if it's worth trying to clean up and
+        // continue here. Failing to switch stacks is a big deal which
+        // may not be recoverable (who knows what state the stack is in).
+        // Also, we've stolen references in preparation for calling
+        // ``g_switchstack_success()`` and we don't have a clean
+        // mechanism for backing that all out.
+        Py_FatalError("greenlet: Failed low-level slp_switch(). The stack is probably corrupt.");
     }
 
     // No stack-based variables are valid anymore.
@@ -2883,24 +2924,65 @@ static PyObject*
 green_unswitchable_getforce(PyGreenlet* self, void* UNUSED(context))
 {
     BrokenGreenlet* broken = dynamic_cast<BrokenGreenlet*>(self->pimpl);
-    return PyBool_FromLong(broken->force_switch_error);
+    return PyBool_FromLong(broken->_force_switch_error);
 }
 
 static int
 green_unswitchable_setforce(PyGreenlet* self, BorrowedObject nforce, void* UNUSED(context))
 {
+    if (!nforce) {
+        PyErr_SetString(
+            PyExc_AttributeError,
+            "Cannot delete force_switch_error"
+        );
+        return -1;
+    }
     BrokenGreenlet* broken = dynamic_cast<BrokenGreenlet*>(self->pimpl);
     int is_true = PyObject_IsTrue(nforce);
     if (is_true == -1) {
         return -1;
     }
-    broken->force_switch_error = is_true;
+    broken->_force_switch_error = is_true;
+    return 0;
+}
+
+static PyObject*
+green_unswitchable_getforceslp(PyGreenlet* self, void* UNUSED(context))
+{
+    BrokenGreenlet* broken = dynamic_cast<BrokenGreenlet*>(self->pimpl);
+    return PyBool_FromLong(broken->_force_slp_switch_error);
+}
+
+static int
+green_unswitchable_setforceslp(PyGreenlet* self, BorrowedObject nforce, void* UNUSED(context))
+{
+    if (!nforce) {
+        PyErr_SetString(
+            PyExc_AttributeError,
+            "Cannot delete force_slp_switch_error"
+        );
+        return -1;
+    }
+    BrokenGreenlet* broken = dynamic_cast<BrokenGreenlet*>(self->pimpl);
+    int is_true = PyObject_IsTrue(nforce);
+    if (is_true == -1) {
+        return -1;
+    }
+    broken->_force_slp_switch_error = is_true;
     return 0;
 }
 
 static PyGetSetDef green_unswitchable_getsets[] = {
     /* name, getter, setter, doc, context pointer */
-    {"force_switch_error", (getter)green_unswitchable_getforce, (setter)green_unswitchable_setforce, /*XXX*/ NULL},
+    {"force_switch_error",
+     (getter)green_unswitchable_getforce,
+     (setter)green_unswitchable_setforce,
+     /*XXX*/ NULL},
+    {"force_slp_switch_error",
+     (getter)green_unswitchable_getforceslp,
+     (setter)green_unswitchable_setforceslp,
+     /*XXX*/ NULL},
+
     {NULL}
 };
 

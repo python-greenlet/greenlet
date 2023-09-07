@@ -5,7 +5,12 @@
 3.0.0rc2 (unreleased)
 =====================
 
-- Nothing changed yet.
+- Fix some potential bugs (assertion failures and memory leaks) in
+  previously-untested error handling code. In some cases, this means
+  that the process will execute a controlled ``abort()`` after severe
+  trouble when previously the process might have continued for some
+  time with a corrupt state. It is unlikely those errors occurred in
+  practice.
 
 
 3.0.0rc1 (2023-09-01)

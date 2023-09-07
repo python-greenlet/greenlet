@@ -192,7 +192,7 @@ class TestGreenlet(TestCase):
             try:
                 greenlet.getcurrent().parent.switch()
             except greenlet.GreenletExit:
-                raise SomeError
+                raise SomeError from None
 
         g = RawGreenlet(run)
         g.switch()
@@ -1141,25 +1141,62 @@ class TestMainGreenlet(TestCase):
 class TestBrokenGreenlets(TestCase):
 
     def test_failed_to_initialstub(self):
-        self.skipTest('Not ready.')
-        import gc
         def func():
             raise AssertionError("Never get here")
 
-        for _ in range(100):
-            g = greenlet._greenlet.UnswitchableGreenlet(func)
-            g.force_switch_error = True
 
-            with self.assertRaisesRegex(SystemError,
-                                        'Switching stacks into a target greenlet failed.'):
-                g.switch()
+        g = greenlet._greenlet.UnswitchableGreenlet(func)
+        g.force_switch_error = True
 
-            gc.collect()
-            print(sys.getrefcount(func))
-            # TODO: references on 'func' are leaking, but
-            # no greenlets are leaking.
-            print('GLETS:', len([x for x in gc.get_objects() if isinstance(x, RawGreenlet)]))
+        with self.assertRaisesRegex(SystemError,
+                                    "Failed to switch stacks into a greenlet for the first time."):
+            g.switch()
 
+    def test_failed_to_switch_into_running(self):
+        runs = []
+        def func():
+            runs.append(1)
+            greenlet.getcurrent().parent.switch()
+            runs.append(2)
+            greenlet.getcurrent().parent.switch()
+            runs.append(3) # pragma: no cover
+
+        g = greenlet._greenlet.UnswitchableGreenlet(func)
+        g.switch()
+        self.assertEqual(runs, [1])
+        g.switch()
+        self.assertEqual(runs, [1, 2])
+        g.force_switch_error = True
+
+        with self.assertRaisesRegex(SystemError,
+                                    "Failed to switch stacks into a running greenlet."):
+            g.switch()
+
+        # If we stopped here, we would fail the leakcheck, because we've left
+        # the ``inner_bootstrap()`` C frame and its descendents hanging around,
+        # which have a bunch of Python references. They'll never get cleaned up
+        # if we don't let the greenlet finish.
+        g.force_switch_error = False
+        g.switch()
+        self.assertEqual(runs, [1, 2, 3])
+
+    def test_failed_to_slp_switch_into_running(self):
+        import subprocess
+        import os.path
+
+        script = os.path.join(
+            os.path.dirname(__file__),
+            'fail_slp_switch.py'
+        )
+
+        with self.assertRaises(subprocess.CalledProcessError) as exc:
+            subprocess.check_output([sys.executable, script],
+                                    encoding='utf-8',
+                                    stderr=subprocess.STDOUT)
+
+        ex = exc.exception
+        self.assertIn('fail_slp_switch is running', ex.output)
+        self.assertIn(ex.returncode, self.get_expected_returncodes_for_aborted_process())
 
 
 if __name__ == '__main__':

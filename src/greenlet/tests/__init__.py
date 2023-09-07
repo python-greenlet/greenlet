@@ -7,6 +7,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import sys
 import unittest
 
 from gc import collect
@@ -23,6 +24,7 @@ from greenlet._greenlet import get_total_main_greenlets
 
 from . import leakcheck
 
+PY312 = sys.version_info[:2] >= (3, 12)
 
 class TestCaseMetaClass(type):
     # wrap each test method with
@@ -120,7 +122,7 @@ class TestCase(TestCaseMetaClass(
     def setUp(self):
         # Ensure the main greenlet exists, otherwise the first test
         # gets a false positive leak
-        super(TestCase, self).setUp()
+        super().setUp()
         getcurrent()
         self.threads_before_test = active_thread_count()
         self.main_greenlets_before_test = get_total_main_greenlets()
@@ -132,4 +134,45 @@ class TestCase(TestCaseMetaClass(
             return
 
         self.wait_for_pending_cleanups(self.threads_before_test, self.main_greenlets_before_test)
-        super(TestCase, self).tearDown()
+        super().tearDown()
+
+    def get_expected_returncodes_for_aborted_process(self):
+        import signal
+        WIN = sys.platform.startswith("win")
+        # The child should be aborted in an unusual way. On POSIX
+        # platforms, this is done with abort() and signal.SIGABRT,
+        # which is reflected in a negative return value; however, on
+        # Windows, even though we observe the child print "Fatal
+        # Python error: Aborted" and in older versions of the C
+        # runtime "This application has requested the Runtime to
+        # terminate it in an unusual way," it always has an exit code
+        # of 3. This is interesting because 3 is the error code for
+        # ERROR_PATH_NOT_FOUND; BUT: the C runtime abort() function
+        # also uses this code.
+        #
+        # If we link to the static C library on Windows, the error
+        # code changes to '0xc0000409' (hex(3221226505)), which
+        # apparently is STATUS_STACK_BUFFER_OVERRUN; but "What this
+        # means is that nowadays when you get a
+        # STATUS_STACK_BUFFER_OVERRUN, it doesn’t actually mean that
+        # there is a stack buffer overrun. It just means that the
+        # application decided to terminate itself with great haste."
+        #
+        # See
+        # https://devblogs.microsoft.com/oldnewthing/20110519-00/?p=10623
+        # and
+        # https://docs.microsoft.com/en-us/previous-versions/k089yyh0(v=vs.140)?redirectedfrom=MSDN
+        # and
+        # https://devblogs.microsoft.com/oldnewthing/20190108-00/?p=100655
+        expected_exit = (
+            -signal.SIGABRT,
+            # But beginning on Python 3.11, the faulthandler
+            # that prints the C backtraces sometimes segfaults after
+            # reporting the exception but before printing the stack.
+            # This has only been seen on linux/gcc.
+            -signal.SIGSEGV,
+        ) if not WIN else (
+            3,
+            0xc0000409,
+        )
+        return expected_exit

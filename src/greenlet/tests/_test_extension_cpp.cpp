@@ -4,6 +4,8 @@
 
 #include "../greenlet.h"
 #include "../greenlet_compiler_compat.hpp"
+#include <exception>
+#include <stdexcept>
 
 struct exception_t {
     int depth;
@@ -11,13 +13,20 @@ struct exception_t {
 };
 
 /* Functions are called via pointers to prevent inlining */
-static void (*p_test_exception_throw)(int depth);
+static void (*p_test_exception_throw_nonstd)(int depth);
+static void (*p_test_exception_throw_std)();
 static PyObject* (*p_test_exception_switch_recurse)(int depth, int left);
 
 static void
-test_exception_throw(int depth)
+test_exception_throw_nonstd(int depth)
 {
     throw exception_t(depth);
+}
+
+static void
+test_exception_throw_std()
+{
+    throw std::runtime_error("Thrown from an extension.");
 }
 
 static PyObject*
@@ -37,7 +46,7 @@ test_exception_switch_recurse(int depth, int left)
             Py_DECREF(self);
             return NULL;
         }
-        p_test_exception_throw(depth);
+        p_test_exception_throw_nonstd(depth);
         PyErr_SetString(PyExc_RuntimeError,
                         "throwing C++ exception didn't work");
     }
@@ -72,14 +81,25 @@ test_exception_switch(PyObject* UNUSED(self), PyObject* args)
 
 
 static PyObject*
-py_test_exception_throw(PyObject* self, PyObject* args)
+py_test_exception_throw_nonstd(PyObject* self, PyObject* args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
-    p_test_exception_throw(0);
+    p_test_exception_throw_nonstd(0);
     PyErr_SetString(PyExc_AssertionError, "unreachable code running after throw");
     return NULL;
 }
+
+static PyObject*
+py_test_exception_throw_std(PyObject* self, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, ""))
+        return NULL;
+    p_test_exception_throw_std();
+    PyErr_SetString(PyExc_AssertionError, "unreachable code running after throw");
+    return NULL;
+}
+
 
 
 /* test_exception_switch_and_do_in_g2(g2func)
@@ -143,11 +163,18 @@ static PyMethodDef test_methods[] = {
      "Creates new greenlet g2 to run g2func and switches to it inside try/catch "
      "block. Used together with test_exception_throw to verify that unhandled "
      "C++ exceptions thrown in a greenlet doe not corrupt memory."},
-    {"test_exception_throw",
-     (PyCFunction)&py_test_exception_throw,
+    {"test_exception_throw_nonstd",
+     (PyCFunction)&py_test_exception_throw_nonstd,
      METH_VARARGS,
-     "Throws C++ exception. Calling this function directly should abort the process."},
-    {NULL, NULL, 0, NULL}};
+     "Throws non-standard C++ exception. Calling this function directly should abort the process."
+    },
+    {"test_exception_throw_std",
+     (PyCFunction)&py_test_exception_throw_std,
+     METH_VARARGS,
+     "Throws standard C++ exception. Calling this function directly should abort the process."
+    },
+    {NULL, NULL, 0, NULL}
+};
 
 
 static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,
@@ -176,7 +203,8 @@ PyInit__test_extension_cpp(void)
         return NULL;
     }
 
-    p_test_exception_throw = test_exception_throw;
+    p_test_exception_throw_nonstd = test_exception_throw_nonstd;
+    p_test_exception_throw_std = test_exception_throw_std;
     p_test_exception_switch_recurse = test_exception_switch_recurse;
 
     return module;

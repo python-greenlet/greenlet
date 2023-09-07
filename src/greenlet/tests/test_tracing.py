@@ -1,8 +1,16 @@
 from __future__ import print_function
 import sys
 import greenlet
+import unittest
 
 from . import TestCase
+from . import PY312
+
+# https://discuss.python.org/t/cpython-3-12-greenlet-and-tracing-profiling-how-to-not-crash-and-get-correct-results/33144/2
+DEBUG_BUILD_PY312 = (
+    PY312 and hasattr(sys, 'gettotalrefcount'),
+    "Broken on debug builds of Python 3.12"
+)
 
 class SomeError(Exception):
     pass
@@ -190,7 +198,7 @@ class TestPythonTracing(TestCase):
 
         self._check_trace_events_from_greenlet_sets_profiler(X(), tracer)
 
-
+    @unittest.skipIf(*DEBUG_BUILD_PY312)
     def test_trace_events_multiple_greenlets_switching(self):
         tracer = PythonTracer()
 
@@ -228,6 +236,7 @@ class TestPythonTracing(TestCase):
             ('c_call', '__exit__'),
         ])
 
+    @unittest.skipIf(*DEBUG_BUILD_PY312)
     def test_trace_events_multiple_greenlets_switching_siblings(self):
         # Like the first version, but get both greenlets running first
         # as "siblings" and then establish the tracing.
@@ -279,5 +288,4 @@ class TestPythonTracing(TestCase):
 
 
 if __name__ == '__main__':
-    import unittest
     unittest.main()

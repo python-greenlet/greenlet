@@ -402,6 +402,10 @@ namespace greenlet
         // this object represents.
         virtual BorrowedGreenlet self() const noexcept = 0;
 
+        // For testing. If this returns true, we should pretend that
+        // slp_switch() failed.
+        virtual bool force_slp_switch_error() const noexcept;
+
     protected:
         inline void release_args();
 
@@ -443,6 +447,12 @@ namespace greenlet
                   origin_greenlet(origin)
             {
             }
+
+            switchstack_result_t(const switchstack_result_t& other)
+                : status(other.status),
+                  the_state_that_switched(other.the_state_that_switched),
+                  origin_greenlet(other.origin_greenlet)
+            {}
 
             switchstack_result_t& operator=(const switchstack_result_t& other)
             {
@@ -503,6 +513,7 @@ namespace greenlet
            should no longer be the case with thread-local variables.)
 
         */
+        // Made virtual to facilitate subclassing UserGreenlet for testing.
         virtual switchstack_result_t g_switchstack(void);
     private:
         OwnedObject g_switch_finish(const switchstack_result_t& err);
@@ -569,21 +580,27 @@ namespace greenlet
     private:
         static greenlet::PythonAllocator<BrokenGreenlet> allocator;
     public:
-        bool force_switch_error = false;
+        bool _force_switch_error = false;
+        bool _force_slp_switch_error = false;
+
         static void* operator new(size_t UNUSED(count));
         static void operator delete(void* ptr);
         BrokenGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
             : UserGreenlet(p, the_parent)
         {}
+        virtual ~BrokenGreenlet()
+        {}
+
         virtual switchstack_result_t g_switchstack(void)
         {
-            if (this->force_switch_error) {
+            if (this->_force_switch_error) {
                 return switchstack_result_t(-1);
             }
             return UserGreenlet::g_switchstack();
         }
-        virtual ~BrokenGreenlet()
-        {}
+
+        virtual bool force_slp_switch_error() const noexcept;
+
     };
 
     class MainGreenlet : public Greenlet

@@ -1,7 +1,9 @@
 [MASTER]
-extension-pkg-whitelist=greenlet._greenlet,greenlet.tests._test_extension
-extension-pkg-allow-list=greenlet._greenlet,greenlet.tests._test_extension
-
+load-plugins=pylint.extensions.bad_builtin
+# Fix zope.cachedescriptors.property.Lazy; the property-classes doesn't seem to
+# do anything.
+# https://stackoverflow.com/questions/51160955/pylint-how-to-specify-a-self-defined-property-decorator-with-property-classes
+init-hook = "import astroid.bases; astroid.bases.POSSIBLE_PROPERTIES.add('Lazy')"
 
 [MESSAGES CONTROL]
 
@@ -47,41 +49,31 @@ extension-pkg-allow-list=greenlet._greenlet,greenlet.tests._test_extension
 # Pylint 2.4 adds self-assigning-variable. But we do *that* to avoid unused-import when we
 # "export" the variable and don't have a __all__.
 # Pylint 2.6+ adds some python-3-only things that don't apply: raise-missing-from, super-with-arguments, consider-using-f-string, redundant-u-string-prefix
-disable=missing-docstring,
+disable=wrong-import-position,
+    wrong-import-order,
+    missing-docstring,
     ungrouped-imports,
     invalid-name,
-    protected-access,
-    no-self-use,
     too-few-public-methods,
-    exec-used,
     global-statement,
-    multiple-statements,
     locally-disabled,
-    cyclic-import,
     too-many-arguments,
-    redefined-builtin,
     useless-suppression,
     duplicate-code,
-    undefined-all-variable,
-    inconsistent-return-statements,
-    useless-return,
     useless-object-inheritance,
     import-outside-toplevel,
     self-assigning-variable,
-    raise-missing-from,
-    super-with-arguments,
-    consider-using-f-string,
-    redundant-u-string-prefix
+    consider-using-f-string
+
 
 [FORMAT]
-# duplicated from setup.cfg
-max-line-length=160
+max-line-length=100
 max-module-lines=1100
 
 [MISCELLANEOUS]
 # List of note tags to take in consideration, separated by a comma.
 #notes=FIXME,XXX,TODO
-# Disable that, we don't want them in the report (???)
+# Disable that, we don't want them to fail the lint CI job.
 notes=
 
 [VARIABLES]
@@ -93,8 +85,14 @@ dummy-variables-rgx=_.*
 # List of members which are set dynamically and missed by pylint inference
 # system, and so shouldn't trigger E1101 when accessed. Python regular
 # expressions are accepted.
-# gevent: this is helpful for py3/py2 code.
-generated-members=exc_clear
+generated-members=REQUEST,acl_users,aq_parent,providedBy
+
+
+# Tells whether missing members accessed in mixin class should be ignored. A
+# mixin class is detected if its name ends with "mixin" (case insensitive).
+# XXX: deprecated in 2.14; replaced with ignored-checks-for-mixins.
+# The defaults for that value seem to be what we want
+#ignore-mixin-members=yes
 
 # List of classes names for which member attributes should not be checked
 # (useful for classes with attributes dynamically set). This can work
@@ -106,18 +104,25 @@ generated-members=exc_clear
 # (useful for modules/projects where namespaces are manipulated during runtime
 # and thus existing member attributes cannot be deduced by static analysis. It
 # supports qualified module names, as well as Unix pattern matching.
-ignored-modules=gevent._corecffi,gevent.os,os,threading,gevent.libev.corecffi,gevent.socket,gevent.core,gevent.testing.support
+#ignored-modules=gevent._corecffi,gevent.os,os,greenlet,threading,gevent.libev.corecffi,gevent.socket,gevent.core,gevent.testing.support
 
 [DESIGN]
 max-attributes=12
 max-parents=10
 
 [BASIC]
-bad-functions=input
 # Prospector turns ot unsafe-load-any-extension by default, but
 # pylint leaves it off. This is the proximal cause of the
 # undefined-all-variable crash.
 unsafe-load-any-extension = yes
+property-classes=zope.cachedescriptors.property.Lazy,zope.cachedescriptors.property.Cached
+extension-pkg-allow-list=greenlet._greenlet
+
+[CLASSES]
+# List of interface methods to ignore, separated by a comma. This is used for
+# instance to not check methods defines in Zope's Interface base class.
+
+
 
 # Local Variables:
 # mode: conf
