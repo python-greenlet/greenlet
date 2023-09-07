@@ -25,6 +25,7 @@ from greenlet._greenlet import get_total_main_greenlets
 from . import leakcheck
 
 PY312 = sys.version_info[:2] >= (3, 12)
+WIN = sys.platform.startswith("win")
 
 class TestCaseMetaClass(type):
     # wrap each test method with
@@ -138,7 +139,6 @@ class TestCase(TestCaseMetaClass(
 
     def get_expected_returncodes_for_aborted_process(self):
         import signal
-        WIN = sys.platform.startswith("win")
         # The child should be aborted in an unusual way. On POSIX
         # platforms, this is done with abort() and signal.SIGABRT,
         # which is reflected in a negative return value; however, on
