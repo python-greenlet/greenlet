@@ -177,7 +177,7 @@ class TestCase(TestCaseMetaClass(
         )
         return expected_exit
 
-    def run_script(self, script_name):
+    def run_script(self, script_name, show_output=True):
         import subprocess
         import os
         script = os.path.join(
@@ -185,14 +185,24 @@ class TestCase(TestCaseMetaClass(
             script_name,
         )
 
-        return subprocess.check_output([sys.executable, script],
-                                       encoding='utf-8',
-                                       stderr=subprocess.STDOUT)
+        try:
+            subprocess.check_output([sys.executable, script],
+                                    encoding='utf-8',
+                                    stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as ex:
+            if show_output:
+                print('-----')
+                print('Failed to run script', script)
+                print('~~~~~')
+                print(ex.output)
+                print('------')
+            raise
+
 
     def assertScriptRaises(self, script_name, exitcodes=None):
         import subprocess
         with self.assertRaises(subprocess.CalledProcessError) as exc:
-            output = self.run_script(script_name)
+            output = self.run_script(script_name, show_output=False)
             __traceback_info__ = output
             # We're going to fail the assertion if we get here, at least
             # preserve the output in the traceback.

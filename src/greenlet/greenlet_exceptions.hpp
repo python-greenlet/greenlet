@@ -31,6 +31,7 @@ namespace greenlet {
         {
             PyErr_SetString(exc_kind, msg);
         }
+
         PyErrOccurred(PyObject* exc_kind, const std::string msg)
             : std::runtime_error(msg)
         {

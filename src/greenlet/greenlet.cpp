@@ -264,6 +264,7 @@ single_result(const OwnedObject& results)
         && PyTuple_Check(results.borrow())
         && PyTuple_GET_SIZE(results.borrow()) == 1) {
         PyObject* result = PyTuple_GET_ITEM(results.borrow(), 0);
+        assert(result);
         return OwnedObject::owning(result);
     }
     return results;
@@ -1060,7 +1061,7 @@ UserGreenlet::g_switch()
     try {
         this->check_switch_allowed();
     }
-    catch(const PyErrOccurred&) {
+    catch (const PyErrOccurred&) {
         this->release_args();
         throw;
     }
@@ -1641,7 +1642,6 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
         // Our only caller handles the bad error case
         assert(err.status >= 0);
         assert(state.borrow_current() == this->self());
-
         if (OwnedObject tracefunc = state.get_tracefunc()) {
             g_calltrace(tracefunc,
                         result ? mod_globs->event_switch : mod_globs->event_throw,
@@ -1660,7 +1660,6 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
             // be reached after a test run.
             throw PyErrOccurred();
         }
-
         return result;
     }
     catch (const PyErrOccurred&) {
@@ -2310,7 +2309,14 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
         assert(!current->args());
 #endif
         PyObject* p = result.relinquish_ownership();
-        assert(p || PyErr_Occurred());
+        if (!p && !PyErr_Occurred()) {
+            // Temporary: Crash "gracefully" in this case. Figure out
+            // how it is happening and make sure it doesn't.
+            throw PyErrOccurred(
+                mod_globs->PyExc_GreenletError,
+                "Greenlet.switch() returned NULL without an exception set."
+            );
+        }
         return p;
     }
     catch(const PyErrOccurred&) {
