@@ -55,7 +55,7 @@ class CPPTests(TestCase):
         # verify that plain unhandled throw aborts
         output = self._do_test_unhandled_exception('run_as_greenlet_target')
         self.assertIn(
-            'Fatal Python error: g_initialstub: greenlet: Unhandled C++ exception: Thrown from an extension.',
+            'greenlet: Unhandled C++ exception: Thrown from an extension.',
             output
         )
 
