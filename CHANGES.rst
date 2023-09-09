@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.0.0rc2 (unreleased)
+3.0.0rc2 (2023-09-09)
 =====================
 
 - Fix some potential bugs (assertion failures and memory leaks) in
