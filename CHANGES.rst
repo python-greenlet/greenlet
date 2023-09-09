@@ -28,6 +28,9 @@
   greenlet. This often manifested as a ``SystemError``: "switch
   returned NULL without an exception set."
 
+For context on the fixes, see `gevent issue #1985
+<https://github.com/gevent/gevent/issues/1985>`_.
+
 3.0.0rc1 (2023-09-01)
 =====================
 
