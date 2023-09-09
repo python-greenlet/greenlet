@@ -670,7 +670,9 @@ namespace greenlet
 
     // Instantiate one on the stack to save the GC state,
     // and then disable GC. When it goes out of scope, GC will be
-    // restored to its original state.
+    // restored to its original state. Sadly, these APIs are only
+    // available on 3.10+; luckily, we only need them on 3.11+.
+#if GREENLET_PY310
     class GCDisabledGuard
     {
     private:
@@ -689,6 +691,7 @@ namespace greenlet
             }
         }
     };
+#endif
 
 } // namespace greenlet ;
 

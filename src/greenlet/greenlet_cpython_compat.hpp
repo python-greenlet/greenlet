@@ -11,6 +11,7 @@
 
 
 #if PY_VERSION_HEX >= 0x30A00B1
+#    define GREENLET_PY310 1
 /*
 Python 3.10 beta 1 changed tstate->use_tracing to a nested cframe member.
 See https://github.com/python/cpython/pull/25276
@@ -19,6 +20,7 @@ We have to save and restore this as well.
 #    define GREENLET_USE_CFRAME 1
 #else
 #    define GREENLET_USE_CFRAME 0
+#    define GREENLET_PY310 0
 #endif
 
 
