@@ -16,6 +16,38 @@ namespace greenlet {
     class PyErrOccurred : public std::runtime_error
     {
     public:
+
+        // CAUTION: In debug builds, may run arbitrary Python code.
+        static PyErrOccurred
+        from_current()
+        {
+            assert(PyErr_Occurred());
+#ifndef NDEBUG
+            // This is not exception safe, and
+            // not necessarily safe in general (what if it switches?)
+            // But we only do this in debug mode, where we are in
+            // tight control of what exceptions are getting raised and
+            // can prevent those issues.
+
+            // You can't call PyObject_Str with a pending exception.
+            PyObject* typ;
+            PyObject* val;
+            PyObject* tb;
+
+            PyErr_Fetch(&typ, &val, &tb);
+            PyObject* s = PyObject_Str(PyErr_Occurred());
+            const char* msg = PyUnicode_AsUTF8(s);
+            PyErr_Restore(typ, val, tb);
+
+            PyErrOccurred ex(msg);
+            Py_XDECREF(s);
+
+            return ex;
+#else
+            return PyErrOccurred();
+#endif
+        }
+
         PyErrOccurred() : std::runtime_error("")
         {
             assert(PyErr_Occurred());

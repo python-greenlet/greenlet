@@ -19,7 +19,14 @@
 - Fix a potential crash when the callable object passed to the
   greenlet constructor (or set as the ``greenlet.run`` attribute) has
   a destructor attached to it that switches. Typically, triggering
-  this issue would require an unlikely subclass of ``greenlet.greenlet``.
+  this issue would require an unlikely subclass of
+  ``greenlet.greenlet``.
+- Python 3.11+: Fix rare switching errors that could occur when a
+  garbage collection was triggered during the middle of a switch, and
+  Python-level code in ``__del__`` or weakref callbacks switched to a
+  different greenlet and ultimately switched back to the original
+  greenlet. This often manifested as a ``SystemError``: "switch
+  returned NULL without an exception set."
 
 3.0.0rc1 (2023-09-01)
 =====================

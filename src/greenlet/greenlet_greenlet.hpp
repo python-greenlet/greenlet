@@ -87,7 +87,7 @@ namespace greenlet
             tstate->context_ver++;
         }
     };
-
+    class SwitchingArgs;
     class PythonState : public PythonStateContext
     {
     public:
@@ -127,9 +127,8 @@ namespace greenlet
         // or not. It returns const so they can't modify it.
         const OwnedFrame& top_frame() const noexcept;
 
-
-        void operator<<(const PyThreadState *const tstate) noexcept;
-        void operator>>(PyThreadState* tstate) noexcept;
+        inline void operator<<(const PyThreadState *const tstate) noexcept;
+        inline void operator>>(PyThreadState* tstate) noexcept;
         void clear() noexcept;
 
         int tp_traverse(visitproc visit, void* arg, bool visit_top_frame) noexcept;
@@ -138,7 +137,8 @@ namespace greenlet
 #if GREENLET_USE_CFRAME
         void set_new_cframe(_PyCFrame& frame) noexcept;
 #endif
-        void will_switch_from(PyThreadState *const origin_tstate) noexcept;
+        inline void may_switch_away() noexcept;
+        inline void will_switch_from(PyThreadState *const origin_tstate) noexcept;
         void did_finish(PyThreadState* tstate) noexcept;
     };
 
@@ -214,12 +214,12 @@ namespace greenlet
               _kwargs(other._kwargs)
         {}
 
-        OwnedObject& args()
+        const OwnedObject& args()
         {
             return this->_args;
         }
 
-        OwnedObject& kwargs()
+        const OwnedObject& kwargs()
         {
             return this->_kwargs;
         }
@@ -312,6 +312,18 @@ namespace greenlet
         virtual ~Greenlet();
 
         const OwnedObject context() const;
+
+        // You MUST call this _very_ early in the switching process to
+        // prepare anything that may need prepared. This might perform
+        // garbage collections or otherwise run arbitrary Python code.
+        //
+        // One specific use of it is for Python 3.11+, preventing
+        // running arbitrary code at unsafe times. See
+        // PythonState::may_switch_away().
+        inline void may_switch_away()
+        {
+            this->python_state.may_switch_away();
+        }
 
         inline void context(refs::BorrowedObject new_context);
 
@@ -434,43 +446,43 @@ namespace greenlet
         struct switchstack_result_t
         {
             int status;
-            Greenlet* the_state_that_switched;
+            Greenlet* the_new_current_greenlet;
             OwnedGreenlet origin_greenlet;
 
             switchstack_result_t()
                 : status(0),
-                  the_state_that_switched(nullptr)
+                  the_new_current_greenlet(nullptr)
             {}
 
             switchstack_result_t(int err)
                 : status(err),
-                  the_state_that_switched(nullptr)
+                  the_new_current_greenlet(nullptr)
             {}
 
             switchstack_result_t(int err, Greenlet* state, OwnedGreenlet& origin)
                 : status(err),
-                  the_state_that_switched(state),
+                  the_new_current_greenlet(state),
                   origin_greenlet(origin)
             {
             }
 
             switchstack_result_t(int err, Greenlet* state, const BorrowedGreenlet& origin)
                 : status(err),
-                  the_state_that_switched(state),
+                  the_new_current_greenlet(state),
                   origin_greenlet(origin)
             {
             }
 
             switchstack_result_t(const switchstack_result_t& other)
                 : status(other.status),
-                  the_state_that_switched(other.the_state_that_switched),
+                  the_new_current_greenlet(other.the_new_current_greenlet),
                   origin_greenlet(other.origin_greenlet)
             {}
 
             switchstack_result_t& operator=(const switchstack_result_t& other)
             {
                 this->status = other.status;
-                this->the_state_that_switched = other.the_state_that_switched;
+                this->the_new_current_greenlet = other.the_new_current_greenlet;
                 this->origin_greenlet = other.origin_greenlet;
                 return *this;
             }
@@ -656,7 +668,29 @@ namespace greenlet
         virtual int tp_traverse(visitproc visit, void* arg);
     };
 
-};
+    // Instantiate one on the stack to save the GC state,
+    // and then disable GC. When it goes out of scope, GC will be
+    // restored to its original state.
+    class GCDisabledGuard
+    {
+    private:
+        int was_enabled = 0;
+    public:
+        GCDisabledGuard()
+            : was_enabled(PyGC_IsEnabled())
+        {
+            PyGC_Disable();
+        }
+
+        ~GCDisabledGuard()
+        {
+            if (this->was_enabled) {
+                PyGC_Enable();
+            }
+        }
+    };
+
+} // namespace greenlet ;
 
 template<typename T>
 void greenlet::operator<<(const PyThreadState *const lhs, T& rhs)
@@ -846,6 +880,34 @@ PythonState::PythonState()
 #endif
 }
 
+
+inline void PythonState::may_switch_away() noexcept
+{
+#if GREENLET_PY311
+    // PyThreadState_GetFrame is probably going to have to allocate a
+    // new frame object. That may trigger garbage collection. Because
+    // we call this during the early phases of a switch (it doesn't
+    // matter to which greenlet, as this has a global effect), if a GC
+    // triggers a switch away, two things can happen, both bad:
+    // - We might not get switched back to, halting forward progress.
+    //   this is pathological, but possible.
+    // - We might get switched back to with a different set of
+    //   arguments or a throw instead of a switch. That would corrupt
+    //   our state (specifically, PyErr_Occurred() and this->args()
+    //   would no longer agree).
+    //
+    // Thus, when we call this API, we need to have GC disabled.
+    // This method serves as a bottleneck we call when maybe beginning
+    // a switch. In this way, it is always safe -- no risk of GC -- to
+    // use ``_GetFrame()`` whenever we need to, just as it was in
+    // <=3.10 (because subsequent calls will be cached and not
+    // allocate memory).
+
+    GCDisabledGuard no_gc;
+    Py_XDECREF(PyThreadState_GetFrame(PyThreadState_GET()));
+#endif
+}
+
 void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 {
     this->_context.steal(tstate->context);
@@ -876,8 +938,10 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     this->datastack_chunk = tstate->datastack_chunk;
     this->datastack_top = tstate->datastack_top;
     this->datastack_limit = tstate->datastack_limit;
+
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
-    Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new reference.
+    Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new
+                        // reference.
     this->_top_frame.steal(frame);
   #if GREENLET_PY312
     if (frame) {
@@ -896,6 +960,7 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     this->trash_delete_nesting = tstate->trash_delete_nesting;
 #endif // GREENLET_PY311
 }
+
 
 void PythonState::operator>>(PyThreadState *const tstate) noexcept
 {
@@ -946,7 +1011,7 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
 #endif // GREENLET_PY311
 }
 
-void PythonState::will_switch_from(PyThreadState *const origin_tstate) noexcept
+inline void PythonState::will_switch_from(PyThreadState *const origin_tstate) noexcept
 {
 #if GREENLET_USE_CFRAME && !GREENLET_PY312
     // The weird thing is, we don't actually save this for an
