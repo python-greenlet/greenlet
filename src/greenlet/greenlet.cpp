@@ -26,6 +26,8 @@
 #include "greenlet_thread_support.hpp"
 #include "greenlet_greenlet.hpp"
 
+#include "TMainGreenlet.cpp"
+
 using greenlet::ThreadState;
 using greenlet::Mutex;
 using greenlet::LockGuard;
@@ -369,9 +371,6 @@ public:
 
 static const GreenletGlobals* mod_globs;
 
-// Protected by the GIL. Incremented when we create a main greenlet,
-// in a new thread, decremented when it is destroyed.
-static Py_ssize_t total_main_greenlets;
 
 struct ThreadState_DestroyWithGIL
 {
@@ -732,26 +731,6 @@ UserGreenlet::UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
 }
 
 
-MainGreenlet::MainGreenlet(PyGreenlet* p, ThreadState* state)
-    : Greenlet(p, StackState::make_main()),
-      _self(p),
-      _thread_state(state)
-{
-    total_main_greenlets++;
-}
-
-ThreadState*
-MainGreenlet::thread_state() const noexcept
-{
-    return this->_thread_state;
-}
-
-void
-MainGreenlet::thread_state(ThreadState* t) noexcept
-{
-    assert(!t);
-    this->_thread_state = t;
-}
 
 BorrowedGreenlet
 UserGreenlet::self() const noexcept
@@ -759,22 +738,12 @@ UserGreenlet::self() const noexcept
     return this->_self;
 }
 
-BorrowedGreenlet
-MainGreenlet::self() const noexcept
-{
-    return BorrowedGreenlet(this->_self.borrow());
-}
+
 
 const BorrowedMainGreenlet
 UserGreenlet::main_greenlet() const
 {
     return this->_main_greenlet;
-}
-
-const BorrowedMainGreenlet
-MainGreenlet::main_greenlet() const
-{
-    return this->_self;
 }
 
 static PyGreenlet*
@@ -813,11 +782,7 @@ UserGreenlet::find_main_greenlet_in_lineage() const
 }
 
 
-BorrowedMainGreenlet
-MainGreenlet::find_main_greenlet_in_lineage() const
-{
-    return BorrowedMainGreenlet(this->_self);
-}
+
 
 /***********************************************************/
 
@@ -919,17 +884,6 @@ void UserGreenlet::operator delete(void* ptr)
                                 1);
 }
 
-void* MainGreenlet::operator new(size_t UNUSED(count))
-{
-    return allocator.allocate(1);
-}
-
-
-void MainGreenlet::operator delete(void* ptr)
-{
-    return allocator.deallocate(static_cast<MainGreenlet*>(ptr),
-                                1);
-}
 
 void* BrokenGreenlet::operator new(size_t UNUSED(count))
 {
@@ -1006,11 +960,7 @@ UserGreenlet::was_running_in_dead_thread() const noexcept
     return this->_main_greenlet && !this->thread_state();
 }
 
-bool
-MainGreenlet::was_running_in_dead_thread() const noexcept
-{
-    return !this->_thread_state;
-}
+
 
 inline void
 Greenlet::slp_restore_state() noexcept
@@ -1166,31 +1116,7 @@ UserGreenlet::g_switch()
     return err.the_new_current_greenlet->g_switch_finish(err);
 }
 
-OwnedObject
-MainGreenlet::g_switch()
-{
-    try {
-        this->check_switch_allowed();
-    }
-    catch (const PyErrOccurred&) {
-        this->release_args();
-        throw;
-    }
 
-    switchstack_result_t err = this->g_switchstack();
-    if (err.status < 0) {
-        // XXX: This code path is untested, but it is shared
-        // with the UserGreenlet path that is tested.
-        return this->on_switchstack_or_initialstub_failure(
-            this,
-            err,
-            true, // target was me
-            false // was initial stub
-        );
-    }
-
-    return err.the_new_current_greenlet->g_switch_finish(err);
-}
 
 
 OwnedGreenlet
@@ -1723,7 +1649,7 @@ Greenlet::g_switch_finish(const switchstack_result_t& err)
 
 
 greenlet::PythonAllocator<UserGreenlet> UserGreenlet::allocator;
-greenlet::PythonAllocator<MainGreenlet> MainGreenlet::allocator;
+
 greenlet::PythonAllocator<BrokenGreenlet> BrokenGreenlet::allocator;
 
 
@@ -2044,18 +1970,7 @@ UserGreenlet::tp_traverse(visitproc visit, void* arg)
     return Greenlet::tp_traverse(visit, arg);
 }
 
-int
-MainGreenlet::tp_traverse(visitproc visit, void* arg)
-{
-    if (this->_thread_state) {
-        // we've already traversed main, (self), don't do it again.
-        int result = this->_thread_state->tp_traverse(visit, arg, false);
-        if (result) {
-            return result;
-        }
-    }
-    return Greenlet::tp_traverse(visit, arg);
-}
+
 
 static int
 green_traverse(PyGreenlet* self, visitproc visit, void* arg)
@@ -2254,11 +2169,7 @@ UserGreenlet::~UserGreenlet()
     this->tp_clear();
 }
 
-MainGreenlet::~MainGreenlet()
-{
-    total_main_greenlets--;
-    this->tp_clear();
-}
+
 
 static void
 green_dealloc(PyGreenlet* self)
@@ -2534,17 +2445,7 @@ UserGreenlet::run(const BorrowedObject nrun)
     this->_run_callable = nrun;
 }
 
-const OwnedObject&
-MainGreenlet::run() const
-{
-    throw AttributeError("Main greenlets do not have a run attribute.");
-}
 
-void
-MainGreenlet::run(const BorrowedObject UNUSED(nrun))
-{
-   throw AttributeError("Main greenlets do not have a run attribute.");
-}
 
 static int
 green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* UNUSED(context))
@@ -2602,20 +2503,7 @@ UserGreenlet::parent(const BorrowedObject raw_new_parent)
     this->_parent = new_parent;
 }
 
-void
-MainGreenlet::parent(const BorrowedObject raw_new_parent)
-{
-    if (!raw_new_parent) {
-        throw AttributeError("can't delete attribute");
-    }
-    throw AttributeError("cannot set the parent of a main greenlet");
-}
 
-const OwnedGreenlet
-MainGreenlet::parent() const
-{
-    return OwnedGreenlet(); // null becomes None
-}
 
 static int
 green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* UNUSED(context))
@@ -3231,7 +3119,7 @@ PyDoc_STRVAR(mod_get_total_main_greenlets_doc,
 static PyObject*
 mod_get_total_main_greenlets(PyObject* UNUSED(module))
 {
-    return PyLong_FromSize_t(total_main_greenlets);
+    return PyLong_FromSize_t(G_TOTAL_MAIN_GREENLETS);
 }
 
 PyDoc_STRVAR(mod_get_clocks_used_doing_optional_cleanup_doc,
