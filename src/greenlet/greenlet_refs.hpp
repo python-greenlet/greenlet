@@ -658,6 +658,34 @@ namespace greenlet {
 
     };
 
+    class ImmortalEventName : public ImmortalString
+    {
+    private:
+        G_NO_COPIES_OF_CLS(ImmortalEventName);
+    public:
+        ImmortalEventName(const char* const str) : ImmortalString(str)
+        {}
+    };
+
+    class ImmortalException : public ImmortalObject
+    {
+    private:
+        G_NO_COPIES_OF_CLS(ImmortalException);
+    public:
+        ImmortalException(const char* const name, PyObject* base=nullptr) :
+            ImmortalObject(name
+                           // Python 2.7 isn't const correct
+                           ? Require(PyErr_NewException((char*)name, base, nullptr))
+                           : nullptr)
+        {}
+
+        inline bool PyExceptionMatches() const
+        {
+            return PyErr_ExceptionMatches(this->p) > 0;
+        }
+
+    };
+
     template<typename T, TypeChecker TC>
     inline OwnedObject PyObjectPointer<T, TC>::PyStr() const noexcept
     {

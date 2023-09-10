@@ -546,6 +546,60 @@ namespace greenlet
         */
         // Made virtual to facilitate subclassing UserGreenlet for testing.
         virtual switchstack_result_t g_switchstack(void);
+
+class TracingGuard
+{
+private:
+    PyThreadState* tstate;
+public:
+    TracingGuard()
+        : tstate(PyThreadState_GET())
+    {
+        PyThreadState_EnterTracing(this->tstate);
+    }
+
+    ~TracingGuard()
+    {
+        PyThreadState_LeaveTracing(this->tstate);
+        this->tstate = nullptr;
+    }
+
+    inline void CallTraceFunction(const OwnedObject& tracefunc,
+                                  const greenlet::refs::ImmortalEventName& event,
+                                  const BorrowedGreenlet& origin,
+                                  const BorrowedGreenlet& target)
+    {
+        // TODO: This calls tracefunc(event, (origin, target)). Add a shortcut
+        // function for that that's specialized to avoid the Py_BuildValue
+        // string parsing, or start with just using "ON" format with PyTuple_Pack(2,
+        // origin, target). That seems like what the N format is meant
+        // for.
+        // XXX: Why does event not automatically cast back to a PyObject?
+        // It tries to call the "deleted constructor ImmortalEventName
+        // const" instead.
+        assert(tracefunc);
+        assert(event);
+        assert(origin);
+        assert(target);
+        greenlet::refs::NewReference retval(
+            PyObject_CallFunction(
+                tracefunc.borrow(),
+                "O(OO)",
+                event.borrow(),
+                origin.borrow(),
+                target.borrow()
+            ));
+        if (!retval) {
+            throw PyErrOccurred::from_current();
+        }
+    }
+};
+
+      static void
+      g_calltrace(const OwnedObject& tracefunc,
+                  const greenlet::refs::ImmortalEventName& event,
+                  const greenlet::refs::BorrowedGreenlet& origin,
+                  const BorrowedGreenlet& target);
     private:
         OwnedObject g_switch_finish(const switchstack_result_t& err);
 
