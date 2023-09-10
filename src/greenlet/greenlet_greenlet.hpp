@@ -747,6 +747,28 @@ public:
     };
 #endif
 
+    OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) noexcept;
+
+    //TODO: Greenlet::g_switch() should call this automatically on its
+    //return value. As it is, the module code is calling it.
+    static inline OwnedObject
+    single_result(const OwnedObject& results)
+    {
+        if (results
+            && PyTuple_Check(results.borrow())
+            && PyTuple_GET_SIZE(results.borrow()) == 1) {
+            PyObject* result = PyTuple_GET_ITEM(results.borrow(), 0);
+            assert(result);
+            return OwnedObject::owning(result);
+        }
+        return results;
+    }
+
+
+    static OwnedObject
+    g_handle_exit(const OwnedObject& greenlet_result);
+
+
 } // namespace greenlet ;
 
 template<typename T>

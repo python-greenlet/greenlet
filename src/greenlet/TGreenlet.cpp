@@ -22,6 +22,13 @@ Greenlet::Greenlet(PyGreenlet* p)
     p ->pimpl = this;
 }
 
+Greenlet::~Greenlet()
+{
+    // XXX: Can't do this. tp_clear is a virtual function, and by the
+    // time we're here, we've sliced off our child classes.
+    //this->tp_clear();
+}
+
 Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
     : stack_state(initial_stack)
 {
@@ -264,6 +271,69 @@ Greenlet::check_switch_allowed() const
     }
 }
 
+const OwnedObject
+Greenlet::context() const
+{
+    using greenlet::PythonStateContext;
+    OwnedObject result;
+
+    if (this->is_currently_running_in_some_thread()) {
+        /* Currently running greenlet: context is stored in the thread state,
+           not the greenlet object. */
+        if (GET_THREAD_STATE().state().is_current(this->self())) {
+            result = PythonStateContext::context(PyThreadState_GET());
+        }
+        else {
+            throw ValueError(
+                            "cannot get context of a "
+                            "greenlet that is running in a different thread");
+        }
+    }
+    else {
+        /* Greenlet is not running: just return context. */
+        result = this->python_state.context();
+    }
+    if (!result) {
+        result = OwnedObject::None();
+    }
+    return result;
+}
+
+
+void Greenlet::context(BorrowedObject given)
+{
+    using greenlet::PythonStateContext;
+    if (!given) {
+        throw AttributeError("can't delete context attribute");
+    }
+    if (given.is_None()) {
+        /* "Empty context" is stored as NULL, not None. */
+        given = nullptr;
+    }
+
+    //checks type, incrs refcnt
+    greenlet::refs::OwnedContext context(given);
+    PyThreadState* tstate = PyThreadState_GET();
+
+    if (this->is_currently_running_in_some_thread()) {
+        if (!GET_THREAD_STATE().state().is_current(this->self())) {
+            throw ValueError("cannot set context of a greenlet"
+                             " that is running in a different thread");
+        }
+
+        /* Currently running greenlet: context is stored in the thread state,
+           not the greenlet object. */
+        OwnedObject octx = OwnedObject::consuming(PythonStateContext::context(tstate));
+        PythonStateContext::context(tstate, context.relinquish_ownership());
+    }
+    else {
+        /* Greenlet is not running: just set context. Note that the
+           greenlet may be dead.*/
+        this->python_state.context() = context;
+    }
+}
+
+
 namespace greenlet {
 /**
  * CAUTION: May invoke arbitrary Python code.
@@ -309,7 +379,32 @@ OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) noexcep
     }
     return lhs;
 }
-};
+
+static OwnedObject
+g_handle_exit(const OwnedObject& greenlet_result)
+{
+    if (!greenlet_result && mod_globs->PyExc_GreenletExit.PyExceptionMatches()) {
+        /* catch and ignore GreenletExit */
+        PyErrFetchParam val;
+        PyErr_Fetch(PyErrFetchParam(), val, PyErrFetchParam());
+        if (!val) {
+            return OwnedObject::None();
+        }
+        return OwnedObject(val);
+    }
+
+    if (greenlet_result) {
+        // package the result into a 1-tuple
+        // PyTuple_Pack increments the reference of its arguments,
+        // so we always need to decref the greenlet result;
+        // the owner will do that.
+        return OwnedObject::consuming(PyTuple_Pack(1, greenlet_result.borrow()));
+    }
+
+    return OwnedObject();
+}
+
+}; //namespace greenlet
 
 /**
  * May run arbitrary Python code.
@@ -392,4 +487,114 @@ Greenlet::g_calltrace(const OwnedObject& tracefunc,
         (event == mod_globs->event_throw && PyErr_Occurred())
         || (event == mod_globs->event_switch && !PyErr_Occurred())
     );
+}
+
+void
+Greenlet::murder_in_place()
+{
+    if (this->active()) {
+        assert(!this->is_currently_running_in_some_thread());
+        this->deactivate_and_free();
+    }
+}
+
+inline void
+Greenlet::deactivate_and_free()
+{
+    if (!this->active()) {
+        return;
+    }
+    // Throw away any saved stack.
+    this->stack_state = StackState();
+    assert(!this->stack_state.active());
+    // Throw away any Python references.
+    // We're holding a borrowed reference to the last
+    // frame we executed. Since we borrowed it, the
+    // normal traversal, clear, and dealloc functions
+    // ignore it, meaning it leaks. (The thread state
+    // object can't find it to clear it when that's
+    // deallocated either, because by definition if we
+    // got an object on this list, it wasn't
+    // running and the thread state doesn't have
+    // this frame.)
+    // So here, we *do* clear it.
+    this->python_state.tp_clear(true);
+}
+
+bool
+Greenlet::belongs_to_thread(const ThreadState* thread_state) const
+{
+    if (!this->thread_state() // not running anywhere, or thread
+                              // exited
+        || !thread_state) { // same, or there is no thread state.
+        return false;
+    }
+    return true;
+}
+
+
+void
+Greenlet::deallocing_greenlet_in_thread(const ThreadState* current_thread_state)
+{
+    /* Cannot raise an exception to kill the greenlet if
+       it is not running in the same thread! */
+    if (this->belongs_to_thread(current_thread_state)) {
+        assert(current_thread_state);
+        // To get here it had to have run before
+        /* Send the greenlet a GreenletExit exception. */
+
+        // We don't care about the return value, only whether an
+        // exception happened.
+        this->throw_GreenletExit_during_dealloc(*current_thread_state);
+        return;
+    }
+
+    // Not the same thread! Temporarily save the greenlet
+    // into its thread's deleteme list, *if* it exists.
+    // If that thread has already exited, and processed its pending
+    // cleanup, we'll never be able to clean everything up: we won't
+    // be able to raise an exception.
+    // That's mostly OK! Since we can't add it to a list, our refcount
+    // won't increase, and we'll go ahead with the DECREFs later.
+    ThreadState *const  thread_state = this->thread_state();
+    if (thread_state) {
+        thread_state->delete_when_thread_running(this->self());
+    }
+    else {
+        // The thread is dead, we can't raise an exception.
+        // We need to make it look non-active, though, so that dealloc
+        // finishes killing it.
+        this->deactivate_and_free();
+    }
+    return;
+}
+
+
+int
+Greenlet::tp_traverse(visitproc visit, void* arg)
+{
+
+    int result;
+    if ((result = this->exception_state.tp_traverse(visit, arg)) != 0) {
+        return result;
+    }
+    //XXX: This is ugly. But so is handling everything having to do
+    //with the top frame.
+    bool visit_top_frame = this->was_running_in_dead_thread();
+    // When true, the thread is dead. Our implicit weak reference to the
+    // frame is now all that's left; we consider ourselves to
+    // strongly own it now.
+    if ((result = this->python_state.tp_traverse(visit, arg, visit_top_frame)) != 0) {
+        return result;
+    }
+    return 0;
+}
+
+int
+Greenlet::tp_clear()
+{
+    bool own_top_frame = this->was_running_in_dead_thread();
+    this->exception_state.tp_clear();
+    this->python_state.tp_clear(own_top_frame);
+    return 0;
 }
