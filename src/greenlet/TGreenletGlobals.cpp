@@ -17,10 +17,6 @@
 #include "greenlet_thread_support.hpp"
 #include "greenlet_thread_state.hpp"
 
-using greenlet::Mutex;
-using greenlet::Require;
-
-
 namespace greenlet {
 
 // This encapsulates what were previously module global "constants"

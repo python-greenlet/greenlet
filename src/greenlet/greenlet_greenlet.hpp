@@ -678,14 +678,7 @@ public:
         virtual ~BrokenGreenlet()
         {}
 
-        virtual switchstack_result_t g_switchstack(void)
-        {
-            if (this->_force_switch_error) {
-                return switchstack_result_t(-1);
-            }
-            return UserGreenlet::g_switchstack();
-        }
-
+        virtual switchstack_result_t g_switchstack(void);
         virtual bool force_slp_switch_error() const noexcept;
 
     };

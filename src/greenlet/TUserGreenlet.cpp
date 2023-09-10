@@ -15,10 +15,9 @@
 #include "greenlet_thread_state.hpp"
 #include "TThreadStateDestroy.cpp"
 
-using greenlet::UserGreenlet;
-using greenlet::ThreadState;
-using greenlet::refs::BorrowedMainGreenlet;
 
+namespace greenlet {
+using greenlet::refs::BorrowedMainGreenlet;
 greenlet::PythonAllocator<UserGreenlet> UserGreenlet::allocator;
 
 void* UserGreenlet::operator new(size_t UNUSED(count))
@@ -39,8 +38,6 @@ UserGreenlet::UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
 {
     this->_self = p;
 }
-
-
 
 UserGreenlet::~UserGreenlet()
 {
@@ -638,3 +635,5 @@ UserGreenlet::ParentIsCurrentGuard::~ParentIsCurrentGuard()
     this->greenlet->_parent = oldparent;
     oldparent.CLEAR();
 }
+
+}; //namespace greenlet

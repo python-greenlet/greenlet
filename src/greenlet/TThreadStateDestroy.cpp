@@ -17,9 +17,7 @@
 #include "greenlet_thread_support.hpp"
 #include "TGreenletGlobals.cpp"
 
-using greenlet::ThreadState;
-using greenlet::MainGreenlet;
-using greenlet::LockGuard;
+namespace greenlet {
 
 struct ThreadState_DestroyWithGIL
 {
@@ -176,6 +174,7 @@ struct ThreadState_DestroyNoGIL
 
 };
 
+}; // namespace greenlet
 
 // The intent when GET_THREAD_STATE() is needed multiple times in a
 // function is to take a reference to its return value in a local
@@ -184,7 +183,7 @@ struct ThreadState_DestroyNoGIL
 // initial function call in each function that uses a thread local);
 // in contrast, static volatile variables are at some pre-computed
 // offset.
-typedef greenlet::ThreadStateCreator<ThreadState_DestroyNoGIL> ThreadStateCreator;
+typedef greenlet::ThreadStateCreator<greenlet::ThreadState_DestroyNoGIL> ThreadStateCreator;
 static thread_local ThreadStateCreator g_thread_state_global;
 #define GET_THREAD_STATE() g_thread_state_global
 

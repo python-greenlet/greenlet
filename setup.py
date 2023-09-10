@@ -120,7 +120,7 @@ def _find_platform_headers():
     return glob.glob(GREENLET_PLATFORM_DIR + "switch_*.h")
 
 def _find_impl_headers():
-    return glob.glob(GREENLET_SRC_DIR + "*.hpp")
+    return glob.glob(GREENLET_SRC_DIR + "*.hpp") + glob.glob(GREENLET_SRC_DIR + "*.cpp")
 
 if hasattr(sys, "pypy_version_info"):
     ext_modules = []

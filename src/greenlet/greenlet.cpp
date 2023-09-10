@@ -31,21 +31,22 @@
 #include "TGreenlet.cpp"
 #include "TMainGreenlet.cpp"
 #include "TUserGreenlet.cpp"
+#include "TBrokenGreenlet.cpp"
 
 
-using greenlet::ThreadState;
-using greenlet::Mutex;
 using greenlet::LockGuard;
 using greenlet::LockInitError;
 using greenlet::PyErrOccurred;
 using greenlet::Require;
-using greenlet::PyFatalError;
-using greenlet::ExceptionState;
-using greenlet::StackState;
-using greenlet::Greenlet;
-using greenlet::BrokenGreenlet;
+
 using greenlet::g_handle_exit;
 using greenlet::single_result;
+
+using greenlet::Greenlet;
+using greenlet::UserGreenlet;
+using greenlet::MainGreenlet;
+using greenlet::BrokenGreenlet;
+using greenlet::ThreadState;
 
 
 // Helpers for reference counting.
@@ -140,21 +141,6 @@ using greenlet::single_result;
 //     -------------------------------------------------------  -----   ----
 //     total                                                      117    482
 
-using greenlet::refs::BorrowedObject;
-using greenlet::refs::BorrowedGreenlet;
-using greenlet::refs::BorrowedMainGreenlet;
-using greenlet::refs::OwnedObject;
-using greenlet::refs::PyErrFetchParam;
-using greenlet::refs::PyArgParseParam;
-using greenlet::refs::ImmortalString;
-using greenlet::refs::ImmortalObject;
-using greenlet::refs::ImmortalEventName;
-using greenlet::refs::CreatedModule;
-using greenlet::refs::PyErrPieces;
-using greenlet::refs::PyObjectPointer;
-using greenlet::Greenlet;
-using greenlet::UserGreenlet;
-using greenlet::MainGreenlet;
 
 
 // ******* Implementation of things from included files
@@ -313,36 +299,6 @@ slp_save_state and slp_restore_state are also member functions. They
 are called from trampoline functions that themselves are declared as
 not eligible for inlining.
 */
-
-
-
-/* add forward declarations */
-
-
-
-
-
-void* BrokenGreenlet::operator new(size_t UNUSED(count))
-{
-    return allocator.allocate(1);
-}
-
-
-void BrokenGreenlet::operator delete(void* ptr)
-{
-    return allocator.deallocate(static_cast<BrokenGreenlet*>(ptr),
-                                1);
-}
-
-bool
-BrokenGreenlet::force_slp_switch_error() const noexcept
-{
-    return this->_force_slp_switch_error;
-}
-
-
-greenlet::PythonAllocator<BrokenGreenlet> BrokenGreenlet::allocator;
-
 
 extern "C" {
 static int GREENLET_NOINLINE(slp_save_state_trampoline)(char* stackref)

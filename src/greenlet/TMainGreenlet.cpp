@@ -13,15 +13,12 @@
 #include "greenlet_greenlet.hpp"
 #include "greenlet_thread_state.hpp"
 
-using greenlet::ThreadState;
-using greenlet::Greenlet;
-using greenlet::MainGreenlet;
-
 
 // Protected by the GIL. Incremented when we create a main greenlet,
 // in a new thread, decremented when it is destroyed.
 static Py_ssize_t G_TOTAL_MAIN_GREENLETS;
 
+namespace greenlet {
 greenlet::PythonAllocator<MainGreenlet> MainGreenlet::allocator;
 
 void* MainGreenlet::operator new(size_t UNUSED(count))
@@ -154,3 +151,5 @@ MainGreenlet::parent() const
 {
     return OwnedGreenlet(); // null becomes None
 }
+
+}; // namespace greenlet

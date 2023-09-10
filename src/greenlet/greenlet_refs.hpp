@@ -605,6 +605,12 @@ namespace greenlet {
         {
         }
 
+        ImmortalObject(const ImmortalObject& other)
+            : PyObjectPointer<>(other.p)
+        {
+
+        }
+
         /**
          * Become the new owner of the object. Does not change the
          * reference count.

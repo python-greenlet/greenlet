@@ -17,6 +17,8 @@
 #include "TGreenletGlobals.cpp"
 #include "TThreadStateDestroy.cpp"
 
+namespace greenlet {
+
 Greenlet::Greenlet(PyGreenlet* p)
 {
     p ->pimpl = this;
@@ -43,7 +45,8 @@ Greenlet::force_slp_switch_error() const noexcept
     return false;
 }
 
-void Greenlet::release_args()
+void
+Greenlet::release_args()
 {
     this->switch_args.CLEAR();
 }
@@ -300,7 +303,8 @@ Greenlet::context() const
 }
 
 
-void Greenlet::context(BorrowedObject given)
+void
+Greenlet::context(BorrowedObject given)
 {
     using greenlet::PythonStateContext;
     if (!given) {
@@ -333,8 +337,6 @@ void Greenlet::context(BorrowedObject given)
     }
 }
 
-
-namespace greenlet {
 /**
  * CAUTION: May invoke arbitrary Python code.
  *
@@ -404,7 +406,7 @@ g_handle_exit(const OwnedObject& greenlet_result)
     return OwnedObject();
 }
 
-}; //namespace greenlet
+
 
 /**
  * May run arbitrary Python code.
@@ -598,3 +600,5 @@ Greenlet::tp_clear()
     this->python_state.tp_clear(own_top_frame);
     return 0;
 }
+
+}; // namespace greenlet
