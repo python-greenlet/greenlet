@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.0.0rc3 (unreleased)
+3.0.0rc3 (2023-09-12)
 =====================
 
 - Fix an intermittent error during process termination on some
