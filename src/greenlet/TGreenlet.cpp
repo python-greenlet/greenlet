@@ -601,4 +601,10 @@ Greenlet::tp_clear()
     return 0;
 }
 
+bool Greenlet::is_currently_running_in_some_thread() const
+{
+    return this->stack_state.active() && !this->python_state.top_frame();
+}
+
+
 }; // namespace greenlet

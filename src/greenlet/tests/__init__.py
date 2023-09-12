@@ -158,6 +158,10 @@ class TestCase(TestCaseMetaClass(
         # there is a stack buffer overrun. It just means that the
         # application decided to terminate itself with great haste."
         #
+        #
+        # On windows, we've also seen '0xc0000005' (hex(3221225477)).
+        # That's "Access Violation"
+        #
         # See
         # https://devblogs.microsoft.com/oldnewthing/20110519-00/?p=10623
         # and
@@ -174,6 +178,7 @@ class TestCase(TestCaseMetaClass(
         ) if not WIN else (
             3,
             0xc0000409,
+            0xc0000005,
         )
         return expected_exit
 

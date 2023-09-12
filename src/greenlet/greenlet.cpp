@@ -32,6 +32,9 @@
 #include "TMainGreenlet.cpp"
 #include "TUserGreenlet.cpp"
 #include "TBrokenGreenlet.cpp"
+#include "TExceptionState.cpp"
+#include "TPythonState.cpp"
+#include "TStackState.cpp"
 
 
 using greenlet::LockGuard;
@@ -47,99 +50,7 @@ using greenlet::UserGreenlet;
 using greenlet::MainGreenlet;
 using greenlet::BrokenGreenlet;
 using greenlet::ThreadState;
-
-
-// Helpers for reference counting.
-// XXX: running the test cases for greenlet 1.1.2 under Python 3.10+pydebug
-// with zope.testrunner's "report refcounts" option shows a growth of
-// over 500 references when running 90 tests at a steady state (10 repeats)
-// Running in verbose mode and adding objgraph to report gives us this
-// info in a steady state:
-//   Ran 90 tests with 0 failures, 0 errors and 1 skipped in 2.120 seconds.
-// Showing growth
-// tuple                 2811       +16
-// list                  1733       +14
-// function              6304       +11
-// dict                  3604        +9
-// cell                   707        +9
-// greenlet                81        +8
-// method                 103        +5
-// Genlet                  40        +4
-// list_iterator           30        +3
-// getset_descriptor      916        +2
-//   sum detail refcount=341678   sys refcount=379357   change=523
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.NoneType                                            0      2
-//     builtins.cell                                                9     20
-//     builtins.code                                                0     31
-//     builtins.dict                                               18     91
-//     builtins.frame                                              20     32
-//     builtins.function                                           11     28
-//     builtins.getset_descriptor                                   2      2
-//     builtins.int                                                 2     42
-//     builtins.list                                               14     37
-//     builtins.list_iterator                                       3      3
-//     builtins.method                                              5      5
-//     builtins.method_descriptor                                   0      9
-//     builtins.str                                                11     76
-//     builtins.traceback                                           1      2
-//     builtins.tuple                                              20     42
-//     builtins.type                                                2     28
-//     builtins.weakref                                             2      2
-//     greenlet.GreenletExit                                        1      1
-//     greenlet.greenlet                                            8     26
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.Genlet                  4     26
-//     greenlet.tests.test_greenlet.convoluted                      1      2
-//     -------------------------------------------------------  -----   ----
-//     total                                                      135    509
-//
-// As of the commit that adds this comment, we're doing better than
-// 1.1.2, but still not perfect:
-//   Ran 115 tests with 0 failures, 0 errors, 1 skipped in 8.623 seconds.
-// tuple            21310       +23
-// dict              5428       +18
-// frame              183       +17
-// list              1760       +14
-// function          6359       +11
-// cell               698        +8
-// method             105        +5
-// int               2709        +4
-// TheGenlet           40        +4
-// list_iterator       30        +3
-//   sum detail refcount=345051   sys refcount=383043   change=494
-//     Leak details, changes in instances and refcounts by type/class:
-//     type/class                                               insts   refs
-//     -------------------------------------------------------  -----   ----
-//     builtins.NoneType                                            0     12
-//     builtins.bool                                                0      2
-//     builtins.cell                                                8     16
-//     builtins.code                                                0     28
-//     builtins.dict                                               18     74
-//     builtins.frame                                              17     28
-//     builtins.function                                           11     28
-//     builtins.getset_descriptor                                   2      2
-//     builtins.int                                                 4     44
-//     builtins.list                                               14     39
-//     builtins.list_iterator                                       3      3
-//     builtins.method                                              5      5
-//     builtins.method_descriptor                                   0      8
-//     builtins.str                                                -2     69
-//     builtins.tuple                                              23     42
-//     builtins.type                                                2     28
-//     builtins.weakref                                             2      2
-//     greenlet.greenlet                                            1      1
-//     greenlet.main_greenlet                                       1     16
-//     greenlet.tests.test_contextvars.NoContextVarsTests           0      1
-//     greenlet.tests.test_gc.object_with_finalizer                 1      1
-//     greenlet.tests.test_generator_nested.TheGenlet               4     29
-//     greenlet.tests.test_greenlet.convoluted                      1      2
-//     greenlet.tests.test_leaks.HasFinalizerTracksInstances        2      2
-//     -------------------------------------------------------  -----   ----
-//     total                                                      117    482
+using greenlet::PythonState;
 
 
 
@@ -246,19 +157,6 @@ The running greenlet's stack_start is undefined but not NULL.
 
  ***********************************************************/
 
-/*** global state ***/
-
-/* In the presence of multithreading, this is a bit tricky; see
-   greenlet_thread_state.hpp for details.
-*/
-
-
-
-
-
-
-
-
 static PyGreenlet*
 green_create_main(ThreadState* state)
 {
@@ -275,9 +173,6 @@ green_create_main(ThreadState* state)
     assert(Py_REFCNT(gmain) == 1);
     return gmain;
 }
-
-
-
 
 
 
@@ -435,11 +330,6 @@ green_is_gc(BorrowedGreenlet self)
     }
     return result;
 }
-
-
-
-
-
 
 
 static int
@@ -824,10 +714,6 @@ green_getparent(BorrowedGreenlet self, void* UNUSED(context))
     return self->parent().acquire_or_None();
 }
 
-using greenlet::AttributeError;
-
-
-
 
 
 static int
@@ -999,10 +885,8 @@ PyGreenlet_New(PyObject* run, PyGreenlet* parent)
 }
 
 static PyObject*
-PyGreenlet_Switch(PyGreenlet* g, PyObject* args, PyObject* kwargs)
+PyGreenlet_Switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
-    PyGreenlet* self = (PyGreenlet*)g;
-
     if (!PyGreenlet_Check(self)) {
         PyErr_BadArgument();
         return NULL;
@@ -1016,7 +900,7 @@ PyGreenlet_Switch(PyGreenlet* g, PyObject* args, PyObject* kwargs)
         kwargs = NULL;
     }
 
-    return green_switch(g, args, kwargs);
+    return green_switch(self, args, kwargs);
 }
 
 static PyObject*
@@ -1076,6 +960,7 @@ Extern_PyGreenlet_GET_PARENT(PyGreenlet* self)
     return self->pimpl->parent().acquire();
 }
 } // extern C.
+
 /** End C API ****************************************************************/
 
 static PyMethodDef green_methods[] = {
