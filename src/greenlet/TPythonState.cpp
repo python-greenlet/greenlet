@@ -281,7 +281,7 @@ const PythonState::OwnedFrame& PythonState::top_frame() const noexcept
     return this->_top_frame;
 }
 
-void PythonState::did_finish(PyThreadState* UNUSED(tstate)) noexcept
+void PythonState::did_finish(PyThreadState* tstate) noexcept
 {
 #if GREENLET_PY311
     // See https://github.com/gevent/gevent/issues/1924 and
