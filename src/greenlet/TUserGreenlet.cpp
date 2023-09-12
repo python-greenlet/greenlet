@@ -302,6 +302,8 @@ UserGreenlet::g_initialstub(void* mark)
        constructed for the second time until the switch actually happens.
     */
     if (err.status == 1) {
+        // In the new greenlet.
+
         // This never returns! Calling inner_bootstrap steals
         // the contents of our run object within this stack frame, so
         // it is not valid to do anything with it.
@@ -314,16 +316,38 @@ UserGreenlet::g_initialstub(void* mark)
         // C++ extension. We're going to abort anyway, but try to
         // display some nice information if possible.
         //
-        // The catching is tested by ``test_cpp.CPPTests.test_unhandled_exception_in_greenlet_aborts``.
+        // The catching is tested by
+        // ``test_cpp.CPPTests.test_unhandled_exception_in_greenlet_aborts``.
+        //
+        // PyErrOccurred can theoretically be thrown by
+        // inner_bootstrap() -> g_switch_finish(), but that should
+        // never make it back to here. It is a std::exception and
+        // would be caught if it is.
         catch (const std::exception& e) {
             std::string base = "greenlet: Unhandled C++ exception: ";
             base += e.what();
             Py_FatalError(base.c_str());
         }
         catch (...) {
-            Py_FatalError("greenlet: inner_bootstrap terminated with unknown C++ exception\n");
+            // Some compilers/runtimes use exceptions internally.
+            // It appears that GCC on Linux with libstdc++ throws an
+            // exception internally at process shutdown time to unwind
+            // stacks and clean up resources. Depending on exactly
+            // where we are when the process exits, that could result
+            // in an unknown exception getting here. If we
+            // Py_FatalError() or abort() here, we interfere with
+            // orderly process shutdown. Throwing the exception on up
+            // is the right thing to do.
+            //
+            // gevent's ``examples/dns_mass_resolve.py`` demonstrates this.
+#ifndef NDEBUG
+            fprintf(stderr,
+                    "greenlet: inner_bootstrap threw unknown exception; "
+                    "is the process terminating?\n");
+#endif
+            throw;
         }
-        Py_FatalError("greenlet: inner_bootstrap returned\n");
+        Py_FatalError("greenlet: inner_bootstrap returned with no exception.\n");
     }
 
 
@@ -354,7 +378,7 @@ UserGreenlet::g_initialstub(void* mark)
 
 
 void
-GREENLET_NOINLINE(UserGreenlet::inner_bootstrap)(PyGreenlet* origin_greenlet, PyObject* run)
+UserGreenlet::inner_bootstrap(PyGreenlet* origin_greenlet, PyObject* run)
 {
     // The arguments here would be another great place for move.
     // As it is, we take them as a reference so that when we clear
@@ -435,7 +459,7 @@ GREENLET_NOINLINE(UserGreenlet::inner_bootstrap)(PyGreenlet* origin_greenlet, Py
             // GC, which may run arbitrary Python code.
             result = OwnedObject::consuming(PyObject_Call(run, args.args().borrow(), args.kwargs().borrow()));
         }
-        catch(...) {
+        catch (...) {
             // Unhandled C++ exception!
 
             // If we declare ourselves as noexcept, if we don't catch
@@ -481,7 +505,7 @@ GREENLET_NOINLINE(UserGreenlet::inner_bootstrap)(PyGreenlet* origin_greenlet, Py
 #endif
         }
     }
-    // These lines may run arbitrary  code
+    // These lines may run arbitrary code
     args.CLEAR();
     Py_CLEAR(run);
 
@@ -525,7 +549,7 @@ GREENLET_NOINLINE(UserGreenlet::inner_bootstrap)(PyGreenlet* origin_greenlet, Py
             result = parent->g_switch();
         }
         catch (const PyErrOccurred&) {
-            // Ignore.
+            // Ignore, keep passing the error on up.
         }
 
         /* Return here means switch to parent failed,

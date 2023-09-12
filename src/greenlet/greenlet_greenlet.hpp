@@ -657,9 +657,10 @@ public:
     protected:
         virtual switchstack_result_t g_initialstub(void* mark);
     private:
+        // This function isn't meant to return.
         // This accepts raw pointers and the ownership of them at the
         // same time. The caller should use ``inner_bootstrap(origin.relinquish_ownership())``.
-        void GREENLET_NOINLINE(inner_bootstrap)(PyGreenlet* origin_greenlet, PyObject* run);
+        void inner_bootstrap(PyGreenlet* origin_greenlet, PyObject* run);
     };
 
     class BrokenGreenlet : public UserGreenlet

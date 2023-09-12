@@ -5,7 +5,8 @@
 3.0.0rc3 (unreleased)
 =====================
 
-- Nothing changed yet.
+- Fix an intermittent error during process termination on some
+  platforms (GCC/Linux/libstdc++).
 
 
 3.0.0rc2 (2023-09-09)

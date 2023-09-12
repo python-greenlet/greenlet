@@ -18,7 +18,7 @@ namespace greenlet {
     public:
 
         // CAUTION: In debug builds, may run arbitrary Python code.
-        static PyErrOccurred
+        static const PyErrOccurred
         from_current()
         {
             assert(PyErr_Occurred());
@@ -35,12 +35,18 @@ namespace greenlet {
             PyObject* tb;
 
             PyErr_Fetch(&typ, &val, &tb);
-            PyObject* s = PyObject_Str(PyErr_Occurred());
-            const char* msg = PyUnicode_AsUTF8(s);
+            PyObject* typs = PyObject_Str(typ);
+            PyObject* vals = PyObject_Str(val ? val : typ);
+            const char* typ_msg = PyUnicode_AsUTF8(typs);
+            const char* val_msg = PyUnicode_AsUTF8(vals);
             PyErr_Restore(typ, val, tb);
 
+            std::string msg(typ_msg);
+            msg += ": ";
+            msg += val_msg;
             PyErrOccurred ex(msg);
-            Py_XDECREF(s);
+            Py_XDECREF(typs);
+            Py_XDECREF(vals);
 
             return ex;
 #else

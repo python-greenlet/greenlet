@@ -67,20 +67,25 @@ if sys.platform == 'darwin' or 'clang' in plat_compiler:
     cpp_compile_args.append("--std=gnu++11")
 elif is_win and "MSC" in plat_compiler:
     # Older versions of MSVC (Python 2.7) don't handle C++ exceptions
-    # correctly by default. While newer versions do handle exceptions by default,
-    # they don't do it fully correctly. So we need an argument on all versions.
+    # correctly by default. While newer versions do handle exceptions
+    # by default, they don't do it fully correctly ("By default....the
+    # compiler generates code that only partially supports C++
+    # exceptions."). So we need an argument on all versions.
+
     #"/EH" == exception handling.
     #    "s" == standard C++,
     #    "c" == extern C functions don't throw
     # OR
     #   "a" == standard C++, and Windows SEH; anything may throw, compiler optimizations
-    #          around try blocks are less aggressive.
+    #          around try blocks are less aggressive. Because this catches SEH,
+    #          which Windows uses internally, the MS docs say this can be a security issue.
+    #          DO NOT USE.
     # /EHsc is suggested, and /EHa isn't supposed to be linked to other things not built
     # with it. Leaving off the "c" should just result in slower, safer code.
     # Other options:
     #    "r" == Always generate standard confirming checks for noexcept blocks, terminating
     #           if violated. IMPORTANT: We rely on this.
-    # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-160
+    # See https://docs.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model?view=msvc-170
     handler = "/EHsr"
     cpp_compile_args.append(handler)
     # To disable most optimizations:
