@@ -5,7 +5,7 @@
 3.0.0rc4 (unreleased)
 =====================
 
-- Nothing changed yet.
+- No changes from 3.0rc3 aside from the version number.
 
 
 3.0.0rc3 (2023-09-12)
