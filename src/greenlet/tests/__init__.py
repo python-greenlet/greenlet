@@ -16,6 +16,8 @@ from threading import active_count as active_thread_count
 from time import sleep
 from time import time
 
+import psutil
+
 from greenlet import greenlet as RawGreenlet
 from greenlet import getcurrent
 
@@ -181,6 +183,23 @@ class TestCase(TestCaseMetaClass(
             0xc0000005,
         )
         return expected_exit
+
+    def get_process_uss(self):
+        """
+        Return the current process's USS in bytes.
+
+        uss is available on Linux, macOS, Windows. Also known as
+        "Unique Set Size", this is the memory which is unique to a
+        process and which would be freed if the process was terminated
+        right now.
+
+        If this is not supported by ``psutil``, this raises the
+        :exc:`unittest.SkipTest` exception.
+        """
+        try:
+            return psutil.Process().memory_full_info().uss
+        except AttributeError as e:
+            raise unittest.SkipTest("uss not supported") from e
 
     def run_script(self, script_name, show_output=True):
         import subprocess
