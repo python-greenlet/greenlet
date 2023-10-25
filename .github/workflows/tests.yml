@@ -60,7 +60,11 @@ jobs:
         # Something in the build system isn't detecting that we're building for both,
         # so we're getting tagged with just x86_64. Force the universal2 tag.
         # (I've verified that the .so files are in fact universal, with both architectures.)
-        wheel tags --remove --platform-tag universal2 dist/*whl
+        # The macosx_11_0 tag is conservative: At this writing,
+        # on GHA, Python 3.7/3.8/3.9/3.10  all produce that tag, while
+        # 3.11/3.12 produce the less restrictive macosx_10_9 tag. (Locally on JAM's mac,
+        # the official CPython builds produce 10_9 for everything from 3.9 onward.)
+        wheel tags --remove --platform-tag macosx_11_0_universal2 dist/*whl
       env:
         # Unlike the above, we are actually distributing these
         # wheels, so they need to be built for production use.
