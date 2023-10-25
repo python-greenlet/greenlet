@@ -15,6 +15,7 @@
 #include "greenlet_greenlet.hpp"
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
+#include "greenlet_cpython_add_pending.hpp"
 #include "TGreenletGlobals.cpp"
 
 namespace greenlet {
@@ -52,6 +53,10 @@ struct ThreadState_DestroyWithGIL
 
 struct ThreadState_DestroyNoGIL
 {
+    // ensure this is actually defined.
+    static_assert(GREENLET_BROKEN_PY_ADD_PENDING == 1 || GREENLET_BROKEN_PY_ADD_PENDING == 0,
+                  "GREENLET_BROKEN_PY_ADD_PENDING not defined correctly.");
+
 #if GREENLET_BROKEN_PY_ADD_PENDING
     static int _push_pending_call(struct _pending_calls *pending,
                                   int (*func)(void *), void *arg)

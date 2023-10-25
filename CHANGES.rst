@@ -5,7 +5,10 @@
 3.0.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix a potential crash on Python 3.8 at interpreter shutdown time.
+  This was a regression from earlier 3.0.x releases. Reported by Matt
+  Wozniski in `issue 376 <https://github.com/python-greenlet/greenlet/issues/376>`_.
+
 
 
 3.0.0 (2023-10-02)
