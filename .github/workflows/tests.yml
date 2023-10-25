@@ -25,7 +25,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9, "3.10", "3.11", "3.12-dev"]
+        python-version: [3.7, 3.8, 3.9, "3.10", "3.11", "3.12"]
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v3
@@ -56,6 +56,7 @@ jobs:
       run: |
         python setup.py bdist_wheel
         python -m pip install -U -e ".[test,docs]"
+        ls -l dist
         # Something in the build system isn't detecting that we're building for both,
         # so we're getting tagged with just x86_64. Force the universal2 tag.
         # (I've verified that the .so files are in fact universal, with both architectures.)
@@ -159,17 +160,6 @@ jobs:
         with:
           platforms: all
       - name: Build and test greenlet
-        if: matrix.image == 'manylinux2010_x86_64'
-        # An alternate way to do this is to run the container directly with a uses:
-        # and then the script runs inside it. That may work better with caching.
-        # See https://github.com/pyca/bcrypt/blob/f6b5ee2eda76d077c531362ac65e16f045cf1f29/.github/workflows/wheel-builder.yml
-        # The 2010 image is the last one that comes with Python 2.7,
-        # and only up through the tag 2021-02-06-3d322a5
-        env:
-          DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}:2021-02-06-3d322a5
-        run: bash ./make-manylinux
-      - name: Build and test greenlet (other)
-        if: matrix.image != 'manylinux2010_x86_64'
         env:
           DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
         run: bash ./make-manylinux
