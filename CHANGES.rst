@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.0.1 (unreleased)
+3.0.1 (2023-10-25)
 ==================
 
 - Fix a potential crash on Python 3.8 at interpreter shutdown time.
