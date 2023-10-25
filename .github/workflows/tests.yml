@@ -59,7 +59,7 @@ jobs:
         # Something in the build system isn't detecting that we're building for both,
         # so we're getting tagged with just x86_64. Force the universal2 tag.
         # (I've verified that the .so files are in fact universal, with both architectures.)
-        wheel tags --remove --abi-tag universal2 dist/*whl
+        wheel tags --remove --platform-tag universal2 dist/*whl
       env:
         # Unlike the above, we are actually distributing these
         # wheels, so they need to be built for production use.
