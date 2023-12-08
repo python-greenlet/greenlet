@@ -42,7 +42,7 @@ jobs:
     - name: Install greenlet (non-Mac)
       if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
-        python setup.py bdist_wheel
+        python -m pip wheel --wheel-dir ./dist .
         python -m pip install -U -e ".[test,docs]"
       env:
         # Ensure we test with assertions enabled.
@@ -54,7 +54,7 @@ jobs:
     - name: Install greenlet (Mac)
       if: startsWith(runner.os, 'Mac')
       run: |
-        python setup.py bdist_wheel
+        python -m pip wheel --wheel-dir ./dist .
         python -m pip install -U -e ".[test,docs]"
         ls -l dist
         # Something in the build system isn't detecting that we're building for both,

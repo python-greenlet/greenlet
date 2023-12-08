@@ -43,7 +43,7 @@ environment:
     # Fully supported 64-bit versions, with testing. This should be
     # all the current (non EOL) versions.
     - PYTHON: "C:\\Python312-x64"
-      PYTHON_VERSION: "3.12.0b3"
+      PYTHON_VERSION: "3.12.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
@@ -182,7 +182,7 @@ test_script:
 #  - "%CMD_IN_ENV% python -m sphinx -b doctest -d docs/_build/doctrees docs docs/_build/doctest"
 
 after_test:
-  - "%CMD_IN_ENV% python setup.py bdist_wheel"
+  - "%CMD_IN_ENV% python -mpip wheel --wheel-dir dist ."
 
 artifacts:
   - path: dist\*

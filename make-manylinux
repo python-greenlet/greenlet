@@ -37,7 +37,8 @@ if [ -d /greenlet -a -d /opt/python ]; then
         echo "Building $variant $(python --version)"
 
         python -mpip install -U pip
-        python setup.py bdist_wheel
+        python -mpip install -U setuptools wheel
+        python -mpip wheel --wheel-dir ./dist .
         python -mpip install -U .[test]
         python -m unittest discover -v greenlet.tests
         PATH="$OPATH" auditwheel repair dist/greenlet*.whl
