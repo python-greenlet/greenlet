@@ -5,7 +5,9 @@
 3.0.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix a test case on Arm32. Note that this is not a supported platform
+  (there is no CI for it) and support is best effort; there may be
+  other issues lurking. See `issue 385 <https://github.com/python-greenlet/greenlet/issues/385>`_
 
 
 3.0.1 (2023-10-25)

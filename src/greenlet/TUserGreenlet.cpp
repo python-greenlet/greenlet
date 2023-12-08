@@ -314,7 +314,11 @@ UserGreenlet::g_initialstub(void* mark)
         // Getting a C++ exception here isn't good. It's probably a
         // bug in the underlying greenlet, meaning it's probably a
         // C++ extension. We're going to abort anyway, but try to
-        // display some nice information if possible.
+        // display some nice information *if* possible. Some obscure
+        // platforms don't properly support this (old 32-bit Arm, see see
+        // https://github.com/python-greenlet/greenlet/issues/385); that's not
+        // great, but should usually be OK because, as mentioned above, we're
+        // terminating anyway.
         //
         // The catching is tested by
         // ``test_cpp.CPPTests.test_unhandled_exception_in_greenlet_aborts``.

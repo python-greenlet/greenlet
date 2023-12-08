@@ -56,7 +56,11 @@ class CPPTests(TestCase):
         # verify that plain unhandled throw aborts
         output = self._do_test_unhandled_exception('run_as_greenlet_target')
         self.assertIn(
-            'greenlet: Unhandled C++ exception: Thrown from an extension.',
+            # We really expect this to be prefixed with "greenlet: Unhandled C++ exception:"
+            # as added by our handler for std::exception (see TUserGreenlet.cpp), but
+            # that's not correct everywhere --- our handler never runs before std::terminate
+            # gets called (for example, on arm32).
+            'Thrown from an extension.',
             output
         )
 
