@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.0.2 (unreleased)
+3.0.2 (2023-12-08)
 ==================
 
 - Packaging: Add a minimal ``pyproject.toml`` to sdists.
