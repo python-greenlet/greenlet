@@ -6,6 +6,7 @@
 ==================
 
 - Packaging: Add a minimal ``pyproject.toml`` to sdists.
+- Packaging: Various updates to macOS wheels.
 - Fix a test case on Arm32. Note that this is not a supported platform
   (there is no CI for it) and support is best effort; there may be
   other issues lurking. See `issue 385 <https://github.com/python-greenlet/greenlet/issues/385>`_
