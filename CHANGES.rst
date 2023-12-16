@@ -2,11 +2,20 @@
  Changes
 =========
 
-3.0.3 (unreleased)
+3.1.0 (unreleased)
 ==================
 
-- Nothing changed yet.
-
+- Python 3.12: Restore the full ability to walk the stack of a suspended
+  greenlet; previously only the innermost frame was exposed.
+  For performance reasons, there are still some restrictions relative to
+  older Python versions; in particular, by default it is only valid to walk
+  a suspended greenlet's stack in between a ``gr_frame`` access and the next
+  resumption of the greenlet. A more flexible mode can be enabled by setting
+  the greenlet's new ``gr_frames_always_exposed`` attribute to True. If you
+  get a Python interpreter crash on 3.12+ when accessing the ``f_back`` of a
+  suspended greenlet frame, you're probably accessing it in a way that
+  requires you to set this attribute. See `issue 388
+  <https://github.com/python-greenlet/greenlet/issues/388>`_.
 
 3.0.2 (2023-12-08)
 ==================

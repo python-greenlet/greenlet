@@ -100,6 +100,15 @@ py_test_exception_throw_std(PyObject* self, PyObject* args)
     return NULL;
 }
 
+static PyObject*
+py_test_call(PyObject* self, PyObject* arg)
+{
+    PyObject* noargs = PyTuple_New(0);
+    PyObject* ret = PyObject_Call(arg, noargs, nullptr);
+    Py_DECREF(noargs);
+    return ret;
+}
+
 
 
 /* test_exception_switch_and_do_in_g2(g2func)
@@ -172,6 +181,12 @@ static PyMethodDef test_methods[] = {
      (PyCFunction)&py_test_exception_throw_std,
      METH_VARARGS,
      "Throws standard C++ exception. Calling this function directly should abort the process."
+    },
+    {"test_call",
+     (PyCFunction)&py_test_call,
+     METH_O,
+     "Call the given callable. Unlike calling it directly, this creates a "
+     "new C-level stack frame, which may be helpful in testing."
     },
     {NULL, NULL, 0, NULL}
 };

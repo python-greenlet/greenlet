@@ -840,23 +840,81 @@ class TestGreenlet(TestCase):
         self.assertEqual(seen, [42, 24])
 
     def test_can_access_f_back_of_suspended_greenlet(self):
-        # On Python 3.12, they added a ->previous field to
-        # _PyInterpreterFrame that has to be cleared when a frame is inactive.
-        # If we got that wrong, this immediately crashes.
+        # This tests our frame rewriting to work around Python 3.12+ having
+        # some interpreter frames on the C stack. It will crash in the absence
+        # of that logic.
         main = greenlet.getcurrent()
 
-        def Hub():
-            main.switch()
+        def outer():
+            inner()
 
-        hub = RawGreenlet(Hub)
+        def inner():
+            main.switch(sys._getframe(0))
+
+        hub = RawGreenlet(outer)
         # start it
         hub.switch()
+
+        # start another greenlet to make sure we aren't relying on
+        # anything in `hub` still being on the C stack
+        unrelated = RawGreenlet(lambda: None)
+        unrelated.switch()
+
         # now it is suspended
         self.assertIsNotNone(hub.gr_frame)
+        self.assertEqual(hub.gr_frame.f_code.co_name, "inner")
+        self.assertIsNotNone(hub.gr_frame.f_back)
+        self.assertEqual(hub.gr_frame.f_back.f_code.co_name, "outer")
         # The next line is what would crash
-        self.assertIsNone(hub.gr_frame.f_back)
+        self.assertIsNone(hub.gr_frame.f_back.f_back)
 
+    def test_get_stack_with_nested_c_calls(self):
+        from functools import partial
+        from . import _test_extension_cpp
 
+        def recurse(v):
+            if v > 0:
+                return v * _test_extension_cpp.test_call(partial(recurse, v - 1))
+            else:
+                return greenlet.getcurrent().parent.switch()
+
+        gr = RawGreenlet(recurse)
+        gr.switch(5)
+        frame = gr.gr_frame
+        for i in range(5):
+            self.assertEqual(frame.f_locals["v"], i)
+            frame = frame.f_back
+        self.assertEqual(frame.f_locals["v"], 5)
+        self.assertIsNone(frame.f_back)
+        self.assertEqual(gr.switch(10), 1200)  # 1200 = 5! * 10
+
+    def test_frames_always_exposed(self):
+        # On Python 3.12 this will crash if we don't set the
+        # gr_frames_always_exposed attribute. More background:
+        # https://github.com/python-greenlet/greenlet/issues/388
+        main = greenlet.getcurrent()
+
+        def outer():
+            inner(sys._getframe(0))
+
+        def inner(frame):
+            main.switch(frame)
+
+        gr = RawGreenlet(outer)
+        frame = gr.switch()
+
+        # It's fine to set always_exposed after the frame was obtained,
+        # as long as it's before the frame is inspected
+        gr.gr_frames_always_exposed = True
+
+        # Do something else to clobber the part of the C stack used by `gr`,
+        # so we can't skate by on "it just happened to still be there"
+        unrelated = RawGreenlet(lambda: None)
+        unrelated.switch()
+
+        self.assertEqual(frame.f_code.co_name, "outer")
+        # The next line crashes on 3.12 if you don't set always_exposed
+        self.assertIsNone(frame.f_back)
 
 
 class TestGreenletSetParentErrors(TestCase):

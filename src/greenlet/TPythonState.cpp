@@ -26,7 +26,8 @@ PythonState::PythonState()
     ,datastack_limit(nullptr)
 #endif
 #if GREENLET_PY312
-    ,_prev_frame(nullptr)
+    ,frames_were_exposed(false)
+    ,expose_frames_on_every_suspension(false)
 #endif
 {
 #if GREENLET_USE_CFRAME
@@ -147,12 +148,6 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
                         // reference.
     this->_top_frame.steal(frame);
   #if GREENLET_PY312
-    if (frame) {
-        this->_prev_frame = frame->f_frame->previous;
-        frame->f_frame->previous = nullptr;
-    }
-  #endif
-  #if GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
   #else // not 312
     this->trash_delete_nesting = tstate->trash_delete_nesting;
@@ -164,6 +159,25 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 #endif // GREENLET_PY311
 }
 
+#if GREENLET_PY312
+void GREENLET_NOINLINE(PythonState::unexpose_frames)()
+{
+    if (!this->frames_were_exposed) {
+        return;
+    }
+    // See GreenletState::expose_frames() and the comment on frames_were_exposed
+    // for more information about this logic.
+    for (_PyInterpreterFrame *iframe = this->_top_frame->f_frame;
+         iframe != nullptr; ) {
+        _PyInterpreterFrame *prev_exposed = iframe->previous;
+        assert(iframe->frame_obj);
+        memcpy(&iframe->previous, &iframe->frame_obj->_f_frame_data[0],
+               sizeof(void *));
+        iframe = prev_exposed;
+    }
+    this->frames_were_exposed = false;
+}
+#endif
 
 void PythonState::operator>>(PyThreadState *const tstate) noexcept
 {
@@ -187,13 +201,9 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
   #if GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
-    // We're just going to throw this object away anyway, go ahead and
-    // do it now.
-    PyFrameObject* frame = this->_top_frame.relinquish_ownership();
-    if (frame && frame->f_frame) {
-      frame->f_frame->previous = this->_prev_frame;
+    if (this->frames_were_exposed) {
+        this->unexpose_frames();
     }
-    this->_prev_frame = nullptr;
   #else // \/ 3.11
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
   #endif // GREENLET_PY312
