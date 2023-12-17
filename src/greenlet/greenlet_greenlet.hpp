@@ -418,16 +418,15 @@ namespace greenlet
 
 #if GREENLET_PY312
         // Must be called on 3.12+ before exposing a suspended greenlet's
-        // frames to user code. This synthesizes a frame object if necessary
-        // for each interpreter frame on the greenlet's stack, and stitches
-        // together their f_back pointers so that Python accesses to f_back
-        // don't need to walk the interpreter frame stack. This is important
-        // because the interpreter frame stack contains some entries that are
-        // on the C stack and the interpreter will crash when trying to
-        // traverse those for a suspended greenlet. The f_back pointer work
-        // must be undone before resuming the greenlet because the interpreter
-        // assumes f_back is nullptr for running frames. This is tracked via
-        // PythonState::frames_were_exposed.
+        // frames to user code. This rewrites the linked list of interpreter
+        // frames to skip the ones that are being stored on the C stack (which
+        // can't be safely accessed while the greenlet is suspended because
+        // that stack space might be hosting a different greenlet), and
+        // sets PythonState::frames_were_exposed so we remember to restore
+        // the original list before resuming the greenlet. The C-stack frames
+        // are a low-level interpreter implementation detail; while they're
+        // important to the bytecode eval loop, they're superfluous for
+        // introspection purposes.
         void expose_frames();
 
         // To support code that exposes greenlet frames other than through
