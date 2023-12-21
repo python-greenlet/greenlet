@@ -17,8 +17,16 @@ import sys, os
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #sys.path.insert(0, os.path.abspath('.'))
-from importlib import metadata
 sys.path.append(os.path.abspath('../src/'))
+try:
+    from importlib import metadata
+except ImportError:
+    # Building the docs on 3.7. Which we don't do,
+    # except for running doctests.
+    glet_version = '0.0.0'
+else:
+    glet_version = metadata.version('greenlet')
+
 
 # -- General configuration -----------------------------------------------------
 
@@ -58,7 +66,7 @@ copyright = u'2011, Armin Rigo, Christian Tismer'
 # built documents.
 #
 # The short X.Y version.
-version = metadata.version('greenlet')
+version = glet_version
 # The full version, including alpha/beta/rc tags.
 release = version
 
