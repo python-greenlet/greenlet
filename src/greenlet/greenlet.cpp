@@ -758,38 +758,10 @@ green_setcontext(BorrowedGreenlet self, PyObject* nctx, void* UNUSED(context))
 static PyObject*
 green_getframe(BorrowedGreenlet self, void* UNUSED(context))
 {
-#if GREENLET_PY312
-    self->expose_frames();
-#endif
     const PythonState::OwnedFrame& top_frame = self->top_frame();
     return top_frame.acquire_or_None();
 }
 
-static PyObject*
-green_getframeexposed(BorrowedGreenlet self, void* UNUSED(context))
-{
-#if GREENLET_PY312
-    if (!self->expose_frames_on_every_suspension()) {
-        Py_RETURN_FALSE;
-    }
-#endif
-    Py_RETURN_TRUE;
-}
-
-static int
-green_setframeexposed(BorrowedGreenlet self, PyObject* val, void* UNUSED(context))
-{
-    if (val != Py_True && val != Py_False) {
-        PyErr_Format(PyExc_TypeError,
-                     "expected a bool, not '%s'",
-                     Py_TYPE(val)->tp_name);
-        return -1;
-    }
-#if GREENLET_PY312
-    self->set_expose_frames_on_every_suspension(val == Py_True);
-#endif
-    return 0;
-}
 
 static PyObject*
 green_getstate(PyGreenlet* self)
@@ -1008,10 +980,6 @@ static PyGetSetDef green_getsets[] = {
     {"run", (getter)green_getrun, (setter)green_setrun, /*XXX*/ NULL},
     {"parent", (getter)green_getparent, (setter)green_setparent, /*XXX*/ NULL},
     {"gr_frame", (getter)green_getframe, NULL, /*XXX*/ NULL},
-    {"gr_frames_always_exposed",
-     (getter)green_getframeexposed,
-     (setter)green_setframeexposed,
-     /*XXX*/ NULL},
     {"gr_context",
      (getter)green_getcontext,
      (setter)green_setcontext,

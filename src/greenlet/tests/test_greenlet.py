@@ -18,6 +18,12 @@ from .leakcheck import fails_leakcheck
 # We manually manage locks in many tests
 # pylint:disable=consider-using-with
 # pylint:disable=too-many-public-methods
+# This module is quite large.
+# TODO: Refactor into separate test files. For example,
+# put all the regression tests that used to produce
+# crashes in test_greenlet_no_crash; put tests that DO deliberately crash
+# the interpreter into test_greenlet_crash.
+# pylint:disable=too-many-lines
 
 class SomeError(Exception):
     pass
@@ -412,7 +418,7 @@ class TestGreenlet(TestCase):
         class mygreenlet(RawGreenlet):
             def __getattribute__(self, name):
                 try:
-                    raise Exception()
+                    raise Exception # pylint:disable=broad-exception-raised
                 except: # pylint:disable=bare-except
                     pass
                 return RawGreenlet.__getattribute__(self, name)
@@ -875,8 +881,7 @@ class TestGreenlet(TestCase):
         def recurse(v):
             if v > 0:
                 return v * _test_extension_cpp.test_call(partial(recurse, v - 1))
-            else:
-                return greenlet.getcurrent().parent.switch()
+            return greenlet.getcurrent().parent.switch()
 
         gr = RawGreenlet(recurse)
         gr.switch(5)
@@ -903,17 +908,13 @@ class TestGreenlet(TestCase):
         gr = RawGreenlet(outer)
         frame = gr.switch()
 
-        # It's fine to set always_exposed after the frame was obtained,
-        # as long as it's before the frame is inspected
-        gr.gr_frames_always_exposed = True
-
         # Do something else to clobber the part of the C stack used by `gr`,
         # so we can't skate by on "it just happened to still be there"
         unrelated = RawGreenlet(lambda: None)
         unrelated.switch()
 
         self.assertEqual(frame.f_code.co_name, "outer")
-        # The next line crashes on 3.12 if you don't set always_exposed
+        # The next line crashes on 3.12 if we haven't exposed the frames.
         self.assertIsNone(frame.f_back)
 
 

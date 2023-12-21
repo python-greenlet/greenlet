@@ -25,10 +25,6 @@ PythonState::PythonState()
     ,datastack_top(nullptr)
     ,datastack_limit(nullptr)
 #endif
-#if GREENLET_PY312
-    ,frames_were_exposed(false)
-    ,expose_frames_on_every_suspension(false)
-#endif
 {
 #if GREENLET_USE_CFRAME
     /*
@@ -162,21 +158,24 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 #if GREENLET_PY312
 void GREENLET_NOINLINE(PythonState::unexpose_frames)()
 {
-    if (!this->frames_were_exposed) {
+    if (!this->top_frame()) {
         return;
     }
+
     // See GreenletState::expose_frames() and the comment on frames_were_exposed
     // for more information about this logic.
-    for (_PyInterpreterFrame *iframe = this->_top_frame->f_frame;
-         iframe != nullptr; ) {
+    _PyInterpreterFrame *iframe = this->_top_frame->f_frame;
+    while (iframe != nullptr) {
         _PyInterpreterFrame *prev_exposed = iframe->previous;
         assert(iframe->frame_obj);
         memcpy(&iframe->previous, &iframe->frame_obj->_f_frame_data[0],
                sizeof(void *));
         iframe = prev_exposed;
     }
-    this->frames_were_exposed = false;
 }
+#else
+void PythonState::unexpose_frames()
+{}
 #endif
 
 void PythonState::operator>>(PyThreadState *const tstate) noexcept
@@ -201,9 +200,7 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
   #if GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
-    if (this->frames_were_exposed) {
-        this->unexpose_frames();
-    }
+    this->unexpose_frames();
   #else // \/ 3.11
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
   #endif // GREENLET_PY312

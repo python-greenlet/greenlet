@@ -117,26 +117,19 @@ namespace greenlet
         PyObject** datastack_top;
         PyObject** datastack_limit;
 #endif
-#if GREENLET_PY312
         // The PyInterpreterFrame list on 3.12+ contains some entries that are
         // on the C stack, which can't be directly accessed while a greenlet is
         // suspended. In order to keep greenlet gr_frame introspection working,
-        // we hook the gr_frame accessor to rewrite the interpreter frame list
+        // we adjust stack switching to rewrite the interpreter frame list
         // to skip these C-stack frames; we call this "exposing" the greenlet's
         // frames because it makes them valid to work with in Python. Then when
         // the greenlet is resumed we need to remember to reverse the operation
         // we did. The C-stack frames are "entry frames" which are a low-level
         // interpreter detail; they're not needed for introspection, but do
         // need to be present for the eval loop to work.
-        bool frames_were_exposed;
         void unexpose_frames();
-#endif
 
     public:
-#if GREENLET_PY312
-        // State used by Greenlet class, stored here to improve packing
-        bool expose_frames_on_every_suspension;
-#endif
 
         PythonState();
         // You can use this for testing whether we have a frame
@@ -157,20 +150,6 @@ namespace greenlet
         inline void may_switch_away() noexcept;
         inline void will_switch_from(PyThreadState *const origin_tstate) noexcept;
         void did_finish(PyThreadState* tstate) noexcept;
-
-#if GREENLET_PY312
-        // Called when we're about to make the stack of a suspended greenlet
-        // visible to Python code. If it returns true, the stack must be fixed
-        // up first using the logic in Greenlet::expose_frames().
-        bool frame_exposure_needs_stack_rewrite() noexcept
-        {
-            if (!top_frame() || frames_were_exposed) {
-                return false;
-            }
-            frames_were_exposed = true;
-            return true;
-        }
-#endif
     };
 
     class StackState
@@ -416,7 +395,6 @@ namespace greenlet
         // was running in was known to have exited.
         void deallocing_greenlet_in_thread(const ThreadState* current_state);
 
-#if GREENLET_PY312
         // Must be called on 3.12+ before exposing a suspended greenlet's
         // frames to user code. This rewrites the linked list of interpreter
         // frames to skip the ones that are being stored on the C stack (which
@@ -429,23 +407,6 @@ namespace greenlet
         // introspection purposes.
         void expose_frames();
 
-        // To support code that exposes greenlet frames other than through
-        // gr_frame, it is possible to tell a greenlet to expose its frames
-        // every time it suspends itself. This will harm performance and
-        // should only be used if necessary. Attached to the Python attribute
-        // 'gr_frames_always_exposed'.
-        inline bool expose_frames_on_every_suspension() const noexcept
-        {
-            return this->python_state.expose_frames_on_every_suspension;
-        }
-        inline void set_expose_frames_on_every_suspension(bool value) noexcept
-        {
-            this->python_state.expose_frames_on_every_suspension = value;
-            if (value) {
-                expose_frames();
-            }
-        }
-#endif
 
         // TODO: Figure out how to make these non-public.
         inline void slp_restore_state() noexcept;

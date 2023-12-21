@@ -230,16 +230,18 @@ void StackState::copy_from_stack(void* vdest, const void* vsrc, size_t n) const
 {
     char* dest = static_cast<char*>(vdest);
     const char* src = static_cast<const char*>(vsrc);
-    if (src + n <= _stack_start || src >= _stack_start + _stack_saved ||
-        _stack_saved == 0) {
+    if (src + n <= this->_stack_start
+        || src >= this->_stack_start + this->_stack_saved
+        || this->_stack_saved == 0) {
         // Nothing we're copying was spilled from the stack
         memcpy(dest, src, n);
         return;
     }
-    if (src < _stack_start) {
+
+    if (src < this->_stack_start) {
         // Copy the part before the saved stack.
         // We know src + n > _stack_start due to the test above.
-        size_t nbefore = _stack_start - src;
+        const size_t nbefore = this->_stack_start - src;
         memcpy(dest, src, nbefore);
         dest += nbefore;
         src += nbefore;
@@ -247,8 +249,8 @@ void StackState::copy_from_stack(void* vdest, const void* vsrc, size_t n) const
     }
     // We know src >= _stack_start after the before-copy, and
     // src < _stack_start + _stack_saved due to the first if condition
-    size_t nspilled = std::min<size_t>(n, _stack_start + _stack_saved - src);
-    memcpy(dest, stack_copy + (src - _stack_start), nspilled);
+    size_t nspilled = std::min<size_t>(n, this->_stack_start + this->_stack_saved - src);
+    memcpy(dest, this->stack_copy + (src - this->_stack_start), nspilled);
     dest += nspilled;
     src += nspilled;
     n -= nspilled;

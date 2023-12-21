@@ -168,11 +168,7 @@ Greenlet::g_switchstack(void)
         current->exception_state << tstate;
         this->python_state.will_switch_from(tstate);
         switching_thread_state = this;
-#if GREENLET_PY312
-        if (current->python_state.expose_frames_on_every_suspension) {
-            current->expose_frames();
-        }
-#endif
+        current->expose_frames();
     }
     assert(this->args() || PyErr_Occurred());
     // If this is the first switch into a greenlet, this will
@@ -614,8 +610,8 @@ bool Greenlet::is_currently_running_in_some_thread() const
 #if GREENLET_PY312
 void GREENLET_NOINLINE(Greenlet::expose_frames)()
 {
-    if (!this->python_state.frame_exposure_needs_stack_rewrite()) {
-        return; // nothing to do
+    if (!this->python_state.top_frame()) {
+        return;
     }
 
     _PyInterpreterFrame* last_complete_iframe = nullptr;
@@ -680,8 +676,8 @@ void GREENLET_NOINLINE(Greenlet::expose_frames)()
             // which can't have happened yet because the frame is currently
             // executing as far as the interpreter is concerned. So, we can
             // reuse it for our own purposes.
-            assert(iframe->owner == FRAME_OWNED_BY_THREAD ||
-                   iframe->owner == FRAME_OWNED_BY_GENERATOR);
+            assert(iframe->owner == FRAME_OWNED_BY_THREAD
+                   || iframe->owner == FRAME_OWNED_BY_GENERATOR);
             if (last_complete_iframe) {
                 assert(last_complete_iframe->frame_obj);
                 memcpy(&last_complete_iframe->frame_obj->_f_frame_data[0],
@@ -707,6 +703,11 @@ void GREENLET_NOINLINE(Greenlet::expose_frames)()
                &last_complete_iframe->previous, sizeof(void *));
         last_complete_iframe->previous = nullptr;
     }
+}
+#else
+void Greenlet::expose_frames()
+{
+
 }
 #endif
 
