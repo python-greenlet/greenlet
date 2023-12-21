@@ -1,6 +1,6 @@
 import gc
 import weakref
-import unittest
+
 
 import greenlet
 from . import TestCase

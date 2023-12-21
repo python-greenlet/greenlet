@@ -2,20 +2,14 @@
  Changes
 =========
 
-3.1.0 (unreleased)
+3.0.3 (unreleased)
 ==================
 
 - Python 3.12: Restore the full ability to walk the stack of a suspended
-  greenlet; previously only the innermost frame was exposed.
-  For performance reasons, there are still some restrictions relative to
-  older Python versions; in particular, by default it is only valid to walk
-  a suspended greenlet's stack in between a ``gr_frame`` access and the next
-  resumption of the greenlet. A more flexible mode can be enabled by setting
-  the greenlet's new ``gr_frames_always_exposed`` attribute to True. If you
-  get a Python interpreter crash on 3.12+ when accessing the ``f_back`` of a
-  suspended greenlet frame, you're probably accessing it in a way that
-  requires you to set this attribute. See `issue 388
-  <https://github.com/python-greenlet/greenlet/issues/388>`_.
+  greenlet; previously only the innermost frame was exposed. See `issue 388
+  <https://github.com/python-greenlet/greenlet/issues/388>`_. Fix by
+  Joshua Oreman in `PR 393
+  <https://github.com/python-greenlet/greenlet/pull/393/>`_.
 
 3.0.2 (2023-12-08)
 ==================
@@ -251,7 +245,7 @@ Known Issues
 ====================
 
 Platforms
-~~~~~~~~~
+---------
 
 - Add experimental, untested support for 64-bit Windows on ARM using
   MSVC. See `PR 271 <https://github.com/python-greenlet/greenlet/pull/271>`_.
@@ -401,7 +395,7 @@ Changes
 - (Documentation) Publish the change log to https://greenlet.readthedocs.io
 
 Supported Platforms
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 - Drop support for Python 2.4, 2.5, 2.6, 3.0, 3.1, 3.2 and 3.4.
   The project metadata now includes the ``python_requires`` data to
@@ -411,7 +405,7 @@ Supported Platforms
   <https://github.com/python-greenlet/greenlet/pull/197>`_.
 
 Packaging Changes
-~~~~~~~~~~~~~~~~~
+-----------------
 
 - Require setuptools to build from source.
 - Stop asking setuptools to build both .tar.gz and .zip

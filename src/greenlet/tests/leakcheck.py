@@ -220,6 +220,7 @@ class _RefCountChecker(object):
 
     def _growth_after(self):
         # Grab post snapshot
+        # pylint:disable=no-member
         if 'urlparse' in sys.modules:
             sys.modules['urlparse'].clear_cache()
         if 'urllib.parse' in sys.modules:

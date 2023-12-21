@@ -47,6 +47,7 @@ class ContextVarsTests(TestCase):
             callback()
 
     def _test_context(self, propagate_by):
+        # pylint:disable=too-many-branches
         ID_VAR.set(0)
 
         callback = getcurrent().switch

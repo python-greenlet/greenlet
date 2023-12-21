@@ -67,8 +67,7 @@ class ThrowTests(TestCase):
                 main.switch("f1 ready to catch")
             except IndexError:
                 return "caught"
-            else:
-                return "normal exit"
+            return "normal exit"
 
         def f2():
             main.switch("from f2")

@@ -89,6 +89,14 @@ jobs:
     - name: Doctest
       run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
+    - name: Lint
+      if: matrix.python-version == '3.10' && startsWith(runner.os, 'Linux')
+      # We only need to do this on one version.
+      # We do this here rather than a separate job to avoid the compilation overhead.
+      run: |
+        pip install -U pylint
+        python -m pylint --rcfile=.pylintrc greenlet
+
     - name: Publish package to PyPI (mac)
       # We cannot 'uses: pypa/gh-action-pypi-publish@v1.4.1' because
       # that's apparently a container action, and those don't run on

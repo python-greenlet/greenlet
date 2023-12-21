@@ -247,6 +247,7 @@ setup(
     extras_require={
         'docs': [
             'Sphinx',
+            'furo',
         ],
         'test': [
             'objgraph',

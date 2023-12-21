@@ -23,7 +23,7 @@ class GCTests(TestCase):
 
     def test_circular_greenlet(self):
         class circular_greenlet(greenlet.greenlet):
-            pass
+            self = None
         o = circular_greenlet()
         o.self = o
         o = weakref.ref(o)

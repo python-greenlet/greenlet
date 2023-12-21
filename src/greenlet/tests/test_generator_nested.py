@@ -149,7 +149,7 @@ class NestedGeneratorTests(TestCase):
         # XXX Test to make sure we are working as a generator expression
 
     def test_genlet_simple(self):
-        for g in [g1, g2, g3]:
+        for g in g1, g2, g3:
             seen = []
             for _ in range(3):
                 for j in g(5, seen):
