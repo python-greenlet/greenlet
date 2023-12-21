@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.0.3 (unreleased)
+3.0.3 (2023-12-21)
 ==================
 
 - Python 3.12: Restore the full ability to walk the stack of a suspended
