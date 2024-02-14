@@ -23,6 +23,7 @@ using greenlet::refs::BorrowedGreenlet;
 #endif
 
 #if GREENLET_PY312
+#  define Py_BUILD_CORE
 #  include "internal/pycore_frame.h"
 #endif
 
