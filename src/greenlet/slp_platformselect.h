@@ -64,6 +64,8 @@ extern "C" {
 # include "platform/switch_aarch64_gcc.h" /* LLVM Aarch64 ABI for Windows */
 #elif defined(__GNUC__) && defined(__loongarch64) && defined(__linux__)
 # include "platform/switch_loongarch64_linux.h" /* LoongArch64 */
+#elif defined(__GNUC__) && defined(__sh__)
+# include "platform/switch_sh_gcc.h" /* SuperH */
 #endif
 
 #ifdef __cplusplus
