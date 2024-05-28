@@ -26,6 +26,34 @@ using greenlet::refs::BorrowedGreenlet;
 #  include "internal/pycore_frame.h"
 #endif
 
+
+typedef struct PyFrameStack {
+    int trash_delete_nesting;
+
+#if PY_VERSION_HEX >= 0x30C0000
+    int py_recursion_depth;
+    int c_recursion_depth;
+#else
+    int recursion_depth;
+#endif
+
+#if PY_VERSION_HEX >= 0x30A0000
+    _PyCFrame* cframe;
+    int use_tracing;
+#endif
+
+#if PY_VERSION_HEX >= 0x30B0000
+    _PyInterpreterFrame* current_frame;
+#endif
+
+#if PY_VERSION_HEX >= 0x30B0000
+    _PyStackChunk* datastack_chunk;
+    PyObject** datastack_top;
+    PyObject** datastack_limit;
+#endif
+} PyFrameStack;
+
+
 // XXX: TODO: Work to remove all virtual functions
 // for speed of calling and size of objects (no vtable).
 // One pattern is the Curiously Recurring Template
@@ -94,29 +122,13 @@ namespace greenlet
         typedef greenlet::refs::OwnedReference<struct _frame> OwnedFrame;
     private:
         G_NO_COPIES_OF_CLS(PythonState);
+        PyFrameStack frame_stack;
         // We own this if we're suspended (although currently we don't
         // tp_traverse into it; that's a TODO). If we're running, it's
         // empty. If we get deallocated and *still* have a frame, it
         // won't be reachable from the place that normally decref's
         // it, so we need to do it (hence owning it).
         OwnedFrame _top_frame;
-#if GREENLET_USE_CFRAME
-        _PyCFrame* cframe;
-        int use_tracing;
-#endif
-#if GREENLET_PY312
-        int py_recursion_depth;
-        int c_recursion_depth;
-#else
-        int recursion_depth;
-#endif
-        int trash_delete_nesting;
-#if GREENLET_PY311
-        _PyInterpreterFrame* current_frame;
-        _PyStackChunk* datastack_chunk;
-        PyObject** datastack_top;
-        PyObject** datastack_limit;
-#endif
         // The PyInterpreterFrame list on 3.12+ contains some entries that are
         // on the C stack, which can't be directly accessed while a greenlet is
         // suspended. In order to keep greenlet gr_frame introspection working,

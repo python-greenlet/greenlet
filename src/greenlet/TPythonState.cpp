@@ -4,80 +4,172 @@
 #include <Python.h>
 #include "greenlet_greenlet.hpp"
 
+// --------------------------------------------------------------------------
+
+void
+PyFrameStack_Init(PyFrameStack *fs)
+{
+    memset(fs, 0, sizeof(*fs));
+
+#if GREENLET_USE_CFRAME
+    fs->cframe = &PyThreadState_GET()->root_cframe;
+#endif
+}
+
+
+void
+PyFrameStack_Save(PyFrameStack *fs, const PyThreadState *const tstate)
+{
+#if PY_VERSION_HEX >= 0x30C0000
+    fs->trash_delete_nesting = tstate->trash.delete_nesting;
+#else
+    fs->trash_delete_nesting = tstate->trash_delete_nesting;
+#endif
+
+#if PY_VERSION_HEX >= 0x30C0000
+    fs->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    fs->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
+#elif PY_VERSION_HEX >= 0x30B0000
+    fs->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+#else
+    fs->recursion_depth = tstate->recursion_depth;
+#endif
+
+#if GREENLET_USE_CFRAME
+    fs->cframe = tstate->cframe;
+#endif
+
+#if GREENLET_USE_CFRAME && PY_VERSION_HEX < 0x30C0000
+    fs->use_tracing = tstate->cframe->use_tracing;
+#endif
+
+#if PY_VERSION_HEX >= 0x30B0000
+    fs->current_frame = tstate->cframe->current_frame;
+#endif
+
+#if PY_VERSION_HEX >= 0x30B0000
+    fs->datastack_chunk = tstate->datastack_chunk;
+    fs->datastack_top = tstate->datastack_top;
+    fs->datastack_limit = tstate->datastack_limit;
+#endif
+}
+
+
+void
+PyFrameStack_Restore(PyFrameStack *fs, PyThreadState *tstate)
+{
+#if PY_VERSION_HEX >= 0x30C0000
+    tstate->trash.delete_nesting = fs->trash_delete_nesting;
+#else
+    tstate->trash_delete_nesting = fs->trash_delete_nesting;
+#endif
+
+#if PY_VERSION_HEX >= 0x30C0000
+    tstate->py_recursion_remaining = tstate->py_recursion_limit - fs->py_recursion_depth;
+    tstate->c_recursion_remaining = C_RECURSION_LIMIT - fs->c_recursion_depth;
+#elif PY_VERSION_HEX >= 0x30B0000
+    tstate->recursion_remaining = tstate->recursion_limit - fs->recursion_depth;
+#else
+    tstate->recursion_depth = fs->recursion_depth;
+#endif
+
+#if GREENLET_USE_CFRAME
+    tstate->cframe = fs->cframe;
+#endif
+
+#if GREENLET_USE_CFRAME && PY_VERSION_HEX < 0x30C0000
+    tstate->cframe->use_tracing = fs->use_tracing;
+#endif
+
+#if PY_VERSION_HEX >= 0x30B0000
+    tstate->cframe->current_frame = fs->current_frame;
+#endif
+
+#if PY_VERSION_HEX >= 0x30B0000
+    tstate->datastack_chunk = fs->datastack_chunk;
+    tstate->datastack_top = fs->datastack_top;
+    tstate->datastack_limit = fs->datastack_limit;
+#endif
+}
+
+
+void
+PyFrameStack_UpdateRecursionDepth(PyFrameStack *fs, const PyThreadState *const tstate)
+{
+#if PY_VERSION_HEX >= 0x30C0000
+    fs->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+    fs->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+#elif PY_VERSION_HEX >= 0x30B0000
+    fs->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
+#else
+    fs->recursion_depth = tstate->recursion_depth;
+#endif
+}
+
+
+#if GREENLET_USE_CFRAME
+void
+PyFrameStack_UpdateCFrame(PyFrameStack *fs, _PyCFrame& frame)
+{
+    frame = *PyThreadState_GET()->cframe;
+    fs->cframe = &frame;
+    fs->cframe->previous = &PyThreadState_GET()->root_cframe;
+}
+#endif
+
+
+void
+PyFrameStack_UpdateTracing(PyFrameStack *fs, PyThreadState *const origin_tstate)
+{
+#if GREENLET_USE_CFRAME && PY_VERSION_HEX < 0x30C0000
+    fs->use_tracing = origin_tstate->cframe->use_tracing;
+#endif
+}
+
+
+void
+PyFrameStack_DidFinish(PyFrameStack *fs, PyThreadState* tstate)
+{
+#if PY_VERSION_HEX >= 0x30B0000
+    PyObjectArenaAllocator alloc;
+    _PyStackChunk* chunk = NULL;
+    if (tstate) {
+        chunk = tstate->datastack_chunk;
+
+        PyObject_GetArenaAllocator(&alloc);
+        tstate->datastack_chunk = NULL;
+        tstate->datastack_limit = NULL;
+        tstate->datastack_top = NULL;
+
+    }
+    else if (fs->datastack_chunk) {
+        chunk = fs->datastack_chunk;
+        PyObject_GetArenaAllocator(&alloc);
+    }
+
+    if (alloc.free && chunk) {
+        while (chunk) {
+            _PyStackChunk *prev = chunk->previous;
+            chunk->previous = NULL;
+            alloc.free(alloc.ctx, chunk, chunk->size);
+            chunk = prev;
+        }
+    }
+
+    fs->datastack_chunk = NULL;
+    fs->datastack_limit = NULL;
+    fs->datastack_top = NULL;
+#endif
+}
+
+// --------------------------------------------------------------------------
+
 namespace greenlet {
 
 PythonState::PythonState()
     : _top_frame()
-#if GREENLET_USE_CFRAME
-    ,cframe(nullptr)
-    ,use_tracing(0)
-#endif
-#if GREENLET_PY312
-    ,py_recursion_depth(0)
-    ,c_recursion_depth(0)
-#else
-    ,recursion_depth(0)
-#endif
-    ,trash_delete_nesting(0)
-#if GREENLET_PY311
-    ,current_frame(nullptr)
-    ,datastack_chunk(nullptr)
-    ,datastack_top(nullptr)
-    ,datastack_limit(nullptr)
-#endif
 {
-#if GREENLET_USE_CFRAME
-    /*
-      The PyThreadState->cframe pointer usually points to memory on
-      the stack, alloceted in a call into PyEval_EvalFrameDefault.
-
-      Initially, before any evaluation begins, it points to the
-      initial PyThreadState object's ``root_cframe`` object, which is
-      statically allocated for the lifetime of the thread.
-
-      A greenlet can last for longer than a call to
-      PyEval_EvalFrameDefault, so we can't set its ``cframe`` pointer
-      to be the current ``PyThreadState->cframe``; nor could we use
-      one from the greenlet parent for the same reason. Yet a further
-      no: we can't allocate one scoped to the greenlet and then
-      destroy it when the greenlet is deallocated, because inside the
-      interpreter the _PyCFrame objects form a linked list, and that too
-      can result in accessing memory beyond its dynamic lifetime (if
-      the greenlet doesn't actually finish before it dies, its entry
-      could still be in the list).
-
-      Using the ``root_cframe`` is problematic, though, because its
-      members are never modified by the interpreter and are set to 0,
-      meaning that its ``use_tracing`` flag is never updated. We don't
-      want to modify that value in the ``root_cframe`` ourself: it
-      *shouldn't* matter much because we should probably never get
-      back to the point where that's the only cframe on the stack;
-      even if it did matter, the major consequence of an incorrect
-      value for ``use_tracing`` is that if its true the interpreter
-      does some extra work --- however, it's just good code hygiene.
-
-      Our solution: before a greenlet runs, after its initial
-      creation, it uses the ``root_cframe`` just to have something to
-      put there. However, once the greenlet is actually switched to
-      for the first time, ``g_initialstub`` (which doesn't actually
-      "return" while the greenlet is running) stores a new _PyCFrame on
-      its local stack, and copies the appropriate values from the
-      currently running _PyCFrame; this is then made the _PyCFrame for the
-      newly-minted greenlet. ``g_initialstub`` then proceeds to call
-      ``glet.run()``, which results in ``PyEval_...`` adding the
-      _PyCFrame to the list. Switches continue as normal. Finally, when
-      the greenlet finishes, the call to ``glet.run()`` returns and
-      the _PyCFrame is taken out of the linked list and the stack value
-      is now unused and free to expire.
-
-      XXX: I think we can do better. If we're deallocing in the same
-      thread, can't we traverse the list and unlink our frame?
-      Can we just keep a reference to the thread state in case we
-      dealloc in another thread? (Is that even possible if we're still
-      running and haven't returned from g_initialstub?)
-    */
-    this->cframe = &PyThreadState_GET()->root_cframe;
-#endif
+    PyFrameStack_Init(&this->frame_stack);
 }
 
 
@@ -110,48 +202,15 @@ inline void PythonState::may_switch_away() noexcept
 
 void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 {
+    PyFrameStack_Save(&this->frame_stack, tstate);
     this->_context.steal(tstate->context);
-#if GREENLET_USE_CFRAME
-    /*
-      IMPORTANT: ``cframe`` is a pointer into the STACK. Thus, because
-      the call to ``slp_switch()`` changes the contents of the stack,
-      you cannot read from ``ts_current->cframe`` after that call and
-      necessarily get the same values you get from reading it here.
-      Anything you need to restore from now to then must be saved in a
-      global/threadlocal variable (because we can't use stack
-      variables here either). For things that need to persist across
-      the switch, use `will_switch_from`.
-    */
-    this->cframe = tstate->cframe;
-  #if !GREENLET_PY312
-    this->use_tracing = tstate->cframe->use_tracing;
-  #endif
-#endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-  #if GREENLET_PY312
-    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
-    this->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
-  #else // not 312
-    this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
-  #endif // GREENLET_PY312
-    this->current_frame = tstate->cframe->current_frame;
-    this->datastack_chunk = tstate->datastack_chunk;
-    this->datastack_top = tstate->datastack_top;
-    this->datastack_limit = tstate->datastack_limit;
-
     PyFrameObject *frame = PyThreadState_GetFrame((PyThreadState *)tstate);
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new
                         // reference.
     this->_top_frame.steal(frame);
-  #if GREENLET_PY312
-    this->trash_delete_nesting = tstate->trash.delete_nesting;
-  #else // not 312
-    this->trash_delete_nesting = tstate->trash_delete_nesting;
-  #endif // GREENLET_PY312
 #else // Not 311
-    this->recursion_depth = tstate->recursion_depth;
     this->_top_frame.steal(tstate->frame);
-    this->trash_delete_nesting = tstate->trash_delete_nesting;
 #endif // GREENLET_PY311
 }
 
@@ -180,74 +239,32 @@ void PythonState::unexpose_frames()
 
 void PythonState::operator>>(PyThreadState *const tstate) noexcept
 {
+    PyFrameStack_Restore(&this->frame_stack, tstate);
     tstate->context = this->_context.relinquish_ownership();
     /* Incrementing this value invalidates the contextvars cache,
        which would otherwise remain valid across switches */
     tstate->context_ver++;
-#if GREENLET_USE_CFRAME
-    tstate->cframe = this->cframe;
-    /*
-      If we were tracing, we need to keep tracing.
-      There should never be the possibility of hitting the
-      root_cframe here. See note above about why we can't
-      just copy this from ``origin->cframe->use_tracing``.
-    */
-  #if !GREENLET_PY312
-    tstate->cframe->use_tracing = this->use_tracing;
-  #endif
-#endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
   #if GREENLET_PY312
-    tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
-    tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
     this->unexpose_frames();
-  #else // \/ 3.11
-    tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
   #endif // GREENLET_PY312
-    tstate->cframe->current_frame = this->current_frame;
-    tstate->datastack_chunk = this->datastack_chunk;
-    tstate->datastack_top = this->datastack_top;
-    tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
-  #if GREENLET_PY312
-    tstate->trash.delete_nesting = this->trash_delete_nesting;
-  #else // not 3.12
-    tstate->trash_delete_nesting = this->trash_delete_nesting;
-  #endif // GREENLET_PY312
 #else // not 3.11
     tstate->frame = this->_top_frame.relinquish_ownership();
-    tstate->recursion_depth = this->recursion_depth;
-    tstate->trash_delete_nesting = this->trash_delete_nesting;
 #endif // GREENLET_PY311
 }
 
 inline void PythonState::will_switch_from(PyThreadState *const origin_tstate) noexcept
 {
-#if GREENLET_USE_CFRAME && !GREENLET_PY312
-    // The weird thing is, we don't actually save this for an
-    // effect on the current greenlet, it's saved for an
-    // effect on the target greenlet. That is, we want
-    // continuity of this setting across the greenlet switch.
-    this->use_tracing = origin_tstate->cframe->use_tracing;
-#endif
+    PyFrameStack_UpdateTracing(&this->frame_stack, origin_tstate);
 }
 
 void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 {
+    PyFrameStack_UpdateRecursionDepth(&this->frame_stack, tstate);
     this->_top_frame = nullptr;
-#if GREENLET_PY312
-    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
-    // XXX: TODO: Comment from a reviewer:
-    //     Should this be ``C_RECURSION_LIMIT - tstate->c_recursion_remaining``?
-    // But to me it looks more like that might not be the right
-    // initialization either?
-    this->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
-#elif GREENLET_PY311
-    this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
-#else
-    this->recursion_depth = tstate->recursion_depth;
-#endif
 }
+
 // TODO: Better state management about when we own the top frame.
 int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noexcept
 {
@@ -272,14 +289,7 @@ void PythonState::tp_clear(bool own_top_frame) noexcept
 #if GREENLET_USE_CFRAME
 void PythonState::set_new_cframe(_PyCFrame& frame) noexcept
 {
-    frame = *PyThreadState_GET()->cframe;
-    /* Make the target greenlet refer to the stack value. */
-    this->cframe = &frame;
-    /*
-      And restore the link to the previous frame so this one gets
-      unliked appropriately.
-    */
-    this->cframe->previous = &PyThreadState_GET()->root_cframe;
+    PyFrameStack_UpdateCFrame(&this->frame_stack, frame);
 }
 #endif
 
@@ -290,83 +300,7 @@ const PythonState::OwnedFrame& PythonState::top_frame() const noexcept
 
 void PythonState::did_finish(PyThreadState* tstate) noexcept
 {
-#if GREENLET_PY311
-    // See https://github.com/gevent/gevent/issues/1924 and
-    // https://github.com/python-greenlet/greenlet/issues/328. In
-    // short, Python 3.11 allocates memory for frames as a sort of
-    // linked list that's kept as part of PyThreadState in the
-    // ``datastack_chunk`` member and friends. These are saved and
-    // restored as part of switching greenlets.
-    //
-    // When we initially switch to a greenlet, we set those to NULL.
-    // That causes the frame management code to treat this like a
-    // brand new thread and start a fresh list of chunks, beginning
-    // with a new "root" chunk. As we make calls in this greenlet,
-    // those chunks get added, and as calls return, they get popped.
-    // But the frame code (pystate.c) is careful to make sure that the
-    // root chunk never gets popped.
-    //
-    // Thus, when a greenlet exits for the last time, there will be at
-    // least a single root chunk that we must be responsible for
-    // deallocating.
-    //
-    // The complex part is that these chunks are allocated and freed
-    // using ``_PyObject_VirtualAlloc``/``Free``. Those aren't public
-    // functions, and they aren't exported for linking. It so happens
-    // that we know they are just thin wrappers around the Arena
-    // allocator, so we can use that directly to deallocate in a
-    // compatible way.
-    //
-    // CAUTION: Check this implementation detail on every major version.
-    //
-    // It might be nice to be able to do this in our destructor, but
-    // can we be sure that no one else is using that memory? Plus, as
-    // described below, our pointers may not even be valid anymore. As
-    // a special case, there is one time that we know we can do this,
-    // and that's from the destructor of the associated UserGreenlet
-    // (NOT main greenlet)
-    PyObjectArenaAllocator alloc;
-    _PyStackChunk* chunk = nullptr;
-    if (tstate) {
-        // We really did finish, we can never be switched to again.
-        chunk = tstate->datastack_chunk;
-        // Unfortunately, we can't do much sanity checking. Our
-        // this->datastack_chunk pointer is out of date (evaluation may
-        // have popped down through it already) so we can't verify that
-        // we deallocate it. I don't think we can even check datastack_top
-        // for the same reason.
-
-        PyObject_GetArenaAllocator(&alloc);
-        tstate->datastack_chunk = nullptr;
-        tstate->datastack_limit = nullptr;
-        tstate->datastack_top = nullptr;
-
-    }
-    else if (this->datastack_chunk) {
-        // The UserGreenlet (NOT the main greenlet!) is being deallocated. If we're
-        // still holding a stack chunk, it's garbage because we know
-        // we can never switch back to let cPython clean it up.
-        // Because the last time we got switched away from, and we
-        // haven't run since then, we know our chain is valid and can
-        // be dealloced.
-        chunk = this->datastack_chunk;
-        PyObject_GetArenaAllocator(&alloc);
-    }
-
-    if (alloc.free && chunk) {
-        // In case the arena mechanism has been torn down already.
-        while (chunk) {
-            _PyStackChunk *prev = chunk->previous;
-            chunk->previous = nullptr;
-            alloc.free(alloc.ctx, chunk, chunk->size);
-            chunk = prev;
-        }
-    }
-
-    this->datastack_chunk = nullptr;
-    this->datastack_limit = nullptr;
-    this->datastack_top = nullptr;
-#endif
+    PyFrameStack_DidFinish(&this->frame_stack, tstate);
 }
 
 
