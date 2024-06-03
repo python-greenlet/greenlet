@@ -111,7 +111,11 @@ namespace greenlet
 #else
         int recursion_depth;
 #endif
+#if GREENLET_PY313
+        PyObject *delete_later;
+#else
         int trash_delete_nesting;
+#endif
 #if GREENLET_PY311
         _PyInterpreterFrame* current_frame;
         _PyStackChunk* datastack_chunk;

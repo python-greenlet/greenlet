@@ -18,7 +18,11 @@ PythonState::PythonState()
 #else
     ,recursion_depth(0)
 #endif
+#if GREENLET_PY313
+    ,delete_later(nullptr)
+#else
     ,trash_delete_nesting(0)
+#endif
 #if GREENLET_PY311
     ,current_frame(nullptr)
     ,datastack_chunk(nullptr)
@@ -145,7 +149,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new
                         // reference.
     this->_top_frame.steal(frame);
-  #if GREENLET_PY312
+  #if GREENLET_PY313
+    this->delete_later = Py_XNewRef(tstate->delete_later);
+  #elif GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
   #else // not 312
     this->trash_delete_nesting = tstate->trash_delete_nesting;
@@ -213,7 +219,11 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
-  #if GREENLET_PY312
+  #if GREENLET_PY313
+    Py_XDECREF(tstate->delete_later);
+    tstate->delete_later = this->delete_later;
+    Py_CLEAR(this->delete_later);
+  #elif GREENLET_PY312
     tstate->trash.delete_nesting = this->trash_delete_nesting;
   #else // not 3.12
     tstate->trash_delete_nesting = this->trash_delete_nesting;

@@ -1328,6 +1328,7 @@ mod_enable_optional_cleanup(PyObject* UNUSED(module), PyObject* flag)
     Py_RETURN_NONE;
 }
 
+#if !GREENLET_PY313
 PyDoc_STRVAR(mod_get_tstate_trash_delete_nesting_doc,
              "get_tstate_trash_delete_nesting() -> Integer\n"
              "\n"
@@ -1343,6 +1344,7 @@ mod_get_tstate_trash_delete_nesting(PyObject* UNUSED(module))
     return PyLong_FromLong(tstate->trash_delete_nesting);
 #endif
 }
+#endif
 
 static PyMethodDef GreenMethods[] = {
     {"getcurrent",
@@ -1356,7 +1358,9 @@ static PyMethodDef GreenMethods[] = {
     {"get_total_main_greenlets", (PyCFunction)mod_get_total_main_greenlets, METH_NOARGS, mod_get_total_main_greenlets_doc},
     {"get_clocks_used_doing_optional_cleanup", (PyCFunction)mod_get_clocks_used_doing_optional_cleanup, METH_NOARGS, mod_get_clocks_used_doing_optional_cleanup_doc},
     {"enable_optional_cleanup", (PyCFunction)mod_enable_optional_cleanup, METH_O, mod_enable_optional_cleanup_doc},
+#if !GREENLET_PY313
     {"get_tstate_trash_delete_nesting", (PyCFunction)mod_get_tstate_trash_delete_nesting, METH_NOARGS, mod_get_tstate_trash_delete_nesting_doc},
+#endif
     {NULL, NULL} /* Sentinel */
 };
 
