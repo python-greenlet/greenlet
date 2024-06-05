@@ -138,7 +138,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
   #else // not 312
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
   #endif // GREENLET_PY312
-  #if GREENLET_USE_CFRAME
+  #if GREENLET_PY313
+    this->current_frame = tstate->current_frame;
+  #elif GREENLET_USE_CFRAME
     this->current_frame = tstate->cframe->current_frame;
   #endif
     this->datastack_chunk = tstate->datastack_chunk;
@@ -212,7 +214,9 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
   #else // \/ 3.11
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
   #endif // GREENLET_PY312
-  #if GREENLET_USE_CFRAME
+  #if GREENLET_PY313
+    tstate->current_frame = this->current_frame;
+  #elif GREENLET_USE_CFRAME
     tstate->cframe->current_frame = this->current_frame;
   #endif
     tstate->datastack_chunk = this->datastack_chunk;
