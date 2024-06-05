@@ -29,8 +29,17 @@ from __future__ import print_function, absolute_import, division
 
 import unittest
 
+try:
+    from greenlet._greenlet import get_tstate_trash_delete_nesting
+except ImportError:
+    get_tstate_trash_delete_nesting = None
+
+
 class TestTrashCanReEnter(unittest.TestCase):
 
+    # Python 3.13 has not "trash delete nesting" anymore (but "delete later")
+    @unittest.skipIf(get_tstate_trash_delete_nesting is None,
+                     'need get_tstate_trash_delete_nesting()')
     def test_it(self):
         # Try several times to trigger it, because it isn't 100%
         # reliable.

@@ -471,7 +471,9 @@ class TestGreenlet(TestCase):
         # Unfortunately, this doesn't actually clear the references, they're in the
         # fast local array.
         if not wait_for_cleanup:
-            result[0].gr_frame.f_locals.clear()
+            # f_locals has no clear method in Python 3.13
+            if hasattr(result[0].gr_frame.f_locals, 'clear'):
+                result[0].gr_frame.f_locals.clear()
         else:
             self.assertIsNone(result[0].gr_frame)
 
