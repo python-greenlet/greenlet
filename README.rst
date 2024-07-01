@@ -1,3 +1,7 @@
+.. image:: https://assets.piptrends.com/get-last-month-downloads-badge/greenlet.svg
+    :alt: greenlet Downloads Last Month by pip Trends
+    :target: https://piptrends.com/package/greenlet
+
 .. This file is included into docs/history.rst
 
 
