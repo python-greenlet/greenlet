@@ -105,7 +105,7 @@ struct ThreadState_DestroyNoGIL
         // this works first
         if (_Py_IsFinalizing()) {
             fprintf(stderr,
-                    "greenlet: WARNING: Interpreter is finilizing. Ignoring"
+                    "greenlet: WARNING: Interpreter is finalizing. Ignoring "
                     "call to Py_AddPendingCall; \n");
             return 0;
         }
