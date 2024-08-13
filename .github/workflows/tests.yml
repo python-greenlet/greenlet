@@ -24,26 +24,30 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         python-version: [3.7, 3.8, 3.9, "3.10", "3.11", "3.12"]
         os: [ubuntu-latest, macos-latest]
+        exclude:
+          - python-version: 3.7
+            os: macos-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
         cache-dependency-path: setup.py
     - name: Install dependencies
       run: |
-        python -m pip install -U pip setuptools wheel
-        python -m pip install -U twine
+        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install --upgrade twine
     - name: Install greenlet (non-Mac)
       if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
         python -m pip wheel --wheel-dir ./dist .
-        python -m pip install -U -e ".[test,docs]"
+        python -m pip install --upgrade --editable ".[test,docs]"
       env:
         # Ensure we test with assertions enabled.
         # As opposed to the manylinux builds, which we distribute and
@@ -55,7 +59,7 @@ jobs:
       if: startsWith(runner.os, 'Mac')
       run: |
         python -m pip wheel --wheel-dir ./dist .
-        python -m pip install -U -e ".[test,docs]"
+        python -m pip install --upgrade --editable ".[test,docs]"
         ls -l dist
         # Something in the build system isn't detecting that we're building for both,
         # so we're getting tagged with just x86_64. Force the universal2 tag.
@@ -77,7 +81,7 @@ jobs:
         ls -l dist
         twine check dist/*
     - name: Store greenlet wheel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: greenlet-${{ runner.os }}-${{ matrix.python-version }}.whl
         path: dist/*whl
@@ -94,7 +98,7 @@ jobs:
       # We only need to do this on one version.
       # We do this here rather than a separate job to avoid the compilation overhead.
       run: |
-        pip install -U pylint
+        pip install --upgrade pylint
         python -m pylint --rcfile=.pylintrc greenlet
 
     - name: Publish package to PyPI (mac)
@@ -113,17 +117,17 @@ jobs:
       # required for all workflows
       security-events: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: 'pip'
           cache-dependency-path: setup.py
       - name: Install dependencies
         run: |
-          python -m pip install -U pip
-          python -m pip install -U setuptools wheel
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
           # Set the `CODEQL-PYTHON` environment variable to the Python executable
           # that includes the dependencies
           echo "CODEQL_PYTHON=$(which python)" >> $GITHUB_ENV
@@ -148,6 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     # We use a regular Python matrix entry to share as much code as possible.
     strategy:
+      fail-fast: false
       matrix:
         python-version: [3.9]
         image:
@@ -162,13 +167,13 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: all
       - name: Build and test greenlet
@@ -176,12 +181,12 @@ jobs:
           DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
         run: bash ./make-manylinux
       - name: Store greenlet wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: wheelhouse/*whl
           name: ${{ matrix.image }}_wheels.zip
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.4.1
+        uses: pypa/gh-action-pypi-publish@v1.9.0
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         with:
           user: __token__
