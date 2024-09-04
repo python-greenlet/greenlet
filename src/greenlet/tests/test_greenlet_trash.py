@@ -34,7 +34,8 @@ class TestTrashCanReEnter(unittest.TestCase):
 
     def test_it(self):
         try:
-            from greenlet._greenlet import get_tstate_trash_delete_nesting
+            # pylint:disable-next=no-name-in-module
+            from greenlet._greenlet import get_tstate_trash_delete_nesting 
         except ImportError:
             import sys
             # Python 3.13 has not "trash delete nesting" anymore (but "delete later")
@@ -47,7 +48,7 @@ class TestTrashCanReEnter(unittest.TestCase):
 
     def check_it(self): # pylint:disable=too-many-statements
         import greenlet
-
+        from greenlet._greenlet import get_tstate_trash_delete_nesting # pylint:disable=no-name-in-module
         main = greenlet.getcurrent()
 
         assert get_tstate_trash_delete_nesting() == 0
