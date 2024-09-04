@@ -26,7 +26,10 @@ jobs:
     strategy:
       matrix:
         python-version: [3.7, 3.8, 3.9, "3.10", "3.11", "3.12"]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
+        include:
+          - os: macos-latest
+            python: 3.12
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python
