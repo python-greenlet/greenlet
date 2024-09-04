@@ -35,12 +35,13 @@ class TestTrashCanReEnter(unittest.TestCase):
     def test_it(self):
         try:
             # pylint:disable-next=no-name-in-module
-            from greenlet._greenlet import get_tstate_trash_delete_nesting 
+            from greenlet._greenlet import get_tstate_trash_delete_nesting # pylint:disable=unused-import
         except ImportError:
             import sys
             # Python 3.13 has not "trash delete nesting" anymore (but "delete later")
             assert sys.version_info[:2] >= (3, 13)
             self.skipTest("get_tstate_trash_delete_nesting is not available.")
+
         # Try several times to trigger it, because it isn't 100%
         # reliable.
         for _ in range(10):
