@@ -26,6 +26,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
     # Build in an isolated directory
     mkdir /tmp/build
     cd /tmp/build
+    git config --global --add safe.directory /greenlet/.git
     git clone /greenlet greenlet
     cd greenlet
 
