@@ -12,17 +12,22 @@
 
 #if PY_VERSION_HEX >= 0x30A00B1
 #    define GREENLET_PY310 1
+#else
+#    define GREENLET_PY310 0
+#endif
+
 /*
 Python 3.10 beta 1 changed tstate->use_tracing to a nested cframe member.
 See https://github.com/python/cpython/pull/25276
 We have to save and restore this as well.
+
+Python 3.13 removed PyThreadState.cframe (GH-108035).
 */
+#if GREENLET_PY310 && PY_VERSION_HEX < 0x30D0000
 #    define GREENLET_USE_CFRAME 1
 #else
 #    define GREENLET_USE_CFRAME 0
-#    define GREENLET_PY310 0
 #endif
-
 
 
 #if PY_VERSION_HEX >= 0x30B00A4
@@ -48,6 +53,12 @@ https://bugs.python.org/issue46090). Summary of breaking internal changes:
 #    define GREENLET_PY312 1
 #else
 #    define GREENLET_PY312 0
+#endif
+
+#if PY_VERSION_HEX >= 0x30D0000
+#    define GREENLET_PY313 1
+#else
+#    define GREENLET_PY313 0
 #endif
 
 #ifndef Py_SET_REFCNT
@@ -122,6 +133,10 @@ static inline void PyThreadState_LeaveTracing(PyThreadState *tstate)
     tstate->use_tracing = use_tracing;
 #endif
 }
+#endif
+
+#if !defined(Py_C_RECURSION_LIMIT) && defined(C_RECURSION_LIMIT)
+#  define Py_C_RECURSION_LIMIT C_RECURSION_LIMIT
 #endif
 
 #endif /* GREENLET_CPYTHON_COMPAT_H */

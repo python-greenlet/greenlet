@@ -18,7 +18,11 @@ PythonState::PythonState()
 #else
     ,recursion_depth(0)
 #endif
+#if GREENLET_PY313
+    ,delete_later(nullptr)
+#else
     ,trash_delete_nesting(0)
+#endif
 #if GREENLET_PY311
     ,current_frame(nullptr)
     ,datastack_chunk(nullptr)
@@ -130,11 +134,15 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
 #if GREENLET_PY311
   #if GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
-    this->c_recursion_depth = C_RECURSION_LIMIT - tstate->c_recursion_remaining;
+    this->c_recursion_depth = Py_C_RECURSION_LIMIT - tstate->c_recursion_remaining;
   #else // not 312
     this->recursion_depth = tstate->recursion_limit - tstate->recursion_remaining;
   #endif // GREENLET_PY312
+  #if GREENLET_PY313
+    this->current_frame = tstate->current_frame;
+  #elif GREENLET_USE_CFRAME
     this->current_frame = tstate->cframe->current_frame;
+  #endif
     this->datastack_chunk = tstate->datastack_chunk;
     this->datastack_top = tstate->datastack_top;
     this->datastack_limit = tstate->datastack_limit;
@@ -143,7 +151,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new
                         // reference.
     this->_top_frame.steal(frame);
-  #if GREENLET_PY312
+  #if GREENLET_PY313
+    this->delete_later = Py_XNewRef(tstate->delete_later);
+  #elif GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
   #else // not 312
     this->trash_delete_nesting = tstate->trash_delete_nesting;
@@ -199,17 +209,25 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
 #if GREENLET_PY311
   #if GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
-    tstate->c_recursion_remaining = C_RECURSION_LIMIT - this->c_recursion_depth;
+    tstate->c_recursion_remaining = Py_C_RECURSION_LIMIT - this->c_recursion_depth;
     this->unexpose_frames();
   #else // \/ 3.11
     tstate->recursion_remaining = tstate->recursion_limit - this->recursion_depth;
   #endif // GREENLET_PY312
+  #if GREENLET_PY313
+    tstate->current_frame = this->current_frame;
+  #elif GREENLET_USE_CFRAME
     tstate->cframe->current_frame = this->current_frame;
+  #endif
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
     this->_top_frame.relinquish_ownership();
-  #if GREENLET_PY312
+  #if GREENLET_PY313
+    Py_XDECREF(tstate->delete_later);
+    tstate->delete_later = this->delete_later;
+    Py_CLEAR(this->delete_later);
+  #elif GREENLET_PY312
     tstate->trash.delete_nesting = this->trash_delete_nesting;
   #else // not 3.12
     tstate->trash_delete_nesting = this->trash_delete_nesting;
@@ -238,7 +256,7 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 #if GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     // XXX: TODO: Comment from a reviewer:
-    //     Should this be ``C_RECURSION_LIMIT - tstate->c_recursion_remaining``?
+    //     Should this be ``Py_C_RECURSION_LIMIT - tstate->c_recursion_remaining``?
     // But to me it looks more like that might not be the right
     // initialization either?
     this->c_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
