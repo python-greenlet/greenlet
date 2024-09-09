@@ -207,7 +207,6 @@ class TestCase(TestCaseMetaClass(
 
     def run_script(self, script_name, show_output=True):
         import subprocess
-        import os
         script = os.path.join(
             os.path.dirname(__file__),
             script_name,
