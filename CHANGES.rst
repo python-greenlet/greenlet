@@ -2,10 +2,19 @@
  Changes
 =========
 
-3.0.4 (unreleased)
+3.1.0 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Adds support for Python 3.13.
+
+.. note::
+
+   greenlet will not work in no-gil (free threaded) builds of CPython.
+   Internally, greenlet heavily depends on the GIL.
+
+.. note::
+
+    This will be the last release to support Python 3.7 and 3.8.
 
 
 3.0.3 (2023-12-21)

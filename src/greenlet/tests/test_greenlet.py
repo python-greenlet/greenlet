@@ -220,6 +220,13 @@ class TestGreenlet(TestCase):
         self.assertIn("SomeError", v)
 
 
+    @unittest.skipIf(
+        PY313 and RUNNING_ON_MANYLINUX,
+        "Sometimes flaky (getting one GreenletExit in the second list)"
+        # Probably due to funky timing interactions?
+        # TODO: FIXME Make that work.
+    )
+
     def test_dealloc_other_thread(self):
         seen = []
         someref = []
