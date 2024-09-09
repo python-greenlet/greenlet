@@ -42,6 +42,12 @@ environment:
 
     # Fully supported 64-bit versions, with testing. This should be
     # all the current (non EOL) versions.
+    - PYTHON: "C:\\Python313-x64"
+      PYTHON_VERSION: "3.13.0"
+      PYTHON_ARCH: "64"
+      PYTHON_EXE: python
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+
     - PYTHON: "C:\\Python312-x64"
       PYTHON_VERSION: "3.12.0"
       PYTHON_ARCH: "64"
