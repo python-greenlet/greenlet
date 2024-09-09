@@ -1,17 +1,17 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import gc
 import sys
 import time
 import threading
+import unittest
 
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
+from abc import abstractmethod
 
 import greenlet
 from greenlet import greenlet as RawGreenlet
 from . import TestCase
+from . import RUNNING_ON_MANYLINUX
+from . import PY313
 from .leakcheck import fails_leakcheck
 
 
@@ -207,10 +207,7 @@ class TestGreenlet(TestCase):
         # we don't get the exception, it just gets printed.
         # When we run on 3.8 only, we can use sys.unraisablehook
         oldstderr = sys.stderr
-        try:
-            from cStringIO import StringIO
-        except ImportError:
-            from io import StringIO
+        from io import StringIO
         stderr = sys.stderr = StringIO()
         try:
             del g
@@ -716,6 +713,13 @@ class TestGreenlet(TestCase):
         del self.glets
         self.assertEqual(sys.getrefcount(Greenlet), initial_refs)
 
+    @unittest.skipIf(
+        PY313 and RUNNING_ON_MANYLINUX,
+        "The manylinux images appear to hang on this test on 3.13rc2"
+        # Or perhaps I just got tired of waiting for the 450s timeout.
+        # Still, it shouldn't take anywhere near that long. Does not reproduce in
+        # Ubuntu images, on macOS or Windows.
+    )
     def test_issue_245_reference_counting_subclass_threads(self):
         # https://github.com/python-greenlet/greenlet/issues/245
         from threading import Thread
@@ -1309,5 +1313,4 @@ class TestBrokenGreenlets(TestCase):
         )
 
 if __name__ == '__main__':
-    import unittest
     unittest.main()

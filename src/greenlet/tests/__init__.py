@@ -3,10 +3,7 @@
 Tests for greenlet.
 
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+import os
 import sys
 import unittest
 
@@ -27,7 +24,14 @@ from greenlet._greenlet import get_total_main_greenlets
 from . import leakcheck
 
 PY312 = sys.version_info[:2] >= (3, 12)
+PY313 = sys.version_info[:2] >= (3, 13)
+
 WIN = sys.platform.startswith("win")
+RUNNING_ON_GITHUB_ACTIONS = os.environ.get('GITHUB_ACTIONS')
+RUNNING_ON_TRAVIS = os.environ.get('TRAVIS') or RUNNING_ON_GITHUB_ACTIONS
+RUNNING_ON_APPVEYOR = os.environ.get('APPVEYOR')
+RUNNING_ON_CI = RUNNING_ON_TRAVIS or RUNNING_ON_APPVEYOR
+RUNNING_ON_MANYLINUX = os.environ.get('GREENLET_MANYLINUX')
 
 class TestCaseMetaClass(type):
     # wrap each test method with
