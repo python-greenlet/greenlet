@@ -33,9 +33,9 @@ jobs:
           - os: macos-latest
             python-version: 3.13
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -83,7 +83,7 @@ jobs:
         ls -l dist
         twine check dist/*
     - name: Store greenlet wheel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: greenlet-${{ runner.os }}-${{ matrix.python-version }}.whl
         path: dist/*whl
@@ -119,9 +119,9 @@ jobs:
       # required for all workflows
       security-events: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: 'pip'
@@ -168,13 +168,13 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: all
       - name: Build and test greenlet
@@ -182,12 +182,12 @@ jobs:
           DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
         run: bash ./make-manylinux
       - name: Store greenlet wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: wheelhouse/*whl
           name: ${{ matrix.image }}_wheels.zip
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.4.1
+        uses: pypa/gh-action-pypi-publish@v1.9.0
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         with:
           user: __token__

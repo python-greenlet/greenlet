@@ -16,6 +16,9 @@
 
     This will be the last release to support Python 3.7 and 3.8.
 
+- Greatly reduce the chances for crashes during interpreter shutdown.
+  See `issue 411 <https://github.com/python-greenlet/greenlet/issues/411>`_.
+
 
 3.0.3 (2023-12-21)
 ==================
