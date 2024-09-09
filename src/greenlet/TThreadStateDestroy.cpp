@@ -139,7 +139,7 @@ struct ThreadState_DestroyNoGIL
 
         // NOTE: Because we're not holding the GIL here, some other
         // Python thread could run and call ``os.fork()``, which would
-        // be bad if that happenend while we are holding the cleanup
+        // be bad if that happened while we are holding the cleanup
         // lock (it wouldn't function in the child process).
         // Make a best effort to try to keep the duration we hold the
         // lock short.

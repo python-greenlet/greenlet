@@ -196,7 +196,7 @@ Known Issues
 =====================
 
 - Linux: Fix another group of rare crashes that could occur when shutting down an
-  interpeter running multiple threads. See `issue 325 <https://github.com/python-greenlet/greenlet/issues/325>`_.
+  interpreter running multiple threads. See `issue 325 <https://github.com/python-greenlet/greenlet/issues/325>`_.
 
 
 2.0.0rc4 (2022-10-30)

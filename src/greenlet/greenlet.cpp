@@ -1220,7 +1220,7 @@ mod_gettrace(PyObject* UNUSED(module))
 PyDoc_STRVAR(mod_set_thread_local_doc,
              "set_thread_local(key, value) -> None\n"
              "\n"
-             "Set a value in the current thread-local dictionary. Debbuging only.\n");
+             "Set a value in the current thread-local dictionary. Debugging only.\n");
 
 static PyObject*
 mod_set_thread_local(PyObject* UNUSED(module), PyObject* args)
