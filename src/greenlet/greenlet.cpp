@@ -238,8 +238,13 @@ green_setrun(BorrowedGreenlet self, BorrowedObject nrun, void* c);
 static int
 green_setparent(BorrowedGreenlet self, BorrowedObject nparent, void* c);
 
+// green_init is used in the tp_init slot. So it's important that
+// it can be called directly from CPython. Thus, we don't use
+// BorrowedGreenlet and BorrowedObject --- although in theory
+// these should be binary layout compatible, that may not be
+// guaranteed to be the case (32-bit linux ppc possibly).
 static int
-green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
+green_init(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
     PyArgParseParam run;
     PyArgParseParam nparent;
@@ -876,7 +881,7 @@ PyGreenlet_New(PyObject* run, PyGreenlet* parent)
             kwargs.SetItem("parent", (PyObject*)parent);
         }
 
-        Require(green_init(g, mod_globs->empty_tuple, kwargs));
+        Require(green_init(g.borrow(), mod_globs->empty_tuple, kwargs.borrow()));
     }
     catch (const PyErrOccurred&) {
         return nullptr;
