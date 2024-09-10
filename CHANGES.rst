@@ -30,7 +30,7 @@ services.
 - Hitachi's `SuperH CPU <https://github.com/python-greenlet/greenlet/issues/166>`_.
 - `NetBSD on PowerPC.
   <https://github.com/python-greenlet/greenlet/pull/402>`_
-- RiscV 64 with `-fno-omic-frame-pointer
+- RiscV 64 with `-fno-omit-frame-pointer
   <https://github.com/python-greenlet/greenlet/pull/404>`_. Note that
   there are `known test failures
   <https://github.com/python-greenlet/greenlet/issues/403>`_, so this
