@@ -243,7 +243,7 @@ green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
 {
     PyArgParseParam run;
     PyArgParseParam nparent;
-    static const char* const kwlist[] = {
+    static char* kwlist[] = {
         "run",
         "parent",
         NULL
@@ -251,7 +251,7 @@ green_init(BorrowedGreenlet self, BorrowedObject args, BorrowedObject kwargs)
 
     // recall: The O specifier does NOT increase the reference count.
     if (!PyArg_ParseTupleAndKeywords(
-             args, kwargs, "|OO:green", (char**)kwlist, &run, &nparent)) {
+             args, kwargs, "|OO:green", kwlist, &run, &nparent)) {
         return -1;
     }
 
