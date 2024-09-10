@@ -5,6 +5,10 @@
 3.1.0 (unreleased)
 ==================
 
+.. note::
+
+    This will be the last release to support Python 3.7 and 3.8.
+
 - Adds support for Python 3.13.
 
 .. note::
@@ -12,15 +16,25 @@
    greenlet will not work in no-gil (free threaded) builds of CPython.
    Internally, greenlet heavily depends on the GIL.
 
-.. note::
-
-    This will be the last release to support Python 3.7 and 3.8.
-
 - Greatly reduce the chances for crashes during interpreter shutdown.
   See `issue 411
   <https://github.com/python-greenlet/greenlet/issues/411>`_.
-- Add untested support for Hitachi's SuperH CPU. This is not tested in
-  CI. See `issue 166 <https://github.com/python-greenlet/greenlet/issues/166>`_.
+
+Platform Support
+----------------
+
+Support for the following platforms was contributed by the community.
+Note that they are untested by this project's continuous integration
+services.
+
+- Hitachi's `SuperH CPU <https://github.com/python-greenlet/greenlet/issues/166>`_.
+- `NetBSD on PowerPC.
+  <https://github.com/python-greenlet/greenlet/pull/402>`_
+- RiscV 64 with `-fno-omic-frame-pointer
+  <https://github.com/python-greenlet/greenlet/pull/404>`_. Note that
+  there are `known test failures
+  <https://github.com/python-greenlet/greenlet/issues/403>`_, so this
+  platform may not work reliably at all.
 
 
 3.0.3 (2023-12-21)
