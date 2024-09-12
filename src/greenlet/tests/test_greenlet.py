@@ -456,11 +456,10 @@ class TestGreenlet(TestCase):
             result[0].throw(SomeError)
 
         if not wait_for_cleanup:
-            self.assertIn(
-                str(exc.exception), [
-                    "cannot switch to a different thread (which happens to have exited)",
-                    "cannot switch to a different thread"
-                ]
+            s = str(exc.exception)
+            self.assertTrue(
+                s == "cannot switch to a different thread (which happens to have exited)"
+                or 'Cannot switch' in s
             )
         else:
             self.assertEqual(
