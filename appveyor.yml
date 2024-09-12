@@ -4,11 +4,8 @@ shallow_clone: true
 build:
   parallel: true
   verbosity: minimal
-# The VS 2019 image doesn't have
-# the MSVC needed for Python 2.7.
-# Note that as of 2020-11-11, this does not include
-# a Python 3.9 build.
-image: Visual Studio 2015
+
+image: Visual Studio 2022
 
 environment:
   global:
@@ -46,43 +43,43 @@ environment:
       PYTHON_VERSION: "3.13.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+
 
     - PYTHON: "C:\\Python312-x64"
       PYTHON_VERSION: "3.12.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+
 
     - PYTHON: "C:\\Python311-x64"
       PYTHON_VERSION: "3.11.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+
 
     - PYTHON: "C:\\Python310-x64"
       PYTHON_VERSION: "3.10.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+
 
     - PYTHON: "C:\\Python39-x64"
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "3.9.x"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
 
     - PYTHON: "C:\\Python38-x64"
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "3.8.x"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
 
     - PYTHON: "C:\\Python37-x64"
       PYTHON_ARCH: "64"
       PYTHON_VERSION: "3.7.x"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
 
     # Tested 32-bit versions. A small, hand-picked selection covering
     # important variations. No need to include newer versions of
@@ -92,7 +89,7 @@ environment:
       PYTHON_ARCH: "32"
       PYTHON_VERSION: "3.9.x"
       PYTHON_EXE: python
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+
 
 
     # Untested 64-bit versions. We don't expect any variance here from
