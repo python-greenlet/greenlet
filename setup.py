@@ -109,6 +109,11 @@ elif is_win and "MSC" in plat_compiler:
     # functions up. Revisit those.
     cpp_compile_args.append("/GT")
 
+    # MSVC won't handle named struct initializers with its default
+    # standard. It complains about them instead and tells us to add
+    # this:
+    cpp_compile_args.append('/std:c++20')
+
 def readfile(filename):
     with open(filename, 'r') as f: # pylint:disable=unspecified-encoding
         return f.read()
