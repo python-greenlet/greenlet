@@ -1025,7 +1025,9 @@ class TestGreenletSetParentErrors(TestCase):
 
             with self.assertRaises(greenlet.error) as exc:
                 g.switch()
-            self.assertEqual(str(exc.exception), "cannot switch to a different thread")
+            self.assertIn("Cannot switch to a different thread", str(exc.exception))
+            self.assertIn("Expected", str(exc.exception))
+            self.assertIn("Current", str(exc.exception))
         finally:
             keep_main_alive.set()
             t.join(10)

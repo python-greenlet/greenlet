@@ -12,7 +12,7 @@
 #ifndef T_THREADSTATE_DESTROY
 #define T_THREADSTATE_DESTROY
 
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 #include "greenlet_thread_state.hpp"
 #include "greenlet_thread_support.hpp"
 #include "greenlet_cpython_add_pending.hpp"

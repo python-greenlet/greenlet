@@ -77,6 +77,27 @@ namespace greenlet {
             // issues to worry about.
             PyErr_SetString(exc_kind, msg.c_str());
         }
+
+        PyErrOccurred(PyObject* exc_kind,
+                      const std::string msg, //This is the format
+                                             //string; that's not
+                                             //usually safe!
+
+                      PyObject* borrowed_obj_one, PyObject* borrowed_obj_two)
+            : std::runtime_error(msg)
+        {
+
+            //This is designed specifically for the
+            //``check_switch_allowed`` function.
+
+            // PyObject_Str and PyObject_Repr are safe to call with
+            // NULL pointers; they return the string "<NULL>" in that
+            // case.
+            // This function always returns null.
+            PyErr_Format(exc_kind,
+                         msg.c_str(),
+                         borrowed_obj_one, borrowed_obj_two);
+        }
     };
 
     class TypeError : public PyErrOccurred

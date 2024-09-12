@@ -133,7 +133,11 @@ namespace greenlet {
     // incref'd, and which the caller MUST NOT decref,
     // should return a ``BorrowedObject``.
 
-    //
+    // XXX: The following two paragraphs do not hold for all platforms.
+    // Notably, 32-bit PPC Linux passes structs by reference, not by
+    // value, so this actually doesn't work. (Although that's the only
+    // platform that doesn't work on.) DO NOT ATTEMPT IT.
+
     // For a class with a single pointer member, whose constructor
     // does nothing but copy a pointer parameter into the member, and
     // which can then be converted back to the pointer type, compilers

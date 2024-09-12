@@ -9,8 +9,10 @@
  * Fix missing braces with:
  *   clang-tidy src/greenlet/greenlet.c -fix -checks="readability-braces-around-statements"
 */
+#ifndef T_MAIN_GREENLET_CPP
+#define T_MAIN_GREENLET_CPP
 
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 #include "greenlet_thread_state.hpp"
 
 
@@ -153,3 +155,5 @@ MainGreenlet::parent() const
 }
 
 }; // namespace greenlet
+
+#endif

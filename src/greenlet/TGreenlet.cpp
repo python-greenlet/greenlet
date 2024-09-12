@@ -9,9 +9,10 @@
  * Fix missing braces with:
  *   clang-tidy src/greenlet/greenlet.c -fix -checks="readability-braces-around-statements"
 */
-
+#ifndef TGREENLET_CPP
+#define TGREENLET_CPP
 #include "greenlet_internal.hpp"
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 #include "greenlet_thread_state.hpp"
 
 #include "TGreenletGlobals.cpp"
@@ -270,8 +271,10 @@ Greenlet::check_switch_allowed() const
         || (!current_main_greenlet->thread_state())) {
         // CAUTION: This may trigger memory allocations, gc, and
         // arbitrary Python code.
-        throw PyErrOccurred(mod_globs->PyExc_GreenletError,
-                            "cannot switch to a different thread");
+        throw PyErrOccurred(
+            mod_globs->PyExc_GreenletError,
+            "Cannot switch to a different thread\n\tCurrent:  %R\n\tExpected: %R",
+            current_main_greenlet, main_greenlet);
     }
 }
 
@@ -712,3 +715,4 @@ void Greenlet::expose_frames()
 #endif
 
 }; // namespace greenlet
+#endif

@@ -1,7 +1,7 @@
 #ifndef GREENLET_STACK_STATE_CPP
 #define GREENLET_STACK_STATE_CPP
 
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 
 namespace greenlet {
 

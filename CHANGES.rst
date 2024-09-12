@@ -5,8 +5,9 @@
 3.1.1 (unreleased)
 ==================
 
-- Nothing changed yet.
-
+- Fix crashes on 32-bit PPC Linux.
+  See `issue 422
+  <https://github.com/python-greenlet/greenlet/issues/422>`_.
 
 3.1.0 (2024-09-10)
 ==================

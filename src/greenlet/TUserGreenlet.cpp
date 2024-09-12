@@ -9,9 +9,11 @@
  * Fix missing braces with:
  *   clang-tidy src/greenlet/greenlet.c -fix -checks="readability-braces-around-statements"
 */
+#ifndef T_USER_GREENLET_CPP
+#define T_USER_GREENLET_CPP
 
 #include "greenlet_internal.hpp"
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 #include "greenlet_thread_state.hpp"
 #include "TThreadStateDestroy.cpp"
 
@@ -665,3 +667,4 @@ UserGreenlet::ParentIsCurrentGuard::~ParentIsCurrentGuard()
 }
 
 }; //namespace greenlet
+#endif

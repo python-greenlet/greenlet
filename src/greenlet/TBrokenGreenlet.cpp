@@ -10,7 +10,7 @@
  *   clang-tidy src/greenlet/greenlet.c -fix -checks="readability-braces-around-statements"
 */
 
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 
 namespace greenlet {
 

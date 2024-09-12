@@ -4,8 +4,6 @@
 #ifdef __clang__
 #    pragma clang diagnostic push
 #    pragma clang diagnostic ignored "-Wunused-function"
-#    pragma clang diagnostic ignored "-Wmissing-field-initializers"
-#    pragma clang diagnostic ignored "-Wunused-variable"
 #endif
 
 /**
@@ -17,7 +15,7 @@
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_cpython_compat.hpp"
 #include "greenlet_exceptions.hpp"
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 #include "greenlet_allocator.hpp"
 
 #include <vector>

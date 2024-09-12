@@ -2,7 +2,7 @@
 #define GREENLET_EXCEPTION_STATE_CPP
 
 #include <Python.h>
-#include "greenlet_greenlet.hpp"
+#include "TGreenlet.hpp"
 
 namespace greenlet {
 
