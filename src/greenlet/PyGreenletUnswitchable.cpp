@@ -126,8 +126,8 @@ static PyGetSetDef green_unswitchable_getsets[] = {
 };
 
 PyTypeObject PyGreenletUnswitchable_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "greenlet._greenlet.UnswitchableGreenlet",
+    .ob_base=PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name="greenlet._greenlet.UnswitchableGreenlet",
     .tp_dealloc= (destructor)green_dealloc, /* tp_dealloc */
     .tp_flags=G_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
     .tp_doc="Undocumented internal class",                        /* tp_doc */

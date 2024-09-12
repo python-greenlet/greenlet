@@ -275,7 +275,7 @@ static const char* const copy_on_greentype[] = {
 };
 
 static struct PyModuleDef greenlet_module_def = {
-    PyModuleDef_HEAD_INIT,
+    .m_base=PyModuleDef_HEAD_INIT,
     .m_name="greenlet._greenlet",
     .m_doc=NULL,
     .m_size=-1,

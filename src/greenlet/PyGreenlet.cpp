@@ -719,7 +719,7 @@ static PyNumberMethods green_as_number = {
 
 
 PyTypeObject PyGreenlet_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
+    .ob_base=PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name="greenlet.greenlet", /* tp_name */
     .tp_basicsize=sizeof(PyGreenlet),  /* tp_basicsize */
     /* methods */
