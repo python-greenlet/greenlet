@@ -108,9 +108,13 @@ struct ThreadState_DestroyNoGIL
 #else
         if (_Py_IsFinalizing()) {
 #endif
+#ifdef GREENLET_DEBUG
+            // No need to log in the general case. Yes, we'll leak,
+            // but we're shutting down so it should be ok.
             fprintf(stderr,
                     "greenlet: WARNING: Interpreter is finalizing. Ignoring "
                     "call to Py_AddPendingCall; \n");
+#endif
             return 0;
         }
         return Py_AddPendingCall(func, arg);

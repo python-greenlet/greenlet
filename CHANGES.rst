@@ -8,6 +8,8 @@
 - Fix crashes on 32-bit PPC Linux.
   See `issue 422
   <https://github.com/python-greenlet/greenlet/issues/422>`_.
+- Remove unnecessary logging sometimes during interpreter shutdown.
+  See `issue 426 <https://github.com/python-greenlet/greenlet/issues/426>`_.
 
 3.1.0 (2024-09-10)
 ==================
