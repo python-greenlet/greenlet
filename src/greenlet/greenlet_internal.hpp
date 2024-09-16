@@ -52,7 +52,7 @@ greenlet::refs::MainGreenletExactChecker(void *p)
     // Greenlets from dead threads no longer respond to main() with a
     // true value; so in that case we need to perform an additional
     // check.
-    Greenlet* g = ((PyGreenlet*)p)->pimpl;
+    Greenlet* g = static_cast<PyGreenlet*>(p)->pimpl;
     if (g->main()) {
         return;
     }
@@ -88,7 +88,6 @@ extern PyTypeObject PyGreenlet_Type;
 /**
   * Forward declarations needed in multiple files.
   */
-static PyGreenlet* green_create_main(greenlet::ThreadState*);
 static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
 static int green_is_gc(BorrowedGreenlet self);
 

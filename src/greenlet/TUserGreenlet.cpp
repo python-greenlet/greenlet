@@ -38,7 +38,6 @@ void UserGreenlet::operator delete(void* ptr)
 UserGreenlet::UserGreenlet(PyGreenlet* p, BorrowedGreenlet the_parent)
     : Greenlet(p), _parent(the_parent)
 {
-    this->_self = p;
 }
 
 UserGreenlet::~UserGreenlet()
@@ -49,13 +48,6 @@ UserGreenlet::~UserGreenlet()
     this->python_state.did_finish(nullptr);
     this->tp_clear();
 }
-
-BorrowedGreenlet
-UserGreenlet::self() const noexcept
-{
-    return this->_self;
-}
-
 
 
 const BorrowedMainGreenlet
@@ -240,7 +232,7 @@ UserGreenlet::g_initialstub(void* mark)
           self.run is the object to call in the new greenlet.
           This could run arbitrary python code and switch greenlets!
         */
-        run = this->_self.PyRequireAttr(mod_globs->str_run);
+        run = this->self().PyRequireAttr(mod_globs->str_run);
         /* restore saved exception */
         saved.PyErrRestore();
 
@@ -600,7 +592,7 @@ UserGreenlet::parent(const BorrowedObject raw_new_parent)
                                                           // throw
                                                           // TypeError!
     for (BorrowedGreenlet p = new_parent; p; p = p->parent()) {
-        if (p == this->_self) {
+        if (p == this->self()) {
             throw ValueError("cyclic parent chain");
         }
         main_greenlet_of_new_parent = p->main_greenlet();

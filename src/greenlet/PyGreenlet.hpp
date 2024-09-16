@@ -15,7 +15,6 @@ using greenlet::refs::PyErrPieces;
 
 
 // XXX: These doesn't really belong here, it's not a Python slot.
-static PyGreenlet* green_create_main(greenlet::ThreadState* state);
 static OwnedObject internal_green_throw(BorrowedGreenlet self, PyErrPieces& err_pieces);
 
 static PyGreenlet* green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds));

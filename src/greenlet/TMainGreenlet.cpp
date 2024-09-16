@@ -63,12 +63,6 @@ MainGreenlet::thread_state(ThreadState* t) noexcept
     this->_thread_state = t;
 }
 
-BorrowedGreenlet
-MainGreenlet::self() const noexcept
-{
-    return BorrowedGreenlet(this->_self.borrow());
-}
-
 
 const BorrowedMainGreenlet
 MainGreenlet::main_greenlet() const

@@ -124,6 +124,27 @@ private:
 
     G_NO_COPIES_OF_CLS(ThreadState);
 
+
+    // Allocates a main greenlet for the thread state. If this fails,
+    // exits the process. Called only during constructing a ThreadState.
+    MainGreenlet* alloc_main()
+    {
+        PyGreenlet* gmain;
+
+        /* create the main greenlet for this thread */
+        gmain = reinterpret_cast<PyGreenlet*>(PyType_GenericAlloc(&PyGreenlet_Type, 0));
+        if (gmain == NULL) {
+            throw PyFatalError("alloc_main failed to alloc"); //exits the process
+        }
+
+        MainGreenlet* const main = new MainGreenlet(gmain, this);
+
+        assert(Py_REFCNT(gmain) == 1);
+        assert(gmain->pimpl == main);
+        return main;
+    }
+
+
 public:
     static void* operator new(size_t UNUSED(count))
     {
@@ -143,20 +164,23 @@ public:
     }
 
     ThreadState()
-        : main_greenlet(OwnedMainGreenlet::consuming(green_create_main(this))),
-          current_greenlet(main_greenlet)
     {
-        if (!this->main_greenlet) {
-            // We failed to create the main greenlet. That's bad.
-            throw PyFatalError("Failed to create main greenlet");
-        }
-        // The main greenlet starts with 1 refs: The returned one. We
-        // then copied it to the current greenlet.
-        assert(this->main_greenlet.REFCNT() == 2);
 
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
         this->exception_state = slp_get_exception_state();
 #endif
+
+        // XXX: Potentially dangerous, exposing a not fully
+        // constructed object.
+        MainGreenlet* const main = this->alloc_main();
+        this->main_greenlet = OwnedMainGreenlet::consuming(
+            main->self()
+        );
+        assert(this->main_greenlet);
+        this->current_greenlet = main->self();
+        // The main greenlet starts with 1 refs: The returned one. We
+        // then copied it to the current greenlet.
+        assert(this->main_greenlet.REFCNT() == 2);
     }
 
     inline void restore_exception_state()

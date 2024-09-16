@@ -21,8 +21,15 @@
 namespace greenlet {
 
 Greenlet::Greenlet(PyGreenlet* p)
+    :  Greenlet(p, StackState())
 {
-    p ->pimpl = this;
+}
+
+Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
+    :  _self(p), stack_state(initial_stack)
+{
+    assert(p->pimpl == nullptr);
+    p->pimpl = this;
 }
 
 Greenlet::~Greenlet()
@@ -30,14 +37,7 @@ Greenlet::~Greenlet()
     // XXX: Can't do this. tp_clear is a virtual function, and by the
     // time we're here, we've sliced off our child classes.
     //this->tp_clear();
-}
-
-Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
-    : stack_state(initial_stack)
-{
-    // can't use a delegating constructor because of
-    // MSVC for Python 2.7
-    p->pimpl = this;
+    this->_self->pimpl = nullptr;
 }
 
 bool
