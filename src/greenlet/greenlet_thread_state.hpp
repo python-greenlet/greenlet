@@ -496,9 +496,21 @@ private:
     // Set to 0 on destruction.
     ThreadState* _state;
     G_NO_COPIES_OF_CLS(ThreadStateCreator);
+
+    inline bool has_initialized_state() const
+    {
+        return this->_state != (ThreadState*)1;
+    }
+
+    inline bool has_state() const
+    {
+        return this->has_initialized_state() && this->_state != nullptr;
+    }
+
 public:
 
-    // Only one of these, auto created per thread
+    // Only one of these, auto created per thread.
+    // Constructing the state constructs the MainGreenlet.
     ThreadStateCreator() :
         _state((ThreadState*)1)
     {
@@ -522,7 +534,7 @@ public:
         // access the pointer from the main greenlet. Deleting the
         // thread, and hence the thread-local storage, will delete the
         // state pointer in the main greenlet.
-        if (this->_state == (ThreadState*)1) {
+        if (!this->has_initialized_state()) {
             // XXX: Assuming allocation never fails
             this->_state = new ThreadState;
             // For non-standard threading, we need to store an object
@@ -548,7 +560,7 @@ public:
 
     inline int tp_traverse(visitproc visit, void* arg)
     {
-        if (this->_state) {
+        if (this->has_state()) {
             return this->_state->tp_traverse(visit, arg);
         }
         return 0;
