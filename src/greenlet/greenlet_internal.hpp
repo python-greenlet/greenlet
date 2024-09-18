@@ -27,6 +27,10 @@ typedef struct _greenlet PyGreenlet;
 namespace greenlet {
 
     class ThreadState;
+    // We can't use the PythonAllocator for this, because we push to it
+    // from the thread state destructor, which doesn't have the GIL,
+    // and Python's allocators can only be called with the GIL.
+    typedef std::vector<ThreadState*> cleanup_queue_t;
 
 };
 

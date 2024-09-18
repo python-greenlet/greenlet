@@ -13,7 +13,7 @@
 #define T_MAIN_GREENLET_CPP
 
 #include "TGreenlet.hpp"
-#include "greenlet_thread_state.hpp"
+
 
 
 // Protected by the GIL. Incremented when we create a main greenlet,

@@ -13,7 +13,7 @@
 #define TGREENLET_CPP
 #include "greenlet_internal.hpp"
 #include "TGreenlet.hpp"
-#include "greenlet_thread_state.hpp"
+
 
 #include "TGreenletGlobals.cpp"
 #include "TThreadStateDestroy.cpp"

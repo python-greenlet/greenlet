@@ -17,7 +17,7 @@
 // as well.
 #include "greenlet_refs.hpp"
 #include "greenlet_slp_switch.hpp"
-#include "greenlet_thread_state.hpp"
+
 #include "greenlet_thread_support.hpp"
 #include "TGreenlet.hpp"
 

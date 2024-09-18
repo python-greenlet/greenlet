@@ -15,7 +15,7 @@
 #include "greenlet_refs.hpp"
 #include "greenlet_exceptions.hpp"
 #include "greenlet_thread_support.hpp"
-#include "greenlet_thread_state.hpp"
+#include "greenlet_internal.hpp"
 
 namespace greenlet {
 

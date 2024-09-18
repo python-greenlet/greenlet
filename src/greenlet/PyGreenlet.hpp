@@ -5,7 +5,7 @@
 #include "greenlet.h"
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_refs.hpp"
-#include "greenlet_thread_state.hpp"
+
 
 using greenlet::refs::OwnedGreenlet;
 using greenlet::refs::BorrowedGreenlet;
