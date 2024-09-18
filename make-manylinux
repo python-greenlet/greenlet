@@ -22,7 +22,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
     # Note: -Ofast includes -ffast-math which affects process-wide floating-point flags (e.g. can affect numpy).
     # It may also violate standards compliance in a few ways. Rather than opt-out with -fno-fast-math,
     # we use O3, which has neither of those problems.
-    export CFLAGS="-O3 -DNDEBUG"
+    export CFLAGS="-O3 -DNDEBUG -Wall"
     # Build in an isolated directory
     mkdir /tmp/build
     cd /tmp/build

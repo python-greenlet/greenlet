@@ -36,7 +36,7 @@ namespace greenlet {
 
 #include "greenlet.h"
 
-G_FP_TMPL_STATIC inline void
+void
 greenlet::refs::MainGreenletExactChecker(void *p)
 {
     if (!p) {
@@ -89,7 +89,7 @@ extern PyTypeObject PyGreenlet_Type;
   * Forward declarations needed in multiple files.
   */
 static PyObject* green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs);
-static int green_is_gc(BorrowedGreenlet self);
+
 
 #ifdef __clang__
 #    pragma clang diagnostic pop

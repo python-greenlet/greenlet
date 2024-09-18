@@ -388,7 +388,7 @@ UserGreenlet::inner_bootstrap(PyGreenlet* origin_greenlet, PyObject* run)
     //PyObject* run = _run.relinquish_ownership();
 
     /* in the new greenlet */
-    assert(this->thread_state()->borrow_current() == this->_self);
+    assert(this->thread_state()->borrow_current() == BorrowedGreenlet(this->_self));
     // C++ exceptions cannot propagate to the parent greenlet from
     // here. (TODO: Do we need a catch(...) clause, perhaps on the
     // function itself? ALl we could do is terminate the program.)

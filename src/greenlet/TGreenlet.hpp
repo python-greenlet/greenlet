@@ -152,7 +152,7 @@ namespace greenlet
         void set_new_cframe(_PyCFrame& frame) noexcept;
 #endif
 
-        inline void may_switch_away() noexcept;
+        void may_switch_away() noexcept;
         inline void will_switch_from(PyThreadState *const origin_tstate) noexcept;
         void did_finish(PyThreadState* tstate) noexcept;
     };

@@ -192,9 +192,9 @@ public:
 #endif
     }
 
-    inline bool has_main_greenlet()
+    inline bool has_main_greenlet() const noexcept
     {
-        return !!this->main_greenlet;
+        return bool(this->main_greenlet);
     }
 
     // Called from the ThreadStateCreator when we're in non-standard

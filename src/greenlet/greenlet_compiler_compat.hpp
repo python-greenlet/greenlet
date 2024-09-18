@@ -38,14 +38,6 @@
 
 #include <cstdint>
 
-# if defined(__clang__)
-#  define G_FP_TMPL_STATIC static
-# else
-// GCC has no problem allowing static function pointers, but emits
-// tons of warnings about "whose type uses the anonymous namespace [-Wsubobject-linkage]"
-#  define G_FP_TMPL_STATIC
-# endif
-
 #    define G_NO_COPIES_OF_CLS(Cls) private:     \
     Cls(const Cls& other) = delete; \
     Cls& operator=(const Cls& other) = delete
