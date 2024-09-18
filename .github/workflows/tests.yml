@@ -58,7 +58,13 @@ jobs:
     - name: Install greenlet (non-Mac)
       if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
-        python -m pip wheel --wheel-dir ./dist .
+        # Stupid setuptools doesn't want you running 'python setup.py' anymore,
+        # but stupid pip hides all the intersting compiler output by default, and the
+        # only way to get anything useful out is to ask *everything* to be verbose,
+        # which is much more junk than we need to wade through, making it hard to
+        # see what we want. What's the point of having warnings at all if we can't
+        # see them, though?
+        python -m pip wheel -v --wheel-dir ./dist .
         python -m pip install -U -e ".[test,docs]"
       env:
         # Ensure we test with assertions enabled.
@@ -71,7 +77,7 @@ jobs:
     - name: Install greenlet (Mac)
       if: startsWith(runner.os, 'Mac')
       run: |
-        python -m pip wheel --wheel-dir ./dist .
+        python -m pip wheel -v --wheel-dir ./dist .
         python -m pip install -U -e ".[test,docs]"
         ls -l dist
         # Something in the build system isn't detecting that we're building for both,
