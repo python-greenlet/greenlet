@@ -13,7 +13,7 @@
 #define T_MAIN_GREENLET_CPP
 
 #include "TGreenlet.hpp"
-#include "greenlet_thread_state.hpp"
+
 
 
 // Protected by the GIL. Incremented when we create a main greenlet,
@@ -61,12 +61,6 @@ MainGreenlet::thread_state(ThreadState* t) noexcept
 {
     assert(!t);
     this->_thread_state = t;
-}
-
-BorrowedGreenlet
-MainGreenlet::self() const noexcept
-{
-    return BorrowedGreenlet(this->_self.borrow());
 }
 
 

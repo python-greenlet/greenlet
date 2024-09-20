@@ -15,7 +15,7 @@
 #include "greenlet_internal.hpp"
 #include "greenlet_refs.hpp"
 
-#include "greenlet_thread_state.hpp"
+
 #include "TThreadStateDestroy.cpp"
 
 #include "PyGreenlet.hpp"

@@ -13,24 +13,141 @@
 #define T_THREADSTATE_DESTROY
 
 #include "TGreenlet.hpp"
-#include "greenlet_thread_state.hpp"
+
 #include "greenlet_thread_support.hpp"
 #include "greenlet_cpython_add_pending.hpp"
 #include "TGreenletGlobals.cpp"
+#include "TThreadState.hpp"
+#include "TThreadStateCreator.hpp"
 
 namespace greenlet {
 
-struct ThreadState_DestroyWithGIL
+extern "C" {
+
+struct ThreadState_DestroyNoGIL
 {
-    ThreadState_DestroyWithGIL(ThreadState* state)
+    /**
+       This function uses the same lock that the PendingCallback does
+     */
+    static void
+    MarkGreenletDeadAndQueueCleanup(ThreadState* const state)
+    {
+        // We are *NOT* holding the GIL. Our thread is in the middle
+        // of its death throes and the Python thread state is already
+        // gone so we can't use most Python APIs. One that is safe is
+        // ``Py_AddPendingCall``, unless the interpreter itself has
+        // been torn down. There is a limited number of calls that can
+        // be queued: 32 (NPENDINGCALLS) in CPython 3.10, so we
+        // coalesce these calls using our own queue.
+
+        if (!MarkGreenletDeadIfNeeded(state)) {
+            // No state, or no greenlet
+            return;
+        }
+
+        // XXX: Because we don't have the GIL, this is a race condition.
+        if (!PyInterpreterState_Head()) {
+            // We have to leak the thread state, if the
+            // interpreter has shut down when we're getting
+            // deallocated, we can't run the cleanup code that
+            // deleting it would imply.
+            return;
+        }
+
+        AddToCleanupQueue(state);
+
+    }
+
+private:
+
+    // If the state has an allocated main greenlet:
+    // - mark the greenlet as dead by disassociating it from the state;
+    // - return 1
+    // Otherwise, return 0.
+    static bool
+    MarkGreenletDeadIfNeeded(ThreadState* const state)
     {
         if (state && state->has_main_greenlet()) {
-            DestroyWithGIL(state);
+            // mark the thread as dead ASAP.
+            // this is racy! If we try to throw or switch to a
+            // greenlet from this thread from some other thread before
+            // we clear the state pointer, it won't realize the state
+            // is dead which can crash the process.
+            PyGreenlet* p(state->borrow_main_greenlet().borrow());
+            assert(p->pimpl->thread_state() == state || p->pimpl->thread_state() == nullptr);
+            dynamic_cast<MainGreenlet*>(p->pimpl)->thread_state(nullptr);
+           return true;
+        }
+        return false;
+    }
+
+    static void
+    AddToCleanupQueue(ThreadState* const state)
+    {
+        assert(state && state->has_main_greenlet());
+
+        // NOTE: Because we're not holding the GIL here, some other
+        // Python thread could run and call ``os.fork()``, which would
+        // be bad if that happened while we are holding the cleanup
+        // lock (it wouldn't function in the child process).
+        // Make a best effort to try to keep the duration we hold the
+        // lock short.
+        // TODO: On platforms that support it, use ``pthread_atfork`` to
+        // drop this lock.
+        LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
+
+        mod_globs->queue_to_destroy(state);
+        if (mod_globs->thread_states_to_destroy.size() == 1) {
+            // We added the first item to the queue. We need to schedule
+            // the cleanup.
+
+            // A size greater than 1 means that we have already added the pending call,
+            // and in fact, it may be executing now.
+            // If it is executing, our lock makes sure that it will see the item we just added
+            // to the queue on its next iteration (after we release the lock)
+            //
+            // A size of 1 means there is no pending call, OR the pending call is
+            // currently executing, has dropped the lock, and is deleting the last item
+            // from the queue; its next iteration will go ahead and delete the item we just added.
+            // And the pending call we schedule here will have no work to do.
+            int result = AddPendingCall(
+                           PendingCallback_DestroyQueueWithGIL,
+                            nullptr);
+            if (result < 0) {
+                // Hmm, what can we do here?
+                fprintf(stderr,
+                        "greenlet: WARNING: failed in call to Py_AddPendingCall; "
+                        "expect a memory leak.\n");
+            }
         }
     }
 
     static int
-    DestroyWithGIL(ThreadState* state)
+    PendingCallback_DestroyQueueWithGIL(void* UNUSED(arg))
+    {
+        // We're holding the GIL here, so no Python code should be able to
+        // run to call ``os.fork()``.
+        while (1) {
+            ThreadState* to_destroy;
+            {
+                LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
+                if (mod_globs->thread_states_to_destroy.empty()) {
+                    break;
+                }
+                to_destroy = mod_globs->take_next_to_destroy();
+            }
+            assert(to_destroy);
+            assert(to_destroy->has_main_greenlet());
+            // Drop the lock while we do the actual deletion.
+            // This allows other calls to MarkGreenletDeadAndQueueCleanup
+            // to enter and add to our queue.
+            DestroyOneWithGIL(to_destroy);
+        }
+        return 0;
+    }
+
+    static void
+    DestroyOneWithGIL(const ThreadState* const state)
     {
         // Holding the GIL.
         // Passed a non-shared pointer to the actual thread state.
@@ -42,17 +159,11 @@ struct ThreadState_DestroyWithGIL
         // We do this here, rather than in a Python dealloc function
         // for the greenlet, in case there's still a reference out
         // there.
-        static_cast<MainGreenlet*>(main->pimpl)->thread_state(nullptr);
+        dynamic_cast<MainGreenlet*>(main->pimpl)->thread_state(nullptr);
 
         delete state; // Deleting this runs the destructor, DECREFs the main greenlet.
-        return 0;
     }
-};
 
-
-
-struct ThreadState_DestroyNoGIL
-{
     // ensure this is actually defined.
     static_assert(GREENLET_BROKEN_PY_ADD_PENDING == 1 || GREENLET_BROKEN_PY_ADD_PENDING == 0,
                   "GREENLET_BROKEN_PY_ADD_PENDING not defined correctly.");
@@ -121,83 +232,10 @@ struct ThreadState_DestroyNoGIL
     }
 #endif
 
-    ThreadState_DestroyNoGIL(ThreadState* state)
-    {
-        // We are *NOT* holding the GIL. Our thread is in the middle
-        // of its death throes and the Python thread state is already
-        // gone so we can't use most Python APIs. One that is safe is
-        // ``Py_AddPendingCall``, unless the interpreter itself has
-        // been torn down. There is a limited number of calls that can
-        // be queued: 32 (NPENDINGCALLS) in CPython 3.10, so we
-        // coalesce these calls using our own queue.
-        if (state && state->has_main_greenlet()) {
-            // mark the thread as dead ASAP.
-            // this is racy! If we try to throw or switch to a
-            // greenlet from this thread from some other thread before
-            // we clear the state pointer, it won't realize the state
-            // is dead which can crash the process.
-            PyGreenlet* p = state->borrow_main_greenlet();
-            assert(p->pimpl->thread_state() == state || p->pimpl->thread_state() == nullptr);
-            static_cast<MainGreenlet*>(p->pimpl)->thread_state(nullptr);
-        }
 
-        // NOTE: Because we're not holding the GIL here, some other
-        // Python thread could run and call ``os.fork()``, which would
-        // be bad if that happened while we are holding the cleanup
-        // lock (it wouldn't function in the child process).
-        // Make a best effort to try to keep the duration we hold the
-        // lock short.
-        // TODO: On platforms that support it, use ``pthread_atfork`` to
-        // drop this lock.
-        LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
 
-        if (state && state->has_main_greenlet()) {
-            // Because we don't have the GIL, this is a race condition.
-            if (!PyInterpreterState_Head()) {
-                // We have to leak the thread state, if the
-                // interpreter has shut down when we're getting
-                // deallocated, we can't run the cleanup code that
-                // deleting it would imply.
-                return;
-            }
 
-            mod_globs->queue_to_destroy(state);
-            if (mod_globs->thread_states_to_destroy.size() == 1) {
-                // We added the first item to the queue. We need to schedule
-                // the cleanup.
-                int result = ThreadState_DestroyNoGIL::AddPendingCall(
-                    ThreadState_DestroyNoGIL::DestroyQueueWithGIL,
-                    NULL);
-                if (result < 0) {
-                    // Hmm, what can we do here?
-                    fprintf(stderr,
-                            "greenlet: WARNING: failed in call to Py_AddPendingCall; "
-                            "expect a memory leak.\n");
-                }
-            }
-        }
-    }
-
-    static int
-    DestroyQueueWithGIL(void* UNUSED(arg))
-    {
-        // We're holding the GIL here, so no Python code should be able to
-        // run to call ``os.fork()``.
-        while (1) {
-            ThreadState* to_destroy;
-            {
-                LockGuard cleanup_lock(*mod_globs->thread_states_to_destroy_lock);
-                if (mod_globs->thread_states_to_destroy.empty()) {
-                    break;
-                }
-                to_destroy = mod_globs->take_next_to_destroy();
-            }
-            // Drop the lock while we do the actual deletion.
-            ThreadState_DestroyWithGIL::DestroyWithGIL(to_destroy);
-        }
-        return 0;
-    }
-
+};
 };
 
 }; // namespace greenlet
@@ -209,7 +247,7 @@ struct ThreadState_DestroyNoGIL
 // initial function call in each function that uses a thread local);
 // in contrast, static volatile variables are at some pre-computed
 // offset.
-typedef greenlet::ThreadStateCreator<greenlet::ThreadState_DestroyNoGIL> ThreadStateCreator;
+typedef greenlet::ThreadStateCreator<greenlet::ThreadState_DestroyNoGIL::MarkGreenletDeadAndQueueCleanup> ThreadStateCreator;
 static thread_local ThreadStateCreator g_thread_state_global;
 #define GET_THREAD_STATE() g_thread_state_global
 

@@ -152,7 +152,7 @@ namespace greenlet
         void set_new_cframe(_PyCFrame& frame) noexcept;
 #endif
 
-        inline void may_switch_away() noexcept;
+        void may_switch_away() noexcept;
         inline void will_switch_from(PyThreadState *const origin_tstate) noexcept;
         void did_finish(PyThreadState* tstate) noexcept;
     };
@@ -319,6 +319,7 @@ namespace greenlet
     {
     private:
         G_NO_COPIES_OF_CLS(Greenlet);
+        PyGreenlet* const _self;
     private:
         // XXX: Work to remove these.
         friend class ThreadState;
@@ -331,6 +332,8 @@ namespace greenlet
         PythonState python_state;
         Greenlet(PyGreenlet* p, const StackState& initial_state);
     public:
+        // This constructor takes ownership of the PyGreenlet, by
+        // setting ``p->pimpl = this;``.
         Greenlet(PyGreenlet* p);
         virtual ~Greenlet();
 
@@ -461,7 +464,10 @@ namespace greenlet
 
         // Return a borrowed greenlet that is the Python object
         // this object represents.
-        virtual BorrowedGreenlet self() const noexcept = 0;
+        inline BorrowedGreenlet self() const noexcept
+        {
+            return BorrowedGreenlet(this->_self);
+        }
 
         // For testing. If this returns true, we should pretend that
         // slp_switch() failed.
@@ -645,7 +651,6 @@ public:
     {
     private:
         static greenlet::PythonAllocator<UserGreenlet> allocator;
-        BorrowedGreenlet _self;
         OwnedMainGreenlet _main_greenlet;
         OwnedObject _run_callable;
         OwnedGreenlet _parent;
@@ -674,7 +679,6 @@ public:
 
         virtual const refs::BorrowedMainGreenlet main_greenlet() const;
 
-        virtual BorrowedGreenlet self() const noexcept;
         virtual void murder_in_place();
         virtual bool belongs_to_thread(const ThreadState* state) const;
         virtual int tp_traverse(visitproc visit, void* arg);
@@ -748,7 +752,6 @@ public:
         virtual ThreadState* thread_state() const noexcept;
         void thread_state(ThreadState*) noexcept;
         virtual OwnedObject g_switch();
-        virtual BorrowedGreenlet self() const noexcept;
         virtual int tp_traverse(visitproc visit, void* arg);
     };
 

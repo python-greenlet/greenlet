@@ -5,7 +5,8 @@
 3.1.1 (unreleased)
 ==================
 
-- Fix crashes on 32-bit PPC Linux.
+- Fix crashes on 32-bit PPC Linux. Note that there is no CI for this,
+  and support is best effort; there may be other issues lurking.
   See `issue 422
   <https://github.com/python-greenlet/greenlet/issues/422>`_.
 - Remove unnecessary logging sometimes during interpreter shutdown.

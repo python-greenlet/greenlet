@@ -58,7 +58,13 @@ jobs:
     - name: Install greenlet (non-Mac)
       if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
-        python -m pip wheel --wheel-dir ./dist .
+        # Stupid setuptools doesn't want you running 'python setup.py' anymore,
+        # but stupid pip hides all the intersting compiler output by default, and the
+        # only way to get anything useful out is to ask *everything* to be verbose,
+        # which is much more junk than we need to wade through, making it hard to
+        # see what we want. What's the point of having warnings at all if we can't
+        # see them, though?
+        python -m pip wheel -v --wheel-dir ./dist .
         python -m pip install -U -e ".[test,docs]"
       env:
         # Ensure we test with assertions enabled.
@@ -66,11 +72,12 @@ jobs:
         # thus only use O3 (because Ofast enables fast-math, which has
         # process-wide effects), we test with Ofast here, because we
         # expect that some people will compile it themselves with that setting.
-        CPPFLAGS: "-Ofast -UNDEBUG"
+        CPPFLAGS: "-Ofast -UNDEBUG -Wall"
+        CFLAGS:   "-Ofast -UNDEBUG -Wall"
     - name: Install greenlet (Mac)
       if: startsWith(runner.os, 'Mac')
       run: |
-        python -m pip wheel --wheel-dir ./dist .
+        python -m pip wheel -v --wheel-dir ./dist .
         python -m pip install -U -e ".[test,docs]"
         ls -l dist
         # Something in the build system isn't detecting that we're building for both,
@@ -84,7 +91,8 @@ jobs:
       env:
         # Unlike the above, we are actually distributing these
         # wheels, so they need to be built for production use.
-        CPPFLAGS: "-O3"
+        CPPFLAGS: "-O3 -flto -ffunction-sections"
+        CFLAGS:   "-O3 -flto -ffunction-sections"
         # Build for both architectures
         ARCHFLAGS: "-arch x86_64 -arch arm64"
 

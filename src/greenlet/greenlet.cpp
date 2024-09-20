@@ -22,12 +22,12 @@
 // as well.
 #include "greenlet_refs.hpp"
 #include "greenlet_slp_switch.hpp"
-#include "greenlet_thread_state.hpp"
+
 #include "greenlet_thread_support.hpp"
 #include "TGreenlet.hpp"
 
 #include "TGreenletGlobals.cpp"
-#include "TThreadStateDestroy.cpp"
+
 #include "TGreenlet.cpp"
 #include "TMainGreenlet.cpp"
 #include "TUserGreenlet.cpp"
@@ -35,6 +35,10 @@
 #include "TExceptionState.cpp"
 #include "TPythonState.cpp"
 #include "TStackState.cpp"
+
+#include "TThreadState.hpp"
+#include "TThreadStateCreator.hpp"
+#include "TThreadStateDestroy.cpp"
 
 #include "PyGreenlet.cpp"
 #include "PyGreenletUnswitchable.cpp"

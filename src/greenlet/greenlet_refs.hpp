@@ -3,6 +3,9 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+
+#include <string>
+
 //#include "greenlet_internal.hpp"
 #include "greenlet_compiler_compat.hpp"
 #include "greenlet_cpython_compat.hpp"
@@ -34,13 +37,13 @@ namespace greenlet
         // implemented as macros.)
         typedef void (*TypeChecker)(void*);
 
-        G_FP_TMPL_STATIC inline void
+        void
         NoOpChecker(void*)
         {
             return;
         }
 
-        G_FP_TMPL_STATIC inline void
+        void
         GreenletChecker(void *p)
         {
             if (!p) {
@@ -63,7 +66,7 @@ namespace greenlet
             }
         }
 
-        G_FP_TMPL_STATIC inline void
+        void
         MainGreenletExactChecker(void *p);
 
         template <typename T, TypeChecker>
@@ -93,7 +96,7 @@ namespace greenlet
 
         typedef _BorrowedGreenlet<PyGreenlet, GreenletChecker> BorrowedGreenlet;
 
-        G_FP_TMPL_STATIC inline void
+        void
         ContextExactChecker(void *p)
         {
             if (!p) {
@@ -171,7 +174,7 @@ namespace greenlet {
     protected:
         T* p;
     public:
-        explicit PyObjectPointer(T* it=nullptr) : p(it)
+        PyObjectPointer(T* it=nullptr) : p(it)
         {
             TC(p);
         }
@@ -186,7 +189,7 @@ namespace greenlet {
         // TODO: This should probably not exist here, but be moved
         // down to relevant sub-types.
 
-        inline T* borrow() const noexcept
+        T* borrow() const noexcept
         {
             return this->p;
         }
@@ -196,7 +199,7 @@ namespace greenlet {
             return reinterpret_cast<PyObject*>(this->p);
         }
 
-        inline T* operator->() const noexcept
+         T* operator->() const noexcept
         {
             return this->p;
         }
@@ -206,7 +209,7 @@ namespace greenlet {
             return this->p == Py_None;
         }
 
-        inline PyObject* acquire_or_None() const noexcept
+        PyObject* acquire_or_None() const noexcept
         {
             PyObject* result = this->p ? reinterpret_cast<PyObject*>(this->p) : Py_None;
             Py_INCREF(result);
@@ -215,15 +218,20 @@ namespace greenlet {
 
         explicit operator bool() const noexcept
         {
-            return p != nullptr;
+            return this->p != nullptr;
         }
 
-        inline Py_ssize_t REFCNT() const noexcept
+        bool operator!() const noexcept
+        {
+            return this->p == nullptr;
+        }
+
+        Py_ssize_t REFCNT() const noexcept
         {
             return p ? Py_REFCNT(p) : -42;
         }
 
-        inline PyTypeObject* TYPE() const noexcept
+        PyTypeObject* TYPE() const noexcept
         {
             return p ? Py_TYPE(p) : nullptr;
         }
@@ -270,9 +278,9 @@ namespace greenlet {
 #endif
 
     template<typename T, TypeChecker TC>
-    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const void* const rhs) noexcept
+    inline bool operator==(const PyObjectPointer<T, TC>& lhs, const PyObject* const rhs) noexcept
     {
-        return lhs.borrow_o() == rhs;
+        return static_cast<const void*>(lhs.borrow_o()) == static_cast<const void*>(rhs);
     }
 
     template<typename T, TypeChecker TC, typename X, TypeChecker XC>
@@ -421,6 +429,7 @@ namespace greenlet {
     {
         target = o.relinquish_ownership();
     }
+
 
     class NewReference : public OwnedObject
     {
@@ -572,8 +581,8 @@ namespace greenlet {
         {
             return reinterpret_cast<PyObject*>(this->p);
         }
-        inline Greenlet* operator->() const noexcept;
-        inline operator Greenlet*() const noexcept;
+        Greenlet* operator->() const noexcept;
+        operator Greenlet*() const noexcept;
     };
 
     typedef _BorrowedGreenlet<PyGreenlet> BorrowedGreenlet;
@@ -789,7 +798,7 @@ namespace greenlet {
         return OwnedObject::consuming(PyObject_Call(this->p, args.borrow(), kwargs.borrow()));
     }
 
-    G_FP_TMPL_STATIC inline void
+    inline void
     ListChecker(void * p)
     {
         if (!p) {

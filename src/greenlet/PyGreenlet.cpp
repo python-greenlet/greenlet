@@ -20,7 +20,7 @@ The Python slot functions for TGreenlet.
 
 #include "greenlet_refs.hpp"
 #include "greenlet_slp_switch.hpp"
-#include "greenlet_thread_state.hpp"
+
 #include "greenlet_thread_support.hpp"
 #include "TGreenlet.hpp"
 
@@ -48,22 +48,6 @@ using greenlet::BrokenGreenlet;
 using greenlet::ThreadState;
 using greenlet::PythonState;
 
-static PyGreenlet*
-green_create_main(ThreadState* state)
-{
-    PyGreenlet* gmain;
-
-    /* create the main greenlet for this thread */
-    gmain = (PyGreenlet*)PyType_GenericAlloc(&PyGreenlet_Type, 0);
-    if (gmain == NULL) {
-        Py_FatalError("green_create_main failed to alloc");
-        return NULL;
-    }
-    new MainGreenlet(gmain, state);
-
-    assert(Py_REFCNT(gmain) == 1);
-    return gmain;
-}
 
 
 static PyGreenlet*

@@ -124,6 +124,27 @@ private:
 
     G_NO_COPIES_OF_CLS(ThreadState);
 
+
+    // Allocates a main greenlet for the thread state. If this fails,
+    // exits the process. Called only during constructing a ThreadState.
+    MainGreenlet* alloc_main()
+    {
+        PyGreenlet* gmain;
+
+        /* create the main greenlet for this thread */
+        gmain = reinterpret_cast<PyGreenlet*>(PyType_GenericAlloc(&PyGreenlet_Type, 0));
+        if (gmain == NULL) {
+            throw PyFatalError("alloc_main failed to alloc"); //exits the process
+        }
+
+        MainGreenlet* const main = new MainGreenlet(gmain, this);
+
+        assert(Py_REFCNT(gmain) == 1);
+        assert(gmain->pimpl == main);
+        return main;
+    }
+
+
 public:
     static void* operator new(size_t UNUSED(count))
     {
@@ -143,20 +164,23 @@ public:
     }
 
     ThreadState()
-        : main_greenlet(OwnedMainGreenlet::consuming(green_create_main(this))),
-          current_greenlet(main_greenlet)
     {
-        if (!this->main_greenlet) {
-            // We failed to create the main greenlet. That's bad.
-            throw PyFatalError("Failed to create main greenlet");
-        }
-        // The main greenlet starts with 1 refs: The returned one. We
-        // then copied it to the current greenlet.
-        assert(this->main_greenlet.REFCNT() == 2);
 
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
         this->exception_state = slp_get_exception_state();
 #endif
+
+        // XXX: Potentially dangerous, exposing a not fully
+        // constructed object.
+        MainGreenlet* const main = this->alloc_main();
+        this->main_greenlet = OwnedMainGreenlet::consuming(
+            main->self()
+        );
+        assert(this->main_greenlet);
+        this->current_greenlet = main->self();
+        // The main greenlet starts with 1 refs: The returned one. We
+        // then copied it to the current greenlet.
+        assert(this->main_greenlet.REFCNT() == 2);
     }
 
     inline void restore_exception_state()
@@ -168,9 +192,9 @@ public:
 #endif
     }
 
-    inline bool has_main_greenlet()
+    inline bool has_main_greenlet() const noexcept
     {
-        return !!this->main_greenlet;
+        return bool(this->main_greenlet);
     }
 
     // Called from the ThreadStateCreator when we're in non-standard
@@ -190,14 +214,14 @@ public:
         return 0;
     }
 
-    inline BorrowedMainGreenlet borrow_main_greenlet() const
+    inline BorrowedMainGreenlet borrow_main_greenlet() const noexcept
     {
         assert(this->main_greenlet);
         assert(this->main_greenlet.REFCNT() >= 2);
         return this->main_greenlet;
     };
 
-    inline OwnedMainGreenlet get_main_greenlet()
+    inline OwnedMainGreenlet get_main_greenlet() const noexcept
     {
         return this->main_greenlet;
     }
@@ -464,79 +488,9 @@ ImmortalString ThreadState::get_referrers_name(nullptr);
 PythonAllocator<ThreadState> ThreadState::allocator;
 std::clock_t ThreadState::_clocks_used_doing_gc(0);
 
-template<typename Destructor>
-class ThreadStateCreator
-{
-private:
-    // Initialized to 1, and, if still 1, created on access.
-    // Set to 0 on destruction.
-    ThreadState* _state;
-    G_NO_COPIES_OF_CLS(ThreadStateCreator);
-public:
-
-    // Only one of these, auto created per thread
-    ThreadStateCreator() :
-        _state((ThreadState*)1)
-    {
-    }
-
-    ~ThreadStateCreator()
-    {
-        ThreadState* tmp = this->_state;
-        this->_state = nullptr;
-        if (tmp && tmp != (ThreadState*)1) {
-            Destructor x(tmp);
-        }
-    }
-
-    inline ThreadState& state()
-    {
-        // The main greenlet will own this pointer when it is created,
-        // which will be right after this. The plan is to give every
-        // greenlet a pointer to the main greenlet for the thread it
-        // runs in; if we are doing something cross-thread, we need to
-        // access the pointer from the main greenlet. Deleting the
-        // thread, and hence the thread-local storage, will delete the
-        // state pointer in the main greenlet.
-        if (this->_state == (ThreadState*)1) {
-            // XXX: Assuming allocation never fails
-            this->_state = new ThreadState;
-            // For non-standard threading, we need to store an object
-            // in the Python thread state dictionary so that it can be
-            // DECREF'd when the thread ends (ideally; the dict could
-            // last longer) and clean this object up.
-        }
-        if (!this->_state) {
-            throw std::runtime_error("Accessing state after destruction.");
-        }
-        return *this->_state;
-    }
-
-    operator ThreadState&()
-    {
-        return this->state();
-    }
-
-    operator ThreadState*()
-    {
-        return &this->state();
-    }
-
-    inline int tp_traverse(visitproc visit, void* arg)
-    {
-        if (this->_state) {
-            return this->_state->tp_traverse(visit, arg);
-        }
-        return 0;
-    }
-
-};
 
 
-// We can't use the PythonAllocator for this, because we push to it
-// from the thread state destructor, which doesn't have the GIL,
-// and Python's allocators can only be called with the GIL.
-typedef std::vector<ThreadState*> cleanup_queue_t;
+
 
 }; // namespace greenlet
 
