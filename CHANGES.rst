@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.1.1 (unreleased)
+3.1.1 (2024-09-20)
 ==================
 
 - Fix crashes on 32-bit PPC Linux. Note that there is no CI for this,
