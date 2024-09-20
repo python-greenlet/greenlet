@@ -50,7 +50,7 @@ slp_switch(void)
     int err;
     int *stackref, stsizediff;
     __asm__ volatile ("" : : : REGS_TO_SAVE);
-    __asm__ ("mr %0, 1" : "=g" (stackref) : );
+    __asm__ ("mr %0, 1" : "=r" (stackref) : );
     {
         SLP_SAVE_STATE(stackref, stsizediff);
         __asm__ volatile (
@@ -58,7 +58,7 @@ slp_switch(void)
             "add 1, 1, 11\n"
             "add 30, 30, 11\n"
             : /* no outputs */
-            : "g" (stsizediff)
+            : "r" (stsizediff)
             : "11"
             );
         SLP_RESTORE_STATE();
