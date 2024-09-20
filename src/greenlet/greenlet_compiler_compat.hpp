@@ -83,5 +83,16 @@
 #    define G_NOEXCEPT_WIN32
 #endif
 
+#if defined(__GNUC__) && defined(__POWERPC__) && defined(__APPLE__)
+// 32-bit PPC/MacOSX. Only known to be tested on unreleased versions
+// of macOS 10.6 using a macports build gcc 14. It appears that
+// running C++ destructors of thread-local variables is broken.
+
+// See https://github.com/python-greenlet/greenlet/pull/419
+#     define GREENLET_BROKEN_THREAD_LOCAL_CLEANUP_JUST_LEAK 1
+#else
+#     define GREENLET_BROKEN_THREAD_LOCAL_CLEANUP_JUST_LEAK 0
+#endif
+
 
 #endif

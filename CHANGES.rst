@@ -11,6 +11,14 @@
   <https://github.com/python-greenlet/greenlet/issues/422>`_.
 - Remove unnecessary logging sometimes during interpreter shutdown.
   See `issue 426 <https://github.com/python-greenlet/greenlet/issues/426>`_.
+- Fix some crashes on 32-bit PPC MacOS. This is a very old platform,
+  and is only known to be tested on beta versions of an operating
+  system that was never released, using the GCC 14 only provided by
+  MacPorts; it may or may not work on the final MacOS X release that
+  supported 32-bit PowerPC. It has the known issue of leaking memory
+  when greenlets are used in multiple threads. Help debugging this
+  would be appreciated. See `PR 419
+  <https://github.com/python-greenlet/greenlet/pull/419>`_.
 
 3.1.0 (2024-09-10)
 ==================

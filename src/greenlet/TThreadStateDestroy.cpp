@@ -16,6 +16,7 @@
 
 #include "greenlet_thread_support.hpp"
 #include "greenlet_cpython_add_pending.hpp"
+#include "greenlet_compiler_compat.hpp"
 #include "TGreenletGlobals.cpp"
 #include "TThreadState.hpp"
 #include "TThreadStateCreator.hpp"
@@ -32,6 +33,9 @@ struct ThreadState_DestroyNoGIL
     static void
     MarkGreenletDeadAndQueueCleanup(ThreadState* const state)
     {
+#if GREENLET_BROKEN_THREAD_LOCAL_CLEANUP_JUST_LEAK
+        return;
+#endif
         // We are *NOT* holding the GIL. Our thread is in the middle
         // of its death throes and the Python thread state is already
         // gone so we can't use most Python APIs. One that is safe is

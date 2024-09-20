@@ -22,7 +22,7 @@ extern "C" {
 #elif defined(__GNUC__) && defined(__PPC__) && (defined(__linux__) || defined(__FreeBSD__))
 # include "platform/switch_ppc_linux.h" /* gcc on PowerPC */
 #elif defined(__GNUC__) && defined(__POWERPC__) && defined(__APPLE__)
-# include "platform/switch_ppc_macosx.h" /* Apple MacOS X on PowerPC */
+# include "platform/switch_ppc_macosx.h" /* Apple MacOS X on 32-bit PowerPC */
 #elif defined(__GNUC__) && defined(__powerpc64__) && defined(_AIX)
 # include "platform/switch_ppc64_aix.h" /* gcc on AIX/PowerPC 64-bit */
 #elif defined(__GNUC__) && defined(_ARCH_PPC) && defined(_AIX)
