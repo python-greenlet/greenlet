@@ -25,7 +25,6 @@ implementation (like most of the rest of this package):
 
     - If the test fails in that way, the interpreter crashes.
 """
-from __future__ import print_function, absolute_import, division
 
 import unittest
 
