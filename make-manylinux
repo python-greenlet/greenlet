@@ -35,7 +35,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
     which auditwheel
     echo "Installed Python versions"
     ls -l /opt/python
-    for variant in `ls -d /opt/python/cp{313,37,38,39,310,311,312}*`; do
+    for variant in `ls -d /opt/python/cp{313,39,310,311,312}*`; do
         if [ "$variant" = "/opt/python/cp313-313t" ]; then
             echo "Skipping no-gil build. The GIL is required."
             continue
