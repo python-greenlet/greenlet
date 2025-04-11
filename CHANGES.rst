@@ -2,10 +2,10 @@
  Changes
 =========
 
-3.1.2 (unreleased)
+3.2.0 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Remove support for Python 3.7 and 3.8.
 
 
 3.1.1 (2024-09-20)

@@ -15,7 +15,6 @@
 #include "TGreenlet.hpp"
 
 #include "greenlet_thread_support.hpp"
-#include "greenlet_cpython_add_pending.hpp"
 #include "greenlet_compiler_compat.hpp"
 #include "TGreenletGlobals.cpp"
 #include "TThreadState.hpp"
@@ -168,47 +167,7 @@ private:
         delete state; // Deleting this runs the destructor, DECREFs the main greenlet.
     }
 
-    // ensure this is actually defined.
-    static_assert(GREENLET_BROKEN_PY_ADD_PENDING == 1 || GREENLET_BROKEN_PY_ADD_PENDING == 0,
-                  "GREENLET_BROKEN_PY_ADD_PENDING not defined correctly.");
 
-#if GREENLET_BROKEN_PY_ADD_PENDING
-    static int _push_pending_call(struct _pending_calls *pending,
-                                  int (*func)(void *), void *arg)
-    {
-        int i = pending->last;
-        int j = (i + 1) % NPENDINGCALLS;
-        if (j == pending->first) {
-            return -1; /* Queue full */
-        }
-        pending->calls[i].func = func;
-        pending->calls[i].arg = arg;
-        pending->last = j;
-        return 0;
-    }
-
-    static int AddPendingCall(int (*func)(void *), void *arg)
-    {
-        _PyRuntimeState *runtime = &_PyRuntime;
-        if (!runtime) {
-            // obviously impossible
-            return 0;
-        }
-        struct _pending_calls *pending = &runtime->ceval.pending;
-        if (!pending->lock) {
-            return 0;
-        }
-        int result = 0;
-        PyThread_acquire_lock(pending->lock, WAIT_LOCK);
-        if (!pending->finishing) {
-            result = _push_pending_call(pending, func, arg);
-        }
-        PyThread_release_lock(pending->lock);
-        SIGNAL_PENDING_CALLS(&runtime->ceval);
-        return result;
-    }
-#else
-    // Python < 3.8 or >= 3.9
     static int AddPendingCall(int (*func)(void*), void* arg)
     {
         // If the interpreter is in the middle of finalizing, we can't add a
@@ -234,7 +193,7 @@ private:
         }
         return Py_AddPendingCall(func, arg);
     }
-#endif
+
 
 
 
