@@ -27,6 +27,11 @@ using greenlet::refs::BorrowedGreenlet;
 #  include "internal/pycore_frame.h"
 #endif
 
+#if GREENLET_PY314
+#  include "internal/pycore_interpframe_structs.h"
+#  include "internal/pycore_interpframe.h"
+#endif
+
 // XXX: TODO: Work to remove all virtual functions
 // for speed of calling and size of objects (no vtable).
 // One pattern is the Curiously Recurring Template

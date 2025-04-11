@@ -12,6 +12,7 @@ from greenlet import greenlet as RawGreenlet
 from . import TestCase
 from . import RUNNING_ON_MANYLINUX
 from . import PY313
+from . import PY314
 from .leakcheck import fails_leakcheck
 
 
@@ -123,13 +124,15 @@ class TestGreenlet(TestCase):
             g = RawGreenlet(f)
             g.switch()
             lst.append('c')
-
+        self.assertEqual(sys.getrefcount(g), 2 if not PY314 else 1)
         g = RawGreenlet(g)
-        self.assertEqual(sys.getrefcount(g), 2)
+        # Python 3.14 elides reference counting operations
+        # in some cases. See https://github.com/python/cpython/pull/130708
+        self.assertEqual(sys.getrefcount(g), 2 if not PY314 else 1)
         g.switch()
         self.assertEqual(lst, ['a', 'b', 'c'])
         # Just the one in this frame, plus the one on the stack we pass to the function
-        self.assertEqual(sys.getrefcount(g), 2)
+        self.assertEqual(sys.getrefcount(g), 2 if not PY314 else 1)
 
     def test_threads(self):
         success = []

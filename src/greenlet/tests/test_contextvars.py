@@ -11,7 +11,7 @@ from unittest import skipIf
 from greenlet import greenlet
 from greenlet import getcurrent
 from . import TestCase
-
+from . import PY314
 
 try:
     from contextvars import Context
@@ -208,8 +208,10 @@ class ContextVarsTests(TestCase):
         # Make sure there are no reference leaks
         gr = None
         gc.collect()
-        self.assertEqual(sys.getrefcount(old_context), 2)
-        self.assertEqual(sys.getrefcount(new_context), 2)
+        # Python 3.14 elides reference counting operations
+        # in some cases. See https://github.com/python/cpython/pull/130708
+        self.assertEqual(sys.getrefcount(old_context), 2 if not PY314 else 1)
+        self.assertEqual(sys.getrefcount(new_context), 2 if not PY314 else 1)
 
     def test_context_assignment_different_thread(self):
         import threading

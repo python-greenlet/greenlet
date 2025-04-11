@@ -14,6 +14,7 @@ import threading
 
 import greenlet
 from . import TestCase
+from . import PY314
 from .leakcheck import fails_leakcheck
 from .leakcheck import ignores_leakcheck
 from .leakcheck import RUNNING_ON_MANYLINUX
@@ -52,12 +53,15 @@ class TestLeaks(TestCase):
 
     def test_kwarg_refs(self):
         kwargs = {}
+        self.assertEqual(sys.getrefcount(kwargs), 2 if not PY314 else 1)
         # pylint:disable=unnecessary-lambda
         g = greenlet.greenlet(
-            lambda **kwargs: greenlet.getcurrent().parent.switch(**kwargs))
+            lambda **gkwargs: greenlet.getcurrent().parent.switch(**gkwargs))
         for _ in range(100):
             g.switch(**kwargs)
-        self.assertEqual(sys.getrefcount(kwargs), 2)
+        # Python 3.14 elides reference counting operations
+        # in some cases. See https://github.com/python/cpython/pull/130708
+        self.assertEqual(sys.getrefcount(kwargs), 2 if not PY314 else 1)
 
 
     @staticmethod
