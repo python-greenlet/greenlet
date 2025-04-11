@@ -25,6 +25,9 @@ from . import leakcheck
 
 PY312 = sys.version_info[:2] >= (3, 12)
 PY313 = sys.version_info[:2] >= (3, 13)
+# XXX: First tested on 3.14a7. Revisit all uses of this on later versions to ensure they
+# are still valid.
+PY314 = sys.version_info[:2] >= (3, 14)
 
 WIN = sys.platform.startswith("win")
 RUNNING_ON_GITHUB_ACTIONS = os.environ.get('GITHUB_ACTIONS')
@@ -55,10 +58,7 @@ class TestCaseMetaClass(type):
         return type.__new__(cls, classname, bases, classDict)
 
 
-class TestCase(TestCaseMetaClass(
-        "NewBase",
-        (unittest.TestCase,),
-        {})):
+class TestCase(unittest.TestCase, metaclass=TestCaseMetaClass):
 
     cleanup_attempt_sleep_duration = 0.001
     cleanup_max_sleep_seconds = 1

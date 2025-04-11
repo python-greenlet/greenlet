@@ -25,7 +25,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.9, "3.10", "3.11", "3.12", "3.13"]
+        python-version: [3.9, "3.10", "3.11", "3.12", "3.13", "3.14.0-alpha.7"]
         os: [ubuntu-latest]
         include:
           # Needs to be all supported Python versions, they upload the built
@@ -40,6 +40,8 @@ jobs:
             python-version: "3.12"
           - os: macos-latest
             python-version: "3.13"
+          - os: macos-latest
+            python-version: "3.14.0-alpha.7"
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
