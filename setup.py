@@ -225,7 +225,11 @@ setup(
         'Documentation': 'https://greenlet.readthedocs.io/',
         'Changes': 'https://greenlet.readthedocs.io/en/latest/changes.html',
     },
-    license="MIT License",
+    license="MIT AND Python-2.0",
+    license_files=[
+        'LICENSE',
+        'LICENSE.PSF',
+    ],
     platforms=['any'],
     package_dir={'': 'src'},
     packages=find_packages('src'),
@@ -235,7 +239,6 @@ setup(
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: C',
         'Programming Language :: Python',
