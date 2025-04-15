@@ -6,6 +6,8 @@
 ==================
 
 - Remove support for Python 3.7 and 3.8.
+- Add untested, community supported implementation for RiscV 32. See
+  `PR 438 <https://github.com/python-greenlet/greenlet/pull/439>`_.
 
 
 3.1.1 (2024-09-20)
