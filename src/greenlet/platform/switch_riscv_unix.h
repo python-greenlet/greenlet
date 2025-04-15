@@ -11,9 +11,14 @@
 static int
 slp_switch(void)
 {
-  long fp;
   int ret;
+#if __riscv_xlen == 32
+  long fp;
   long *stackref, stsizediff;
+#else
+  int fp;
+  int *stackref, stsizediff;
+#endif
   __asm__ volatile ("" : : : REGS_TO_SAVE);
   __asm__ volatile ("mv %0, fp" : "=r" (fp) : );
   __asm__ volatile ("mv %0, sp" : "=r" (stackref) : );
@@ -28,7 +33,11 @@ slp_switch(void)
       SLP_RESTORE_STATE();
   }
   __asm__ volatile ("" : : : REGS_TO_SAVE);
+#if __riscv_xlen == 32
+  __asm__ volatile ("lw fp, %0" : : "m" (fp));
+#else
   __asm__ volatile ("ld fp, %0" : : "m" (fp));
+#endif
   __asm__ volatile ("mv %0, zero" : "=r" (ret) : );
   return ret;
 }
