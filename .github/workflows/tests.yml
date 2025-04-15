@@ -10,9 +10,6 @@ env:
   PYTHONDEVMODE: 1
   PYTHONFAULTHANDLER: 1
   PIP_UPGRADE_STRATEGY: eager
-  # Don't get warnings about Python 2 support being deprecated. We
-  # know. The env var works for pip 20.
-  PIP_NO_PYTHON_VERSION_WARNING: 1
   PIP_NO_WARN_SCRIPT_LOCATION: 1
   # Uploading built wheels for releases.
   # TWINE_PASSWORD is encrypted and stored directly in the
@@ -26,22 +23,9 @@ jobs:
     strategy:
       matrix:
         python-version: [3.9, "3.10", "3.11", "3.12", "3.13", "3.14.0-alpha.7"]
-        os: [ubuntu-latest]
-        include:
-          # Needs to be all supported Python versions, they upload the built
-          # wheels for releases.
-          - os: macos-latest
-            python-version: 3.9
-          - os: macos-latest
-            python-version: "3.10"
-          - os: macos-latest
-            python-version: "3.11"
-          - os: macos-latest
-            python-version: "3.12"
-          - os: macos-latest
-            python-version: "3.13"
-          - os: macos-latest
-            python-version: "3.14.0-alpha.7"
+        # Recall the macOS builds upload built wheels so all supported versions
+        # need to run on mac.
+        os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -148,17 +132,11 @@ jobs:
         run: |
           python -m pip install -U pip
           python -m pip install -U setuptools wheel
-          # Set the `CODEQL-PYTHON` environment variable to the Python executable
-          # that includes the dependencies
-          echo "CODEQL_PYTHON=$(which python)" >> $GITHUB_ENV
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: python, cpp
-          # Override the default behavior so that the action doesn't attempt
-          # to auto-install Python dependencies
-          setup-python-dependencies: false
       - name: Install greenlet
         run: |
           python setup.py build
@@ -205,7 +183,7 @@ jobs:
           path: wheelhouse/*whl
           name: ${{ matrix.image }}_wheels.zip
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.2
+        uses: pypa/gh-action-pypi-publish@v1.12.4
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         with:
           user: __token__
