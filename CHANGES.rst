@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.2.0 (unreleased)
+3.2.0 (2025-04-15)
 ==================
 
 - Remove support for Python 3.7 and 3.8.
