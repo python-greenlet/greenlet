@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# This needs to be run from the root of the project.
+# To update: docker pull quay.io/pypa/manylinux2010_x86_64
+set -e
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+# Use a fixed hash seed for reproducibility
+export PYTHONHASHSEED=8675309
+export CI=1
+export TRAVIS=true
+export PIP_NO_WARN_SCRIPT_LOCATION=1
+
+
+if [ -d /greenlet ]; then
+    # Running inside docker
+    export GREENLET_MANYLINUX=1
+    # Build for speed (we're going to test this anyway) and without assertions.
+    # Note: -Ofast includes -ffast-math which affects process-wide floating-point flags (e.g. can affect numpy).
+    # It may also violate standards compliance in a few ways. Rather than opt-out with -fno-fast-math,
+    # we use O3, which has neither of those problems.
+    export CFLAGS="-O3 -DNDEBUG -Wall"
+
+    apt-get update
+    apt-get install -y python3.12 python3.12-dev python3.12-venv gcc git g++
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+
+    # Build in an isolated directory
+    mkdir /tmp/build
+    cd /tmp/build
+    git config --global --add safe.directory /greenlet/.git
+    git clone /greenlet greenlet
+    cd greenlet
+
+    python -m venv /tmp/venv
+    . /tmp/venv/bin/activate
+    echo "Python"
+    python --version
+
+    python -mpip install -U pip
+    python -mpip install -U setuptools wheel
+    python -mpip wheel -v --wheel-dir ./dist .
+    python -mpip install -U .[test]
+    python -m unittest discover -v greenlet.tests
+
+    exit 0
+fi
+
+# Mount the current directory as /greenlet
+docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-riscv64/ubuntu:latest} /greenlet/$(basename $0)

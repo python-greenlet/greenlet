@@ -145,8 +145,27 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-  manylinux:
+  riscv64:
+    runs-on: ubuntu-latest
+    name: RiscV 64
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+      - name: Build and test greenlet
+        env:
+          DOCKER_IMAGE: riscv64/ubuntu:latest
+        run: bash ./ubuntu-test
 
+
+  manylinux:
     runs-on: ubuntu-latest
     # We use a regular Python matrix entry to share as much code as possible.
     strategy:
