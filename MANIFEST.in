@@ -50,6 +50,7 @@ include LICENSE.PSF
 include MANIFEST.in
 
 include make-manylinux
+include ubuntu-test
 
 global-exclude *.pyc
 global-exclude *.pyd
