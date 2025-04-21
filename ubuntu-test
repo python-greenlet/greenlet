@@ -47,4 +47,4 @@ if [ -d /greenlet ]; then
 fi
 
 # Mount the current directory as /greenlet
-docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-riscv64/ubuntu:latest} /greenlet/$(basename $0)
+docker run --rm --platform linux/riscv64 -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-riscv64/ubuntu:latest} /greenlet/$(basename $0)
