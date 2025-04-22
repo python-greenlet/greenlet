@@ -12,13 +12,9 @@ static int
 slp_switch(void)
 {
   int ret;
-#if __riscv_xlen == 32
   long fp;
   long *stackref, stsizediff;
-#else
-  int fp;
-  int *stackref, stsizediff;
-#endif
+
   __asm__ volatile ("" : : : REGS_TO_SAVE);
   __asm__ volatile ("mv %0, fp" : "=r" (fp) : );
   __asm__ volatile ("mv %0, sp" : "=r" (stackref) : );

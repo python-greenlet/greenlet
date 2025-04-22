@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# This needs to be run from the root of the project.
+
+set -e
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+# Use a fixed hash seed for reproducibility
+export PYTHONHASHSEED=8675309
+export CI=1
+export TRAVIS=true
+export PIP_NO_WARN_SCRIPT_LOCATION=1
+
+
+if [ -d /greenlet ]; then
+    # Running inside docker
+    export GREENLET_MANYLINUX=1
+    # Our setup.py overrides this with -Os; be sure it does.
+    export CFLAGS="-O3 -DNDEBUG -Wall"
+
+    apt-get update
+    apt-get install -y python3.12 python3.12-dev python3.12-venv gcc git g++
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+
+    # Build in an isolated directory
+    mkdir /tmp/build
+    cd /tmp/build
+    git config --global --add safe.directory /greenlet/.git
+    git clone /greenlet greenlet
+    cd greenlet
+
+    python -m venv /tmp/venv
+    . /tmp/venv/bin/activate
+    echo "Python"
+    python --version
+
+    python -mpip install -U pip
+    python -mpip install -U setuptools wheel
+    python -mpip wheel -v --wheel-dir ./dist .
+    python -mpip install -U .[test]
+    python -m unittest discover -v greenlet.tests
+
+    exit 0
+fi
+
+# Mount the current directory as /greenlet
+docker run --rm --platform linux/riscv64 -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-riscv64/ubuntu:latest} /greenlet/$(basename $0)
