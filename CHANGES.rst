@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.2.1 (unreleased)
+3.2.1 (2025-04-22)
 ==================
 
 - Fix a crash regression for Riscv64. See `issue 443
