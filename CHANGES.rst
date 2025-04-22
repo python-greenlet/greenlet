@@ -5,7 +5,8 @@
 3.2.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix a crash regression for Riscv64. See `issue 443
+  <https://github.com/python-greenlet/greenlet/issues/443>`_.
 
 
 3.2.0 (2025-04-15)
