@@ -12,7 +12,9 @@ PythonState::PythonState()
     ,cframe(nullptr)
     ,use_tracing(0)
 #endif
-#if GREENLET_PY312
+#if GREENLET_PY314
+    ,py_recursion_depth(0)
+#elif GREENLET_PY312
     ,py_recursion_depth(0)
     ,c_recursion_depth(0)
 #else
@@ -132,7 +134,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
   #endif
 #endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-  #if GREENLET_PY312
+  #if GREENLET_PY314
+    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+  #elif GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     this->c_recursion_depth = Py_C_RECURSION_LIMIT - tstate->c_recursion_remaining;
   #else // not 312
@@ -207,7 +211,10 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
   #endif
 #endif // GREENLET_USE_CFRAME
 #if GREENLET_PY311
-  #if GREENLET_PY312
+  #if GREENLET_PY314
+    tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
+    this->unexpose_frames();
+  #elif GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->c_recursion_remaining = Py_C_RECURSION_LIMIT - this->c_recursion_depth;
     this->unexpose_frames();
@@ -253,7 +260,9 @@ inline void PythonState::will_switch_from(PyThreadState *const origin_tstate) no
 void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 {
     this->_top_frame = nullptr;
-#if GREENLET_PY312
+#if GREENLET_PY314
+    this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
+#elif GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     // XXX: TODO: Comment from a reviewer:
     //     Should this be ``Py_C_RECURSION_LIMIT - tstate->c_recursion_remaining``?
