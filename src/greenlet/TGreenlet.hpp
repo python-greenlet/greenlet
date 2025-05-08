@@ -110,7 +110,9 @@ namespace greenlet
         _PyCFrame* cframe;
         int use_tracing;
 #endif
-#if GREENLET_PY312
+#if GREENLET_PY314
+        int py_recursion_depth;
+#elif GREENLET_PY312
         int py_recursion_depth;
         int c_recursion_depth;
 #else
