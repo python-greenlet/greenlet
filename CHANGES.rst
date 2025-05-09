@@ -5,7 +5,9 @@
 3.2.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Make greenlet build and run on Python 3.14 beta 1. It will not run
+  on earlier versions of 3.14; it should run on subsequent versions.
+  See `PR 445 <https://github.com/python-greenlet/greenlet/pull/445>`_.
 
 
 3.2.1 (2025-04-22)
