@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.2.2 (unreleased)
+3.2.2 (2025-05-09)
 ==================
 
 - Make greenlet build and run on Python 3.14 beta 1. It will not run
