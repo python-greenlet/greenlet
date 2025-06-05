@@ -6,6 +6,8 @@
 ==================
 
 - Make greenlet build and run on Python 3.14 beta 2 on Windows amd64.
+- Potentially fix build on NetBSD/sparc64. See `PR 447
+  <https://github.com/python-greenlet/greenlet/pull/447>`_.
 
 
 3.2.2 (2025-05-09)
