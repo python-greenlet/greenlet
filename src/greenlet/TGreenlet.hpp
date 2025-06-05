@@ -29,7 +29,9 @@ using greenlet::refs::BorrowedGreenlet;
 
 #if GREENLET_PY314
 #  include "internal/pycore_interpframe_structs.h"
+extern "C" {
 #  include "internal/pycore_interpframe.h"
+}
 #endif
 
 // XXX: TODO: Work to remove all virtual functions
