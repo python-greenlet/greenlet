@@ -23,10 +23,13 @@
  * but still crash. We have that problem on all platforms though. It's just worse
  * here because we have to keep copying the updated definitions.
  */
-
+#include <Python.h>
 #include "greenlet_cpython_compat.hpp"
 
-#if GREENLET_314
+// This file is only included on 3.14+
+
+extern "C" {
+
 // pycore_code.h ----------------
 #define _PyCode_CODE(CO) _Py_RVALUE((_Py_CODEUNIT *)(CO)->co_code_adaptive)
 // End pycore_code.h ----------
@@ -72,7 +75,7 @@ _PyFrame_GetBytecode(_PyInterpreterFrame *f)
 #endif
 }
 
-static inline bool _Py_NO_SANITIZE_THREAD
+static inline bool //_Py_NO_SANITIZE_THREAD
 _PyFrame_IsIncomplete(_PyInterpreterFrame *frame)
 {
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
@@ -84,5 +87,5 @@ _PyFrame_IsIncomplete(_PyInterpreterFrame *frame)
 }
 // pycore_interpframe.h ----------
 
-#endif // GREENLET_314
-#endif
+}
+#endif // GREENLET_MSVC_COMPAT_HPP
