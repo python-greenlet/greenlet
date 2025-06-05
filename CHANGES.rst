@@ -5,7 +5,7 @@
 3.2.3 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Make greenlet build and run on Python 3.14 beta 2 on Windows amd64.
 
 
 3.2.2 (2025-05-09)

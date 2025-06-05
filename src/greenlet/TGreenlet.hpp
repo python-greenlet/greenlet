@@ -29,9 +29,11 @@ using greenlet::refs::BorrowedGreenlet;
 
 #if GREENLET_PY314
 #  include "internal/pycore_interpframe_structs.h"
-extern "C" {
+#if defined(_MSC_VER) || defined(__MINGW64__)
+#   include "greenlet_msvc_compat.hpp"
+#else
 #  include "internal/pycore_interpframe.h"
-}
+#endif
 #endif
 
 // XXX: TODO: Work to remove all virtual functions
