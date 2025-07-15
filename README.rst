@@ -19,12 +19,18 @@ generators; the difference with Python's own generators is that our
 generators can call nested functions and the nested functions can
 yield values too. (Additionally, you don't need a "yield" keyword. See
 the example in `test_generator.py
-<https://github.com/python-greenlet/greenlet/blob/adca19bf1f287b3395896a8f41f3f4fd1797fdc7/src/greenlet/tests/test_generator.py#L1>`_).
+<https://github.com/python-greenlet/greenlet/blob/master/src/greenlet/tests/test_generator.py>`_).
+Moreover, when dealing with deeply nested generators, e.g. recursively
+traversing a tree structure, due to `PEP 380 Optimizations`_ not being
+implemented in CPython, our generators can achieve better time complexity
+(See the example in `test_generator_deeply_nested.py
+<https://github.com/python-greenlet/greenlet/blob/master/src/greenlet/tests/test_generator_deeply_nested.py>`_).
 
 Greenlets are provided as a C extension module for the regular unmodified
 interpreter.
 
 .. _`Stackless`: http://www.stackless.com
+.. _`PEP 380 Optimizations`: https://peps.python.org/pep-0380/#optimisations
 
 
 Who is using Greenlet?
