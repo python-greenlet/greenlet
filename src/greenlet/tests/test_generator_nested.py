@@ -166,3 +166,4 @@ class NestedGeneratorTests(TestCase):
         seen = []
         for ii in ax(5):
             seen.append(ii)
+        self.assertEqual(seen, [1, 2, 3, 4, 5])
