@@ -249,7 +249,7 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
 
         PyObject_GC_Track((PyObject*)self);
 
-        _Py_DEC_REFTOTAL;
+        GREENLET_Py_DEC_REFTOTAL;
 #ifdef COUNT_ALLOCS
         --Py_TYPE(self)->tp_frees;
         --Py_TYPE(self)->tp_allocs;
