@@ -260,6 +260,7 @@ setup(
         'test': [
             'objgraph',
             'psutil',
+            'setuptools',
         ],
     },
     python_requires=">=3.9",
