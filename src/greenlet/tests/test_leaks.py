@@ -10,6 +10,7 @@ import gc
 import time
 import weakref
 import threading
+import unittest
 
 
 import greenlet
@@ -17,7 +18,7 @@ from . import TestCase
 from . import PY314
 from .leakcheck import fails_leakcheck
 from .leakcheck import ignores_leakcheck
-from .leakcheck import RUNNING_ON_MANYLINUX
+from .leakcheck import SKIP_LEAKCHECKS
 
 # pylint:disable=protected-access
 
@@ -39,6 +40,7 @@ class HasFinalizerTracksInstances(object):
         cls.EXTANT_INSTANCES.clear()
 
 
+@unittest.skipIf(SKIP_LEAKCHECKS, "Leak checks disabled")
 class TestLeaks(TestCase):
 
     def test_arg_refs(self):
@@ -313,8 +315,6 @@ class TestLeaks(TestCase):
         assert sys.version_info[0] >= 3
         if sys.version_info[:2] < (3, 8):
             self.skipTest('Only observed on 3.11')
-        if RUNNING_ON_MANYLINUX:
-            self.skipTest("Slow and not worth repeating here")
 
     @ignores_leakcheck
     # Because we're just trying to track raw memory, not objects, and running
