@@ -5,7 +5,11 @@
 3.2.4 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Various small build changes for uncommon configurations (e.g.,
+  building CPython with assertions enabled but NOT debugging),
+  contributed by Michał Górny. Note
+  that while greenlet will BUILD in a free-threaded Python, it will
+  cause the GIL to be allocated and used, and memory may leak.
 
 
 3.2.3 (2025-06-05)

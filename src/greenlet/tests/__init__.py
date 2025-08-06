@@ -5,6 +5,7 @@ Tests for greenlet.
 """
 import os
 import sys
+import sysconfig
 import unittest
 
 from gc import collect
@@ -35,6 +36,13 @@ RUNNING_ON_TRAVIS = os.environ.get('TRAVIS') or RUNNING_ON_GITHUB_ACTIONS
 RUNNING_ON_APPVEYOR = os.environ.get('APPVEYOR')
 RUNNING_ON_CI = RUNNING_ON_TRAVIS or RUNNING_ON_APPVEYOR
 RUNNING_ON_MANYLINUX = os.environ.get('GREENLET_MANYLINUX')
+
+# Is the current interpreter free-threaded?) Note that this
+# isn't the same as whether the GIL is enabled, this is the build-time
+# value. Certain CPython details, like the garbage collector,
+# work very differently on potentially-free-threaded builds than
+# standard builds.
+RUNNING_ON_FREETHREAD_BUILD = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 class TestCaseMetaClass(type):
     # wrap each test method with

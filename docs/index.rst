@@ -80,6 +80,10 @@ that since they're cooperatively scheduled, you are in control of
 when they execute, and since they are coroutines, many greenlets can
 exist in a single native thread.
 
+Note that greenlet will cause a free-threaded build of Python to
+allocate a GIL, so no actual free-threading will take place. For more
+on free-threading and greenlet, see :doc:`caveats`.
+
 .. rubric:: How are greenlets different from threads?
 
 Threads (in theory) are preemptive and parallel [#f1]_, meaning that multiple
@@ -101,6 +105,10 @@ stack, and bookkeeping in the kernel). Because greenlets are
 implemented entirely without involving the operating system, they can
 require fewer resources; it is often practical to have many more
 greenlets than it is threads.
+
+Note that greenlet will cause a free-threaded build of Python to
+allocate a GIL, so no actual free-threading will take place. For more
+on free-threading and greenlet, see :doc:`caveats`.
 
 .. _race conditions: https://en.wikipedia.org/wiki/Race_condition
 .. _deadlocks: https://docs.microsoft.com/en-us/troubleshoot/dotnet/visual-basic/race-conditions-deadlocks#when-deadlocks-occur

@@ -32,3 +32,18 @@ signal handler function doesn't really return to CPython, is likely to
 lead to a hang.
 
 See :issue:`143` for an example.
+
+Free-threading Is Not Supported
+===============================
+
+Beginning with 3.14 (and experimental in 3.13), CPython may be built
+in a free-threaded mode where the GIL is not used by default. greenlet
+does not support this mode (although it will build with it), and using
+greenlet in such an interpreter will cause the GIL to be enabled.
+
+In addition, there are known issues running greenlets in a
+free-threaded CPython. These include:
+
+- Garbage collection differences may cause ``GreenletExit`` to no
+  longer be raised in certain multi-threaded scenarios.
+- There may be other memory leaks.

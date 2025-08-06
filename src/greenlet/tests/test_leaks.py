@@ -15,9 +15,11 @@ import threading
 import greenlet
 from . import TestCase
 from . import PY314
+from . import RUNNING_ON_FREETHREAD_BUILD
 from .leakcheck import fails_leakcheck
 from .leakcheck import ignores_leakcheck
 from .leakcheck import RUNNING_ON_MANYLINUX
+
 
 # pylint:disable=protected-access
 
@@ -37,6 +39,14 @@ class HasFinalizerTracksInstances(object):
     @classmethod
     def reset(cls):
         cls.EXTANT_INSTANCES.clear()
+
+
+def fails_leakcheck_except_on_free_thraded(func):
+    if RUNNING_ON_FREETHREAD_BUILD:
+        # These all seem to pass on free threading because
+        # of the changes to the garbage collector
+        return func
+    return fails_leakcheck(func)
 
 
 class TestLeaks(TestCase):
@@ -265,7 +275,7 @@ class TestLeaks(TestCase):
         finally:
             greenlet._greenlet.enable_optional_cleanup(True)
 
-    @fails_leakcheck
+    @fails_leakcheck_except_on_free_thraded
     def test_issue251_issue252_need_to_collect_in_background(self):
         # Between greenlet 1.1.2 and the next version, this was still
         # failing because the leak of the list still exists when we
@@ -286,7 +296,7 @@ class TestLeaks(TestCase):
         # for some reason, but I've never seen it pass on macOS.
         self._check_issue251(manually_collect_background=False)
 
-    @fails_leakcheck
+    @fails_leakcheck_except_on_free_thraded
     def test_issue251_issue252_need_to_collect_in_background_cleanup_disabled(self):
         self.expect_greenlet_leak = True
         greenlet._greenlet.enable_optional_cleanup(False)
@@ -295,7 +305,7 @@ class TestLeaks(TestCase):
         finally:
             greenlet._greenlet.enable_optional_cleanup(True)
 
-    @fails_leakcheck
+    @fails_leakcheck_except_on_free_thraded
     def test_issue251_issue252_explicit_reference_not_collectable(self):
         self._check_issue251(
             manually_collect_background=False,
