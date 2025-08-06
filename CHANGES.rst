@@ -10,6 +10,9 @@
   contributed by Michał Górny. Note
   that while greenlet will BUILD in a free-threaded Python, it will
   cause the GIL to be allocated and used, and memory may leak.
+- Fix an assertion error on debug builds of Python 3.14 when using the
+  experimental JIT. See :issue:`460
+  <https://github.com/python-greenlet/greenlet/issues/460>`_.
 
 
 3.2.3 (2025-06-05)
