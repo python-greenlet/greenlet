@@ -5,11 +5,16 @@
 3.2.4 (unreleased)
 ==================
 
-- Various small build changes for uncommon configurations (e.g.,
+.. note::
+
+   The 3.2.x series will be the last to support Python 3.9.
+
+- Various small build/test changes for less common configurations (e.g.,
   building CPython with assertions enabled but NOT debugging),
-  contributed by Michał Górny. Note
-  that while greenlet will BUILD in a free-threaded Python, it will
-  cause the GIL to be allocated and used, and memory may leak.
+  contributed by Michał Górny. Note that while greenlet will BUILD in
+  a free-threaded Python, it will cause the GIL to be allocated and
+  used, and memory may leak. Also note that these configurations
+  are not tested by this project's CI.
 - Fix an assertion error on debug builds of Python 3.14 when using the
   experimental JIT. See :issue:`460
   <https://github.com/python-greenlet/greenlet/issues/460>`_.
