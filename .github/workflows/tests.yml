@@ -27,9 +27,9 @@ jobs:
         # need to run on mac.
         os: [ubuntu-latest, macos-latest]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -121,9 +121,9 @@ jobs:
       # required for all workflows
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.10"
           cache: 'pip'
@@ -150,9 +150,9 @@ jobs:
     name: RiscV 64
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Set up QEMU
@@ -183,9 +183,9 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up QEMU
@@ -202,7 +202,7 @@ jobs:
           path: wheelhouse/*whl
           name: ${{ matrix.image }}_wheels.zip
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         with:
           user: __token__
