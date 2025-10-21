@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.9, "3.10", "3.11", "3.12", "3.13", "3.14.0-rc.1"]
+        python-version: [3.9, "3.10", "3.11", "3.12", "3.13", "3.14"]
         # Recall the macOS builds upload built wheels so all supported versions
         # need to run on mac.
         os: [ubuntu-latest, macos-latest]

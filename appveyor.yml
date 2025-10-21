@@ -40,7 +40,7 @@ environment:
     # Fully supported 64-bit versions, with testing. This should be
     # all the current (non EOL) versions.
     - PYTHON: "C:\\Python314-x64"
-      PYTHON_VERSION: "3.14.0rc1"
+      PYTHON_VERSION: "3.14.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
 
