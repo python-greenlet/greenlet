@@ -23,6 +23,12 @@ if [ -d /greenlet -a -d /opt/python ]; then
     # It may also violate standards compliance in a few ways. Rather than opt-out with -fno-fast-math,
     # we use O3, which has neither of those problems.
     export CFLAGS="-O3 -DNDEBUG -Wall"
+    # 2025-10-21: Sometime after 2025-10-01, the manylinux_ppc64le
+    # environment started shipping a version of Python 3.14 that wants to use
+    # clang++ by default. That's not installed here, and I can't get yum to work
+    # to try to install it, but luckily g++ works just as well --- that's what
+    # everything else uses.
+    export CXX="g++"
     # Build in an isolated directory
     mkdir /tmp/build
     cd /tmp/build
