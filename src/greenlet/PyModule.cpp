@@ -168,8 +168,8 @@ mod_enable_optional_cleanup(PyObject* UNUSED(module), PyObject* flag)
         return nullptr;
     }
 
-    std::clock_t clocks = ThreadState::clocks_used_doing_gc();
     if (is_true) {
+        std::clock_t clocks = ThreadState::clocks_used_doing_gc();
         // If we already have a value, we don't want to lose it.
         if (clocks == std::clock_t(-1)) {
             ThreadState::set_clocks_used_doing_gc(0);
