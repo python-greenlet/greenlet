@@ -5,7 +5,9 @@
 3.2.5 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Alpine wheels (musllinux) are now built to the 1.2 standard, up from
+  1.1. 1.1 appears to no longer be supported and couldn't build Python
+  3.14 wheels.
 
 
 3.2.4 (2025-08-07)
