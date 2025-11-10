@@ -11,6 +11,17 @@ Github
 The primary development location for greenlet is GitHub:
 https://github.com/python-greenlet/greenlet/
 
+Compilation database
+====================
+
+To get ``compile_commands.json`` (used by ``clang-tidy``, for example), 
+install ``bear``, then run:
+
+.. code-block:: shell
+
+   $ bear -- python setup.py
+
+
 Releases
 ========
 
