@@ -81,7 +81,7 @@ test_exception_switch(PyObject* UNUSED(self), PyObject* args)
 
 
 static PyObject*
-py_test_exception_throw_nonstd(PyObject* self, PyObject* args)
+py_test_exception_throw_nonstd(PyObject* UNUSED(self), PyObject* args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
@@ -91,7 +91,7 @@ py_test_exception_throw_nonstd(PyObject* self, PyObject* args)
 }
 
 static PyObject*
-py_test_exception_throw_std(PyObject* self, PyObject* args)
+py_test_exception_throw_std(PyObject* UNUSED(self), PyObject* args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
@@ -101,7 +101,7 @@ py_test_exception_throw_std(PyObject* self, PyObject* args)
 }
 
 static PyObject*
-py_test_call(PyObject* self, PyObject* arg)
+py_test_call(PyObject* UNUSED(self), PyObject* arg)
 {
     PyObject* noargs = PyTuple_New(0);
     PyObject* ret = PyObject_Call(arg, noargs, nullptr);
@@ -121,7 +121,7 @@ py_test_call(PyObject* self, PyObject* arg)
  * segfault the process.
  */
 static PyObject*
-test_exception_switch_and_do_in_g2(PyObject* self, PyObject* args)
+test_exception_switch_and_do_in_g2(PyObject* UNUSED(self), PyObject* args)
 {
     PyObject* g2func = NULL;
     PyObject* result = NULL;
