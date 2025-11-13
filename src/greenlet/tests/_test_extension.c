@@ -10,8 +10,32 @@
 
 #define TEST_MODULE_NAME "_test_extension"
 
+// CAUTION: MSVC is stupidly picky:
+//
+// "The compiler ignores, without warning, any __declspec keywords
+// placed after * or & and in front of the variable identifier in a
+// declaration."
+// (https://docs.microsoft.com/en-us/cpp/cpp/declspec?view=msvc-160)
+//
+// So pointer return types must be handled differently (because of the
+// trailing *), or you get inscrutable compiler warnings like "error
+// C2059: syntax error: ''"
+//
+// In C23, there is a standard syntax for attributes, and
+// GCC defines an attribute to use with this: [[gnu:noinline]].
+// In the future, this is expected to become standard.
+
+#if defined(__GNUC__) || defined(__clang__)
+/* We used to check for GCC 4+ or 3.4+, but those compilers are
+   laughably out of date. Just assume they support it. */
+#    define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
+#elif defined(_MSC_VER)
+/* We used to check for  && (_MSC_VER >= 1300) but that's also out of date. */
+#    define UNUSED(x) UNUSED_ ## x
+#endif
+
 static PyObject*
-test_switch(PyObject* self, PyObject* greenlet)
+test_switch(PyObject* UNUSED(self), PyObject* greenlet)
 {
     PyObject* result = NULL;
 
@@ -33,7 +57,7 @@ test_switch(PyObject* self, PyObject* greenlet)
 }
 
 static PyObject*
-test_switch_kwargs(PyObject* self, PyObject* args, PyObject* kwargs)
+test_switch_kwargs(PyObject* UNUSED(self), PyObject* args, PyObject* kwargs)
 {
     PyGreenlet* g = NULL;
     PyObject* result = NULL;
@@ -58,7 +82,7 @@ test_switch_kwargs(PyObject* self, PyObject* args, PyObject* kwargs)
 }
 
 static PyObject*
-test_getcurrent(PyObject* self)
+test_getcurrent(PyObject* UNUSED(self))
 {
     PyGreenlet* g = PyGreenlet_GetCurrent();
     if (g == NULL || !PyGreenlet_Check(g) || !PyGreenlet_ACTIVE(g)) {
@@ -72,7 +96,7 @@ test_getcurrent(PyObject* self)
 }
 
 static PyObject*
-test_setparent(PyObject* self, PyObject* arg)
+test_setparent(PyObject* UNUSED(self), PyObject* arg)
 {
     PyGreenlet* current;
     PyGreenlet* greenlet = NULL;
@@ -97,7 +121,7 @@ test_setparent(PyObject* self, PyObject* arg)
 }
 
 static PyObject*
-test_new_greenlet(PyObject* self, PyObject* callable)
+test_new_greenlet(PyObject* UNUSED(self), PyObject* callable)
 {
     PyObject* result = NULL;
     PyGreenlet* greenlet = PyGreenlet_New(callable, NULL);
@@ -117,21 +141,21 @@ test_new_greenlet(PyObject* self, PyObject* callable)
 }
 
 static PyObject*
-test_raise_dead_greenlet(PyObject* self)
+test_raise_dead_greenlet(PyObject* UNUSED(self))
 {
     PyErr_SetString(PyExc_GreenletExit, "test GreenletExit exception.");
     return NULL;
 }
 
 static PyObject*
-test_raise_greenlet_error(PyObject* self)
+test_raise_greenlet_error(PyObject* UNUSED(self))
 {
     PyErr_SetString(PyExc_GreenletError, "test greenlet.error exception");
     return NULL;
 }
 
 static PyObject*
-test_throw(PyObject* self, PyGreenlet* g)
+test_throw(PyObject* UNUSED(self), PyGreenlet* g)
 {
     const char msg[] = "take that sucka!";
     PyObject* msg_obj = Py_BuildValue("s", msg);
@@ -144,7 +168,7 @@ test_throw(PyObject* self, PyGreenlet* g)
 }
 
 static PyObject*
-test_throw_exact(PyObject* self, PyObject* args)
+test_throw_exact(PyObject* UNUSED(self), PyObject* args)
 {
     PyGreenlet* g = NULL;
     PyObject* typ = NULL;
