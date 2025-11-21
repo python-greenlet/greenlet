@@ -107,7 +107,7 @@ jobs:
       run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
     - name: Lint
-      if: matrix.python-version == '3.12' && startsWith(runner.os, 'Linux')
+      if: matrix.python-version == '3.14' && startsWith(runner.os, 'Linux')
       # We only need to do this on one version.
       # We do this here rather than a separate job to avoid the compilation overhead.
       run: |
