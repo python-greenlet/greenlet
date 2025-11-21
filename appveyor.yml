@@ -39,6 +39,8 @@ environment:
 
     # Fully supported 64-bit versions, with testing. This should be
     # all the current (non EOL) versions.
+    # NOTE: As of 3.14.0, CPython doesn't distribute
+    # free-threaded builds, so we have no way to create those.
     - PYTHON: "C:\\Python314-x64"
       PYTHON_VERSION: "3.14.0"
       PYTHON_ARCH: "64"
@@ -66,24 +68,6 @@ environment:
       PYTHON_VERSION: "3.10.0"
       PYTHON_ARCH: "64"
       PYTHON_EXE: python
-
-
-    - PYTHON: "C:\\Python39-x64"
-      PYTHON_ARCH: "64"
-      PYTHON_VERSION: "3.9.x"
-      PYTHON_EXE: python
-
-
-
-    # Tested 32-bit versions. A small, hand-picked selection covering
-    # important variations. No need to include newer versions of
-    # cpython here, 32-bit x86 windows is on the way out.
-
-    - PYTHON: "C:\\Python39"
-      PYTHON_ARCH: "32"
-      PYTHON_VERSION: "3.9.x"
-      PYTHON_EXE: python
-
 
 
     # Untested 64-bit versions. We don't expect any variance here from
@@ -137,6 +121,7 @@ install:
         & appveyor\install.ps1;
       }
 
+  - ps: "ls \"${env:PYTHON}\""
   # Prepend newly installed Python to the PATH of this build (this cannot be
   # done from inside the powershell script as it would require to restart
   # the parent CMD process).

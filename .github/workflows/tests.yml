@@ -22,10 +22,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.9, "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+
         # Recall the macOS builds upload built wheels so all supported versions
         # need to run on mac.
-        os: [ubuntu-latest, macos-latest]
+        os:
+          - ubuntu-latest
+          - macos-latest
     steps:
     - uses: actions/checkout@v5
     - name: Set up Python
@@ -170,15 +179,15 @@ jobs:
     # We use a regular Python matrix entry to share as much code as possible.
     strategy:
       matrix:
-        python-version: [3.9]
+        python-version:
+          - "3.14"
         image:
           - manylinux_2_28_x86_64
-          - manylinux2014_aarch64
-          - manylinux2014_ppc64le
-          - manylinux2014_s390x
-          - manylinux2014_x86_64
-          - musllinux_1_1_x86_64
-          - musllinux_1_1_aarch64
+          - manylinux_2_28_aarch64
+          - manylinux_2_28_ppc64le
+          - manylinux_2_28_s390x
+          - musllinux_1_2_x86_64
+          - musllinux_1_2_aarch64
     name: ${{ matrix.image }}
 
     steps:
