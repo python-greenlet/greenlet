@@ -29,6 +29,7 @@ PY313 = sys.version_info[:2] >= (3, 13)
 # XXX: First tested on 3.14a7. Revisit all uses of this on later versions to ensure they
 # are still valid.
 PY314 = sys.version_info[:2] >= (3, 14)
+PY315 = sys.version_info[:2] >= (3, 15)
 
 WIN = sys.platform.startswith("win")
 RUNNING_ON_GITHUB_ACTIONS = os.environ.get('GITHUB_ACTIONS')
