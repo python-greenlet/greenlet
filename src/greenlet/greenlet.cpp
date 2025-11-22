@@ -213,6 +213,10 @@ greenlet_internal_mod_init() noexcept
     try {
         CreatedModule m(greenlet_module_def);
 
+#ifdef Py_GIL_DISABLED
+        PyUnstable_Module_SetGIL(m.borrow(), Py_MOD_GIL_NOT_USED);
+#endif
+
         Require(PyType_Ready(&PyGreenlet_Type));
         Require(PyType_Ready(&PyGreenletUnswitchable_Type));
 
