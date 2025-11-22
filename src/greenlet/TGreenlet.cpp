@@ -611,7 +611,104 @@ bool Greenlet::is_currently_running_in_some_thread() const
     return this->stack_state.active() && !this->python_state.top_frame();
 }
 
-#if GREENLET_PY312
+#if GREENLET_PY315
+void GREENLET_NOINLINE(Greenlet::expose_frames)()
+{
+    if (!this->python_state.top_frame()) {
+        return;
+    }
+
+    _PyInterpreterFrame* last_complete_iframe = nullptr;
+    _PyInterpreterFrame* iframe = this->python_state.top_frame()->f_frame;
+    while (iframe) {
+        // We must make a copy before looking at the iframe contents,
+        // since iframe might point to a portion of the greenlet's C stack
+        // that was spilled when switching greenlets.
+        _PyInterpreterFrame iframe_copy;
+        this->stack_state.copy_from_stack(&iframe_copy, iframe, sizeof(*iframe));
+        if (!_PyFrame_IsIncomplete(&iframe_copy)) {
+            // If the iframe were OWNED_BY_INTERPRETER then it would always be
+            // incomplete. Since it's not incomplete, it's not on the C stack
+            // and we can access it through the original `iframe` pointer
+            // directly.  This is important since GetFrameObject might
+            // lazily _create_ the frame object and we don't want the
+            // interpreter to lose track of it.
+            assert(iframe_copy.owner != FRAME_OWNED_BY_INTERPRETER);
+
+            // We really want to just write:
+            //     PyFrameObject* frame = _PyFrame_GetFrameObject(iframe);
+            // but _PyFrame_GetFrameObject calls _PyFrame_MakeAndSetFrameObject
+            // which is not a visible symbol in libpython. The easiest
+            // way to get a public function to call it is using
+            // PyFrame_GetBack, which is defined as follows:
+            //     assert(frame != NULL);
+            //     assert(!_PyFrame_IsIncomplete(frame->f_frame));
+            //     PyFrameObject *back = frame->f_back;
+            //     if (back == NULL) {
+            //         _PyInterpreterFrame *prev = frame->f_frame->previous;
+            //         prev = _PyFrame_GetFirstComplete(prev);
+            //         if (prev) {
+            //             back = _PyFrame_GetFrameObject(prev);
+            //         }
+            //     }
+            //     return (PyFrameObject*)Py_XNewRef(back);
+            if (!iframe->frame_obj) {
+                PyFrameObject dummy_frame;
+                _PyInterpreterFrame dummy_iframe;
+                dummy_frame.f_back = nullptr;
+                dummy_frame.f_frame = &dummy_iframe;
+                // force the iframe to be considered complete without
+                // needing to check its code object:
+                dummy_iframe.owner = FRAME_OWNED_BY_GENERATOR;
+                dummy_iframe.previous = iframe;
+                assert(!_PyFrame_IsIncomplete(&dummy_iframe));
+                // Drop the returned reference immediately; the iframe
+                // continues to hold a strong reference
+                Py_XDECREF(PyFrame_GetBack(&dummy_frame));
+                assert(iframe->frame_obj);
+            }
+
+            // This is a complete frame, so make the last one of those we saw
+            // point at it, bypassing any incomplete frames (which may have
+            // been on the C stack) in between the two. We're overwriting
+            // last_complete_iframe->previous and need that to be reversible,
+            // so we store the original previous ptr in the frame object
+            // (which we must have created on a previous iteration through
+            // this loop). The frame object has a bunch of storage that is
+            // only used when its iframe is OWNED_BY_FRAME_OBJECT, which only
+            // occurs when the frame object outlives the frame's execution,
+            // which can't have happened yet because the frame is currently
+            // executing as far as the interpreter is concerned. So, we can
+            // reuse it for our own purposes.
+            assert(iframe->owner == FRAME_OWNED_BY_THREAD
+                   || iframe->owner == FRAME_OWNED_BY_GENERATOR);
+            if (last_complete_iframe) {
+                assert(last_complete_iframe->frame_obj);
+                memcpy(&last_complete_iframe->frame_obj->_f_frame_data[0],
+                       &last_complete_iframe->previous, sizeof(void *));
+                last_complete_iframe->previous = iframe;
+            }
+            last_complete_iframe = iframe;
+        }
+        // Frames that are OWNED_BY_FRAME_OBJECT are linked via the
+        // frame's f_back while all others are linked via the iframe's
+        // previous ptr. Since all the frames we traverse are running
+        // as far as the interpreter is concerned, we don't have to
+        // worry about the OWNED_BY_FRAME_OBJECT case.
+        iframe = iframe_copy.previous;
+    }
+
+    // Give the outermost complete iframe a null previous pointer to
+    // account for any potential incomplete/C-stack iframes between it
+    // and the actual top-of-stack
+    if (last_complete_iframe) {
+        assert(last_complete_iframe->frame_obj);
+        memcpy(&last_complete_iframe->frame_obj->_f_frame_data[0],
+               &last_complete_iframe->previous, sizeof(void *));
+        last_complete_iframe->previous = nullptr;
+    }
+}
+#elif GREENLET_PY312
 void GREENLET_NOINLINE(Greenlet::expose_frames)()
 {
     if (!this->python_state.top_frame()) {
@@ -633,7 +730,7 @@ void GREENLET_NOINLINE(Greenlet::expose_frames)()
             // directly.  This is important since GetFrameObject might
             // lazily _create_ the frame object and we don't want the
             // interpreter to lose track of it.
-            assert(iframe_copy.owner != FRAME_OWNED_BY_CSTACK);
+            static_assert(iframe_copy.owner != FRAME_OWNED_BY_CSTACK);
 
             // We really want to just write:
             //     PyFrameObject* frame = _PyFrame_GetFrameObject(iframe);
