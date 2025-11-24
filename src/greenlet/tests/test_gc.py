@@ -11,7 +11,7 @@ from .leakcheck import fails_leakcheck
 # which is no longer optional.
 assert greenlet.GREENLET_USE_GC
 
-class GCTests(TestCase):
+class TestGC(TestCase):
     def test_dead_circular_ref(self):
         o = weakref.ref(greenlet.greenlet(greenlet.getcurrent).switch())
         gc.collect()
@@ -84,3 +84,26 @@ class GCTests(TestCase):
         del g
         greenlet.getcurrent()
         gc.collect()
+
+    # def test_crashing_cycle(self):
+    #     # CPython 3.14 free threaded crashes on this
+    #     # (from docs/greenlet_gc.rst)
+    #     import doctest
+
+    #     def with_doctest():
+    #         """
+    #         >>> import gc
+    #         >>> from greenlet import getcurrent, greenlet, GreenletExit
+    #         >>> def collect_it():
+    #         ...      print("Collecting garbage")
+    #         ...      gc.collect()
+    #         >>> def outer():
+    #         ...     gc.collect()
+    #         >>> outer_glet = greenlet(outer)
+    #         >>> outer_glet.switch()
+    #         Collecting garbage
+    #         >>> print(list(globals()))
+    #         >>> print(list(locals()))
+    #         """
+
+    #     doctest.run_docstring_examples(with_doctest, dict())

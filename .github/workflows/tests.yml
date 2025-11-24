@@ -51,8 +51,8 @@ jobs:
     - name: Install greenlet (non-Mac)
       if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
-        # Stupid setuptools doesn't want you running 'python setup.py' anymore,
-        # but stupid pip hides all the intersting compiler output by default, and the
+        # setuptools doesn't want you running 'python setup.py' anymore,
+        # but pip hides all the intersting compiler output by default, and the
         # only way to get anything useful out is to ask *everything* to be verbose,
         # which is much more junk than we need to wade through, making it hard to
         # see what we want. What's the point of having warnings at all if we can't
@@ -104,6 +104,20 @@ jobs:
         python -c 'import greenlet._greenlet as G; assert G.GREENLET_USE_STANDARD_THREADING'
         python -m unittest discover -v greenlet.tests
     - name: Doctest
+      env:
+        # XXX: On 3.14t, when the thread-local bytecode cache is
+        # enabled, sphinx crashes on module cleanup: there is a
+        # reference to pdb.set_trace in ``glob``, and when the
+        # shutdown sequence tries to clear that value, it segfaults
+        # dec-reffing it after taking it out of the module dict. The
+        # object appears to be corrupt, but it is utterly unclear how
+        # we could have done this. It is 100% reliable on bath Mac and
+        # Linux. It can be traced down to a very simple doctest
+        # snippet in greenlet_gc.rst, but running that same snippet
+        # standalone in a unit test doesn't produce the error.
+        #
+        # So this is a temporary workaround.
+        PYTHON_TLBC: "0"
       run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
     - name: Lint

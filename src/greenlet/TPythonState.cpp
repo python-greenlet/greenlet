@@ -15,6 +15,9 @@ PythonState::PythonState()
 #if GREENLET_PY314
     ,py_recursion_depth(0)
     ,current_executor(nullptr)
+    #ifdef Py_GIL_DISABLED
+    ,c_stack_refs(nullptr)
+    #endif
 #elif GREENLET_PY312
     ,py_recursion_depth(0)
     ,c_recursion_depth(0)
@@ -138,6 +141,9 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
   #if GREENLET_PY314
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     this->current_executor = tstate->current_executor;
+    #ifdef Py_GIL_DISABLED
+    this->c_stack_refs = ((_PyThreadStateImpl*)tstate)->c_stack_refs;
+    #endif
   #elif GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     this->c_recursion_depth = Py_C_RECURSION_LIMIT - tstate->c_recursion_remaining;
@@ -216,6 +222,9 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
   #if GREENLET_PY314
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
     tstate->current_executor = this->current_executor;
+    #ifdef Py_GIL_DISABLED
+    ((_PyThreadStateImpl*)tstate)->c_stack_refs = this->c_stack_refs;
+    #endif
     this->unexpose_frames();
   #elif GREENLET_PY312
     tstate->py_recursion_remaining = tstate->py_recursion_limit - this->py_recursion_depth;
