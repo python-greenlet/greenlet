@@ -13,6 +13,12 @@
   CPython on Windows. (Free-threaded CPython 3.13 may work, but is
   untested and unsupported.)
 
+  .. caution::
+
+     Under some rare scenarios, the interpreter may crash on accessing
+     a variable or attribute or when shutting down. If this happens,
+     try disabling the thread-local bytecode cache. See the greenlet
+     documentation for more.
 
 3.2.4 (2025-08-07)
 ==================
