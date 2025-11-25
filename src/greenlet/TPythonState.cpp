@@ -15,6 +15,7 @@ PythonState::PythonState()
 #if GREENLET_PY314
     ,py_recursion_depth(0)
     ,current_executor(nullptr)
+    ,stackpointer(nullptr)
     #ifdef Py_GIL_DISABLED
     ,c_stack_refs(nullptr)
     #endif
@@ -163,6 +164,14 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
     Py_XDECREF(frame);  // PyThreadState_GetFrame gives us a new
                         // reference.
     this->_top_frame.steal(frame);
+  #if GREENLET_PY314
+    if (this->top_frame()) {
+        this->stackpointer = this->_top_frame->f_frame->stackpointer;
+    }
+    else {
+        this->stackpointer = nullptr;
+    }
+  #endif
   #if GREENLET_PY313
     this->delete_later = Py_XNewRef(tstate->delete_later);
   #elif GREENLET_PY312
@@ -241,6 +250,11 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
     tstate->datastack_chunk = this->datastack_chunk;
     tstate->datastack_top = this->datastack_top;
     tstate->datastack_limit = this->datastack_limit;
+#if GREENLET_PY314 && defined(Py_GIL_DISABLED)
+    if (this->top_frame()) {
+        this->_top_frame->f_frame->stackpointer = this->stackpointer;
+    }
+#endif
     this->_top_frame.relinquish_ownership();
   #if GREENLET_PY313
     Py_XDECREF(tstate->delete_later);
@@ -295,6 +309,16 @@ int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noe
     if (own_top_frame) {
         Py_VISIT(this->_top_frame.borrow());
     }
+#if GREENLET_PY314
+    // TODO: Should we be visiting the c_stack_refs objects?
+    // CPython uses a specific macro to do that which takes into
+    // account boxing and null values and then calls
+    // ``_PyGC_VisitStackRef``, but we don't have access to that, and
+    // we can't duplicate it ourself (because it compares
+    // ``visitproc`` to another function we can't access).
+    // The naive way of looping over c_stack_refs->ref and visiting
+    // those crashes the process (at least with GIL disabled).
+#endif
     return 0;
 }
 

@@ -66,18 +66,13 @@ namespace greenlet {
  * invoke destructors; the C++11 version is the most portable solution
  * I found). When the thread exits, we can drop references and
  * otherwise manipulate greenlets and frames that we know can no
- * longer be switched to. For compilers that don't support C++11
- * thread locals, we have a solution that uses the python thread
- * dictionary, though it may not collect everything as promptly as
- * other compilers do, if some other library is using the thread
- * dictionary and has a cycle or extra reference.
+ * longer be switched to.
  *
  * There are two small wrinkles. The first is that when the thread
  * exits, it is too late to actually invoke Python APIs: the Python
  * thread state is gone, and the GIL is released. To solve *this*
  * problem, our destructor uses ``Py_AddPendingCall`` to transfer the
- * destruction work to the main thread. (This is not an issue for the
- * dictionary solution.)
+ * destruction work to the main thread.
  *
  * The second is that once the thread exits, the thread local object
  * is invalid and we can't even access a pointer to it, so we can't
