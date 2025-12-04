@@ -2,13 +2,24 @@
  Changes
 =========
 
-3.2.5 (unreleased)
+3.3.0 (unreleased)
 ==================
 
-- Alpine wheels (musllinux) are now built to the 1.2 standard, up from
-  1.1. 1.1 appears to no longer be supported and couldn't build Python
-  3.14 wheels.
+- Drop support for Python 3.9.
+- Switch to distributing manylinux_2_28 wheels instead of
+  manylinux2014 wheels. Likewise, switch from musllinux_1_1 to 1_2.
+- Add initial support for free-threaded builds of CPython 3.14. Due to
+  limitations, we do not distribute binary wheels for free-threaded
+  CPython on Windows. (Free-threaded CPython 3.13 may work, but is
+  untested and unsupported.)
 
+  .. caution::
+
+     Under some rare scenarios with free-threaded 3.14, the
+     interpreter may crash on accessing a variable or attribute or
+     when shutting down. If this happens, try disabling the
+     thread-local bytecode cache. See the greenlet documentation for
+     more.
 
 3.2.4 (2025-08-07)
 ==================

@@ -1134,8 +1134,9 @@ class TestGreenletSetParentErrors(TestCase):
 
 class TestRepr(TestCase):
 
-    def assertEndsWith(self, got, suffix):
-        self.assertTrue(got.endswith(suffix), (got, suffix))
+    if not hasattr(TestCase, 'assertEndsWith'): # Added in 3.14
+        def assertEndsWith(self, s, suffix, msg=None):
+            self.assertTrue(s.endswith(suffix), (s, suffix, msg))
 
     def test_main_while_running(self):
         r = repr(greenlet.getcurrent())
@@ -1348,6 +1349,17 @@ class TestBrokenGreenlets(TestCase):
             "]",
             output
         )
+
+class TestModule(TestCase):
+
+    @unittest.skipUnless(hasattr(sys, '_is_gil_enabled'),
+                         "Needs 3.13 and above for sys._is_gil_enabled")
+    def test_no_gil_on_free_threaded(self):
+
+        if RUNNING_ON_FREETHREAD_BUILD:
+            self.assertFalse(sys._is_gil_enabled())
+        else:
+            self.assertTrue(sys._is_gil_enabled())
 
 if __name__ == '__main__':
     unittest.main()

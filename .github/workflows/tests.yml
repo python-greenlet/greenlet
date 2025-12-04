@@ -22,10 +22,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.9, "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+
         # Recall the macOS builds upload built wheels so all supported versions
         # need to run on mac.
-        os: [ubuntu-latest, macos-latest]
+        os:
+          - ubuntu-latest
+          - macos-latest
     steps:
     - uses: actions/checkout@v5
     - name: Set up Python
@@ -42,8 +51,8 @@ jobs:
     - name: Install greenlet (non-Mac)
       if: ${{ ! startsWith(runner.os, 'Mac') }}
       run: |
-        # Stupid setuptools doesn't want you running 'python setup.py' anymore,
-        # but stupid pip hides all the intersting compiler output by default, and the
+        # setuptools doesn't want you running 'python setup.py' anymore,
+        # but pip hides all the intersting compiler output by default, and the
         # only way to get anything useful out is to ask *everything* to be verbose,
         # which is much more junk than we need to wade through, making it hard to
         # see what we want. What's the point of having warnings at all if we can't
@@ -95,10 +104,24 @@ jobs:
         python -c 'import greenlet._greenlet as G; assert G.GREENLET_USE_STANDARD_THREADING'
         python -m unittest discover -v greenlet.tests
     - name: Doctest
+      env:
+        # XXX: On 3.14t, when the thread-local bytecode cache is
+        # enabled, sphinx crashes on module cleanup: there is a
+        # reference to pdb.set_trace in ``glob``, and when the
+        # shutdown sequence tries to clear that value, it segfaults
+        # dec-reffing it after taking it out of the module dict. The
+        # object appears to be corrupt, but it is utterly unclear how
+        # we could have done this. It is 100% reliable on bath Mac and
+        # Linux. It can be traced down to a very simple doctest
+        # snippet in greenlet_gc.rst, but running that same snippet
+        # standalone in a unit test doesn't produce the error.
+        #
+        # So this is a temporary workaround.
+        PYTHON_TLBC: "0"
       run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
     - name: Lint
-      if: matrix.python-version == '3.12' && startsWith(runner.os, 'Linux')
+      if: matrix.python-version == '3.14' && startsWith(runner.os, 'Linux')
       # We only need to do this on one version.
       # We do this here rather than a separate job to avoid the compilation overhead.
       run: |
@@ -170,13 +193,13 @@ jobs:
     # We use a regular Python matrix entry to share as much code as possible.
     strategy:
       matrix:
-        python-version: [3.9]
+        python-version:
+          - "3.14"
         image:
           - manylinux_2_28_x86_64
-          - manylinux2014_aarch64
-          - manylinux2014_ppc64le
-          - manylinux2014_s390x
-          - manylinux2014_x86_64
+          - manylinux_2_28_aarch64
+          - manylinux_2_28_ppc64le
+          - manylinux_2_28_s390x
           - musllinux_1_2_x86_64
           - musllinux_1_2_aarch64
     name: ${{ matrix.image }}

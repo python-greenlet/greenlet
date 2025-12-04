@@ -11,7 +11,7 @@ from .leakcheck import fails_leakcheck
 # which is no longer optional.
 assert greenlet.GREENLET_USE_GC
 
-class GCTests(TestCase):
+class TestGC(TestCase):
     def test_dead_circular_ref(self):
         o = weakref.ref(greenlet.greenlet(greenlet.getcurrent).switch())
         gc.collect()

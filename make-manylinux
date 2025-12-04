@@ -41,9 +41,9 @@ if [ -d /greenlet -a -d /opt/python ]; then
     which auditwheel
     echo "Installed Python versions"
     ls -l /opt/python
-    for variant in `ls -d /opt/python/cp{314,313,39,310,311,312}*`; do
-        if [[ "$variant" == *t ]]; then
-            echo "Skipping no-gil build. The GIL is required."
+    for variant in  /opt/python/cp{314,313,312,311,310}*; do
+        if [[ "$variant" == *3t ]]; then
+            echo "Skipping no-gil build for 3.13; only 3.14 is fully supported."
             continue
         fi
         export PATH="$variant/bin:$OPATH"
@@ -52,7 +52,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
         python -mpip install -U pip
         python -mpip install -U setuptools wheel
         python -mpip wheel -v --wheel-dir ./dist .
-        python -mpip install -U .[test]
+        python -mpip install -U ".[test]"
         python -m unittest discover -v greenlet.tests
         PATH="$OPATH" auditwheel repair dist/greenlet*.whl
         cp wheelhouse/greenlet*.whl /greenlet/wheelhouse
@@ -67,5 +67,5 @@ fi
 
 # Mount the current directory as /greenlet
 # Can't use -i on Travis with arm64, "input device not a tty"
-docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-quay.io/pypa/manylinux2014_x86_64} /greenlet/$(basename $0)
+docker run --rm -v "$(pwd):/greenlet"  ${DOCKER_IMAGE:-quay.io/pypa/manylinux_2_28_x86_64} /greenlet/$(basename $0)
 ls -l wheelhouse

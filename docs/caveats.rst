@@ -33,17 +33,23 @@ lead to a hang.
 
 See :issue:`143` for an example.
 
-Free-threading Is Not Supported
-===============================
+Free-threading Is Experimental
+==============================
 
-Beginning with 3.14 (and experimental in 3.13), CPython may be built
-in a free-threaded mode where the GIL is not used by default. greenlet
-does not support this mode (although it will build with it), and using
-greenlet in such an interpreter will cause the GIL to be enabled.
+Beginning with greenlet 3.3.0, support for Python 3.14's free-threaded
+mode is enabled. Use caution, as it has only limited testing.
 
-In addition, there are known issues running greenlets in a
-free-threaded CPython. These include:
+There are known issues running greenlets in a free-threaded CPython.
+These include:
 
+- As with any threaded program, use caution when forking. Greenlet
+  maintains internal locks and forking at the wrong time might result
+  in the child process hanging.
 - Garbage collection differences may cause ``GreenletExit`` to no
   longer be raised in certain multi-threaded scenarios.
 - There may be other memory leaks.
+- It may be necessary to disable the thread-local bytecode cache (and
+  hence the specializing interpreter) to avoid a rare crash. If your
+  process crashes on accessing an attribute or object, or at shutdown
+  during module cleanup, try setting the environment variable
+  ``PYTHON_TLBC=0`` or using the ``-X tlbc=0`` argument.
