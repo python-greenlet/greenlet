@@ -36,7 +36,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
@@ -94,7 +94,7 @@ jobs:
         ls -l dist
         twine check dist/*
     - name: Store greenlet wheel
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: greenlet-${{ runner.os }}-${{ matrix.python-version }}.whl
         path: dist/*whl
@@ -144,7 +144,7 @@ jobs:
       # required for all workflows
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -157,7 +157,7 @@ jobs:
           python -m pip install -U setuptools wheel
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: python, cpp
       - name: Install greenlet
@@ -166,14 +166,14 @@ jobs:
       # - name: Autobuild
       #   uses: github/codeql-action/autobuild@v1
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
   riscv64:
     runs-on: ubuntu-latest
     name: RiscV 64
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -206,7 +206,7 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
@@ -220,7 +220,7 @@ jobs:
           DOCKER_IMAGE: quay.io/pypa/${{ matrix.image }}
         run: bash ./make-manylinux
       - name: Store greenlet wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           path: wheelhouse/*whl
           name: ${{ matrix.image }}_wheels.zip
