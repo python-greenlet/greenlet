@@ -19,7 +19,10 @@
      interpreter may crash on accessing a variable or attribute or
      when shutting down. If this happens, try disabling the
      thread-local bytecode cache. See the greenlet documentation for
-     more.
+     more details. See `PR 472 by T. Wouters
+     <https://github.com/python-greenlet/greenlet/pull/472>`_ for the
+     initial free-threaded support and a discussion of the current
+     known issues.
 
 3.2.4 (2025-08-07)
 ==================
@@ -35,7 +38,7 @@
   used, and memory may leak. Also note that these configurations
   are not tested by this project's CI.
 - Fix an assertion error on debug builds of Python 3.14 when using the
-  experimental JIT. See :issue:`460
+  experimental JIT. See `issue 460
   <https://github.com/python-greenlet/greenlet/issues/460>`_.
 
 
