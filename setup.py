@@ -114,10 +114,6 @@ elif is_win and "MSC" in plat_compiler:
     # this:
     cpp_compile_args.append('/std:c++20')
 
-def readfile(filename):
-    with open(filename, 'r') as f: # pylint:disable=unspecified-encoding
-        return f.read()
-
 GREENLET_SRC_DIR = 'src/greenlet/'
 GREENLET_HEADER_DIR = GREENLET_SRC_DIR
 GREENLET_HEADER = GREENLET_HEADER_DIR + 'greenlet.h'
@@ -197,72 +193,9 @@ else:
     ]
 
 
-def get_greenlet_version():
-    with open('src/greenlet/__init__.py') as f: # pylint:disable=unspecified-encoding
-        looking_for = '__version__ = \''
-        for line in f:
-            if line.startswith(looking_for):
-                version = line[len(looking_for):-2]
-                return version
-    raise ValueError("Unable to find version")
-
-
 setup(
-    name="greenlet",
-    version=get_greenlet_version(),
-    description='Lightweight in-process concurrent programming',
-    long_description=readfile("README.rst"),
-    long_description_content_type="text/x-rst",
-    url="https://greenlet.readthedocs.io/",
-    keywords="greenlet coroutine concurrency threads cooperative",
-    author="Alexey Borzenkov",
-    author_email="snaury@gmail.com",
-    maintainer='Jason Madden',
-    maintainer_email='jason@seecoresoftware.com',
-    project_urls={
-        'Bug Tracker': 'https://github.com/python-greenlet/greenlet/issues',
-        'Source Code': 'https://github.com/python-greenlet/greenlet/',
-        'Documentation': 'https://greenlet.readthedocs.io/',
-        'Changes': 'https://greenlet.readthedocs.io/en/latest/changes.html',
-    },
-    license="MIT AND Python-2.0",
-    license_files=[
-        'LICENSE',
-        'LICENSE.PSF',
-    ],
-    platforms=['any'],
     package_dir={'': 'src'},
     packages=find_packages('src'),
-    include_package_data=True,
     headers=headers,
     ext_modules=ext_modules,
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        'Intended Audience :: Developers',
-        'Natural Language :: English',
-        'Programming Language :: C',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-        'Programming Language :: Python :: 3.12',
-        'Programming Language :: Python :: 3.13',
-        'Programming Language :: Python :: 3.14',
-        'Operating System :: OS Independent',
-        'Topic :: Software Development :: Libraries :: Python Modules'
-    ],
-    extras_require={
-        'docs': [
-            'Sphinx',
-            'furo',
-        ],
-        'test': [
-            'objgraph',
-            'psutil',
-            'setuptools',
-        ],
-    },
-    python_requires=">=3.10",
-    zip_safe=False,
 )

@@ -5,7 +5,8 @@
 3.3.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Make sure that the `License-Expression` attribute is correctly set
+  in the metadata.
 
 
 3.3.0 (2025-12-04)
