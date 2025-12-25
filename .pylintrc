@@ -166,7 +166,6 @@ disable=wrong-import-position,
 enable=consider-using-augmented-assign
 
 [FORMAT]
-# duplicated from setup.cfg
 max-line-length=160
 max-module-lines=1100
 

@@ -1,5 +1,70 @@
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = [
-     "setuptools >= 40.8.0"
+     "setuptools >= 77.0.3"
 ]
+
+[project]
+name = "greenlet"
+description = "Lightweight in-process concurrent programming"
+readme = "README.rst"
+authors = [
+    { name = "Alexey Borzenkov", email = "snaury@gmail.com" },
+]
+maintainers = [
+    { name = "Jason Madden", email = "jason@seecoresoftware.com" }
+]
+license = "MIT AND Python-2.0"
+license-files = [
+    'LICENSE',
+    'LICENSE.PSF',
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: C",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = [
+    "greenlet",
+    "coroutine",
+    "concurrency",
+    "threads",
+    "cooperative",
+]
+requires-python = ">=3.10"
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://greenlet.readthedocs.io"
+Documentation = "https://greenlet.readthedocs.io"
+Repository = "https://github.com/python-greenlet/greenlet"
+Issues = "https://github.com/python-greenlet/greenlet/issues"
+Changelog = "https://greenlet.readthedocs.io/en/latest/changes.html"
+
+[project.optional-dependencies]
+docs = [
+    "Sphinx",
+    "furo",
+]
+test = [
+    "objgraph",
+    "psutil",
+    "setuptools",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "greenlet.__version__"}
+
+[tools.zest-releaser]
+python-file-with-version = "src/greenlet/__init__.py"
+create-wheel = false
