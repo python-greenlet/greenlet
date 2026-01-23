@@ -35,6 +35,8 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
+          - windows-latest
+          - windows-11-arm
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python
@@ -90,6 +92,7 @@ jobs:
         ARCHFLAGS: "-arch x86_64 -arch arm64"
 
     - name: Check greenlet build
+      if: ${{ ! startsWith(runner.os, 'Windows') }}
       run: |
         ls -l dist
         twine check dist/*
@@ -132,7 +135,7 @@ jobs:
       # We cannot 'uses: pypa/gh-action-pypi-publish@v1.4.1' because
       # that's apparently a container action, and those don't run on
       # the Mac.
-      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags') && startsWith(runner.os, 'Mac')
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') && (startsWith(runner.os, 'Mac') || startsWith(runner.os, 'Windows')) }}
       env:
         TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
       run: |
