@@ -65,6 +65,6 @@ test = [
 [tool.setuptools.dynamic]
 version = {attr = "greenlet.__version__"}
 
-[tools.zest-releaser]
+[tool.zest-releaser]
 python-file-with-version = "src/greenlet/__init__.py"
 create-wheel = false
