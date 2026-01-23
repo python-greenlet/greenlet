@@ -365,6 +365,11 @@ class TestLeaks(TestCase):
         # Like the above test, but what if there are a bunch of
         # unfinished greenlets in a thread that dies?
         # Does it matter if we deallocate in the thread or not?
+
+        # First, make sure we can get useful measurements. This will
+        # be skipped if not.
+        self.get_process_uss()
+
         EXIT_COUNT = [0]
 
         def f():
