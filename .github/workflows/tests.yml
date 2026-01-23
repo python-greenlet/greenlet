@@ -104,7 +104,7 @@ jobs:
     - name: Store greenlet wheel
       uses: actions/upload-artifact@v5
       with:
-        name: greenlet-${{ runner.os }}-${{ matrix.python-version }}.whl
+        name: greenlet-${{ matrix.os }}-${{ matrix.python-version }}.whl
         path: dist/*whl
     - name: Test
       run: |
