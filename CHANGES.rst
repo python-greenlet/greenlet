@@ -5,7 +5,10 @@
 3.3.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Publish Windows ARM binary wheels, where available.
+- Fix compilation for 3.14t on Windows.
+- Publish Windows 3.14t binary wheels for Intel.
+- Switch from Appveyor for Windows to Github Actions.
 
 
 3.3.0 (2025-12-04)
