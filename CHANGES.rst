@@ -9,6 +9,10 @@
 - Fix compilation for 3.14t on Windows.
 - Publish Windows 3.14t binary wheels for Intel.
 - Switch from Appveyor for Windows to Github Actions.
+- Fix compilation on MIPS with GCC 15 and binutils 2.45. See `PR 487
+  by Rosen Penev
+  <https://github.com/python-greenlet/greenlet/pull/487>`_. Note that
+  this is not a platform tested by this project's CI.
 
 
 3.3.0 (2025-12-04)
