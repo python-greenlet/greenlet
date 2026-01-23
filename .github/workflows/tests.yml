@@ -38,10 +38,12 @@ jobs:
           - windows-latest
           - windows-11-arm
         exclude:
-          # 3.10 not available for windows.
+          # 3.10 not available for windows arm
           - os: windows-11-arm
             python-version: "3.10"
-
+          # 3.14t not available for windows arm
+          - os: windows-11-arm
+            python-version: "3.14t"
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python
