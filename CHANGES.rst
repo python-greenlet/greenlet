@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.3.1 (unreleased)
+3.3.1 (2026-01-23)
 ==================
 
 - Publish Windows ARM binary wheels, where available.
