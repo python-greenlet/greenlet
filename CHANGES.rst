@@ -13,7 +13,10 @@
   by Rosen Penev
   <https://github.com/python-greenlet/greenlet/pull/487>`_. Note that
   this is not a platform tested by this project's CI.
-
+- Move most project metadata into the static ``pyproject.toml`` file.
+  This updates licensing information to use the modern
+  ``License-Expression`` field. See `PR 480 by mrbean-bremen
+  <https://github.com/python-greenlet/greenlet/pull/480/>`_.
 
 3.3.0 (2025-12-04)
 ==================
