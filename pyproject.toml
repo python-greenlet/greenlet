@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     { name = "Jason Madden", email = "jason@seecoresoftware.com" }
 ]
-license = "MIT AND Python-2.0"
+license = "MIT AND PSF-2.0"
 license-files = [
     'LICENSE',
     'LICENSE.PSF',
