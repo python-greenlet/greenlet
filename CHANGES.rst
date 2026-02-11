@@ -5,7 +5,22 @@
 3.3.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Restore support for Python 3.9. The ``requires-python`` metadata,
+  trove classifiers, and CI test matrix have been updated to include
+  Python 3.9 again. No C/C++ code was removed when 3.9 support was
+  dropped in 3.3.0, so this is purely a packaging and CI change.
+  Combined with the safe finalization fix (below), greenlet now works
+  reliably on Python 3.9 during interpreter shutdown. See `PR 496
+  <https://github.com/python-greenlet/greenlet/pull/496>`_.
+- Fix SIGSEGV and SIGABRT crashes during interpreter shutdown on
+  Python < 3.11. Active greenlets being deallocated during
+  ``Py_FinalizeEx`` would trigger ``g_switch()`` in a partially-torn-down
+  interpreter. The fix checks ``_Py_IsFinalizing()`` and uses
+  ``murder_in_place()`` instead, avoiding the crash at the cost of not
+  running cleanup code inside the greenlet on older Pythons. Also adds
+  the first interpreter-shutdown tests to the test suite. See `PR 495
+  <https://github.com/python-greenlet/greenlet/pull/495>`_.
+  Fixes :issue:`411`.
 
 
 3.3.1 (2026-01-23)
@@ -317,7 +332,22 @@ Known Issues
 2.0.0 (2022-10-31)
 ==================
 
-- Nothing changed yet.
+- Restore support for Python 3.9. The ``requires-python`` metadata,
+  trove classifiers, and CI test matrix have been updated to include
+  Python 3.9 again. No C/C++ code was removed when 3.9 support was
+  dropped in 3.3.0, so this is purely a packaging and CI change.
+  Combined with the safe finalization fix (below), greenlet now works
+  reliably on Python 3.9 during interpreter shutdown. See `PR 496
+  <https://github.com/python-greenlet/greenlet/pull/496>`_.
+- Fix SIGSEGV and SIGABRT crashes during interpreter shutdown on
+  Python < 3.11. Active greenlets being deallocated during
+  ``Py_FinalizeEx`` would trigger ``g_switch()`` in a partially-torn-down
+  interpreter. The fix checks ``_Py_IsFinalizing()`` and uses
+  ``murder_in_place()`` instead, avoiding the crash at the cost of not
+  running cleanup code inside the greenlet on older Pythons. Also adds
+  the first interpreter-shutdown tests to the test suite. See `PR 495
+  <https://github.com/python-greenlet/greenlet/pull/495>`_.
+  Fixes :issue:`411`.
 
 
 2.0.0rc5 (2022-10-31)
