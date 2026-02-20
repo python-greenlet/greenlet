@@ -2,6 +2,18 @@
  Changes
 =========
 
+3.2.5 (unreleased)
+==================
+
+.. note::
+
+   The 3.2.x series will be the last to support Python 3.9.
+
+- Fix a crash on Python 3.9 and 3.10 if there are active greenlets during
+  interpreter shutdown. See `PR 495
+  <https://github.com/python-greenlet/greenlet/pull/495>`_ by Nicolas
+  Bouvrette.
+
 3.2.4 (2025-08-07)
 ==================
 

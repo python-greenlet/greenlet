@@ -172,7 +172,7 @@ class _RefCountChecker(object):
         # to try to reverse the order of arguments...which leads
         # to the explosion of mock objects. We don't want that, so we implement
         # the check manually.
-        if kind == type(self._include_object_p):
+        if kind == type(self._include_object_p): # pylint: disable=unidiomatic-typecheck
             try:
                 # pylint:disable=not-callable
                 exact_method_equals = self._include_object_p.__eq__(obj)
