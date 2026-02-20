@@ -5,7 +5,10 @@
 3.3.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix a crash on Python 3.10 if there are active greenlets during
+  interpreter shutdown. See `PR 495
+  <https://github.com/python-greenlet/greenlet/pull/495>`_ by Nicolas
+  Bouvrette.
 
 
 3.3.1 (2026-01-23)
