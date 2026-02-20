@@ -25,7 +25,7 @@ __all__ = [
 ###
 # Metadata
 ###
-__version__ = '3.2.5'
+__version__ = '3.2.6.dev0'
 from ._greenlet import _C_API # pylint:disable=no-name-in-module
 
 ###
