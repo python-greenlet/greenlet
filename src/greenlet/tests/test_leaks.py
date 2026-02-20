@@ -16,6 +16,7 @@ import greenlet
 from . import TestCase
 from . import PY314
 from . import RUNNING_ON_FREETHREAD_BUILD
+from . import WIN
 from .leakcheck import fails_leakcheck
 from .leakcheck import ignores_leakcheck
 from .leakcheck import RUNNING_ON_MANYLINUX
@@ -456,6 +457,17 @@ class TestLeaks(TestCase):
     # Because the main greenlets from the background threads do not exit in a timely fashion,
     # we fail the object-based leakchecks.
     def test_untracked_memory_doesnt_increase_unfinished_thread_dealloc_in_main(self):
+        # Between Feb 10 and Feb 20 2026, this test started failing on
+        # Github Actions, windows 3.14t. With no relevant code changes on
+        # our part. Both versions were 3.14.3 (same build). The only change
+        # is the Github actions "Runner Image". The working one was version
+        # 20260202.17.1, while the updated failing version was
+        # 20260217.31.1. Both report the same version of the operating system
+        # (Microsoft Windows Server 2025 10.0.26100).
+        #
+        # Reevaluate on future runner image releases.
+        if WIN and RUNNING_ON_FREETHREAD_BUILD and PY314:
+            self.skipTest("Windows 3.14t appears to leak. No other platform does.")
         self._check_untracked_memory_thread(deallocate_in_thread=False)
 
 if __name__ == '__main__':
