@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.3.2 (unreleased)
+3.3.2 (2026-02-20)
 ==================
 
 - Fix a crash on Python 3.10 if there are active greenlets during
