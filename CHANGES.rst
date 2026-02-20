@@ -49,6 +49,19 @@
      initial free-threaded support and a discussion of the current
      known issues.
 
+3.2.5 (2026-02-20)
+==================
+
+.. note::
+
+   The 3.2.x series will be the last to support Python 3.9.
+
+- Backport the changes from PR 495 in release 3.3.2 for Python 3.9.
+
+.. note::
+
+   No Windows wheels will be published for this version.
+
 3.2.4 (2025-08-07)
 ==================
 
