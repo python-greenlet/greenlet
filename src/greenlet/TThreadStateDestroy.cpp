@@ -177,11 +177,7 @@ private:
         // segfault if we happen to get context switched, and maybe we should
         // just always implement our own AddPendingCall, but I'd like to see if
         // this works first
-#if GREENLET_PY313
-        if (Py_IsFinalizing()) {
-#else
-        if (_Py_IsFinalizing()) {
-#endif
+        if (g_greenlet_shutting_down || Py_IsFinalizing()) {
 #ifdef GREENLET_DEBUG
             // No need to log in the general case. Yes, we'll leak,
             // but we're shutting down so it should be ok.

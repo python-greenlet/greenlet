@@ -232,6 +232,39 @@ greenlet_internal_mod_init() noexcept
         OwnedObject clocks_per_sec = OwnedObject::consuming(PyLong_FromSsize_t(CLOCKS_PER_SEC));
         m.PyAddObject("CLOCKS_PER_SEC", clocks_per_sec);
 
+        // Register an atexit handler that sets g_greenlet_shutting_down.
+        // Python's atexit is LIFO: registered last = called first.  By
+        // registering here (at import time, after most other libraries),
+        // our handler runs before their cleanup code, which may try to
+        // call greenlet.getcurrent() on objects whose type has been
+        // invalidated.  _Py_IsFinalizing() alone is insufficient on ALL
+        // Python versions because it is only set AFTER atexit handlers
+        // complete inside Py_FinalizeEx.
+        {
+            PyObject* atexit_mod = PyImport_ImportModule("atexit");
+            if (atexit_mod) {
+                PyObject* register_fn = PyObject_GetAttrString(atexit_mod, "register");
+                if (register_fn) {
+                    extern PyMethodDef _greenlet_atexit_method;
+                    PyObject* callback = PyCFunction_New(&_greenlet_atexit_method, NULL);
+                    if (callback) {
+                        PyObject* args = PyTuple_Pack(1, callback);
+                        if (args) {
+                            PyObject* result = PyObject_Call(register_fn, args, NULL);
+                            Py_XDECREF(result);
+                            Py_DECREF(args);
+                        }
+                        Py_DECREF(callback);
+                    }
+                    Py_DECREF(register_fn);
+                }
+                Py_DECREF(atexit_mod);
+            }
+            // Non-fatal: if atexit registration fails, we still have
+            // the _Py_IsFinalizing() fallback.
+            PyErr_Clear();
+        }
+
         /* also publish module-level data as attributes of the greentype. */
         // XXX: This is weird, and enables a strange pattern of
         // confusing the class greenlet with the module greenlet; with

@@ -15,6 +15,7 @@ import threading
 import greenlet
 from . import TestCase
 from . import PY314
+from . import WIN
 from . import RUNNING_ON_FREETHREAD_BUILD
 from .leakcheck import fails_leakcheck
 from .leakcheck import ignores_leakcheck
@@ -439,7 +440,15 @@ class TestLeaks(TestCase):
 
         self.wait_for_pending_cleanups()
         uss_after = self.get_process_uss()
-        self.assertLessEqual(uss_after, uss_before, "after attempts %d" % (count,))
+        # On Windows, USS can fluctuate by tens of KB between
+        # measurements due to working set trimming, page table
+        # updates, etc.  Allow a small tolerance so OS-level noise
+        # doesn't cause false failures.  Real leaks produce MBs of
+        # growth (each iteration creates 20k greenlets), so 512 KB
+        # is well below the detection threshold for genuine issues.
+        tolerance = 512 * 1024 if WIN else 0
+        self.assertLessEqual(uss_after, uss_before + tolerance,
+                             "after attempts %d" % (count,))
 
     @ignores_leakcheck
     # Because we're just trying to track raw memory, not objects, and running

@@ -203,12 +203,10 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     //
     // See: https://github.com/python-greenlet/greenlet/issues/411
     //      https://github.com/python-greenlet/greenlet/issues/351
-#if !GREENLET_PY311
-    if (_Py_IsFinalizing()) {
+    if (g_greenlet_shutting_down || Py_IsFinalizing()) {
         self->murder_in_place();
         return 1;
     }
-#endif
 
     /* Hacks hacks hacks copied from instance_dealloc() */
     /* Temporarily resurrect the greenlet. */
