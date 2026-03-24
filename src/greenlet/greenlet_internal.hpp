@@ -46,6 +46,9 @@ greenlet::refs::MainGreenletExactChecker(void *p)
     if (!p) {
         return;
     }
+    if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+        return;
+    }
     // We control the class of the main greenlet exactly.
     if (Py_TYPE(p) != &PyGreenlet_Type) {
         std::string err("MainGreenlet: Expected exactly a greenlet, not a ");

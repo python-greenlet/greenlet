@@ -206,22 +206,19 @@ class TestGreenlet(TestCase):
 
         g = RawGreenlet(run)
         g.switch()
-        # Destroying the only reference to the greenlet causes it
-        # to get GreenletExit; when it in turn raises, even though we're the parent
-        # we don't get the exception, it just gets printed.
-        # When we run on 3.8 only, we can use sys.unraisablehook
-        oldstderr = sys.stderr
-        from io import StringIO
-        stderr = sys.stderr = StringIO()
+
+        unraisable_events = []
+        old_hook = sys.unraisablehook
+        def _capture(unraisable):
+            unraisable_events.append(unraisable)
+        sys.unraisablehook = _capture
         try:
             del g
         finally:
-            sys.stderr = oldstderr
+            sys.unraisablehook = old_hook
 
-        v = stderr.getvalue()
-        self.assertIn("Exception", v)
-        self.assertIn('ignored', v)
-        self.assertIn("SomeError", v)
+        self.assertEqual(len(unraisable_events), 1)
+        self.assertIsInstance(unraisable_events[0].exc_value, SomeError)
 
 
     @unittest.skipIf(
@@ -1355,11 +1352,11 @@ class TestModule(TestCase):
     @unittest.skipUnless(hasattr(sys, '_is_gil_enabled'),
                          "Needs 3.13 and above for sys._is_gil_enabled")
     def test_no_gil_on_free_threaded(self):
-
+        _is_gil_enabled = getattr(sys, '_is_gil_enabled')
         if RUNNING_ON_FREETHREAD_BUILD:
-            self.assertFalse(sys._is_gil_enabled())
+            self.assertFalse(_is_gil_enabled())
         else:
-            self.assertTrue(sys._is_gil_enabled())
+            self.assertTrue(_is_gil_enabled())
 
 if __name__ == '__main__':
     unittest.main()

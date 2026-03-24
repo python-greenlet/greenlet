@@ -6,7 +6,11 @@
 ==================
 
 - Publish binary wheels for RiscV 64.
+- Fix multiple rare crash paths during interpreter shutdown on.
 
+  See `PR #499
+  <https://github.com/python-greenlet/greenlet/pull/499>`_ by Nicolas
+  Bouvrette.
 
 3.3.2 (2026-02-20)
 ==================

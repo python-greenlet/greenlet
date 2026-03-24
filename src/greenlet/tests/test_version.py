@@ -38,4 +38,11 @@ class VersionTests(NonLeakingTestCase):
         with os.popen(invoke_setup) as f:
             sversion = f.read().strip()
 
+        if not sversion or not sversion[0].isdigit():
+            self.skipTest(
+                "setup.py --version did not return a version string "
+                "(likely a setuptools compatibility issue): "
+                + repr(sversion[:80])
+            )
+
         self.assertEqual(sversion, greenlet.__version__)
