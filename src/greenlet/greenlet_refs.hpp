@@ -16,6 +16,7 @@ struct _PyMainGreenlet;
 
 typedef struct _greenlet PyGreenlet;
 extern PyTypeObject PyGreenlet_Type;
+extern int g_greenlet_shutting_down;
 
 
 #ifdef  GREENLET_USE_STDIO
@@ -47,6 +48,9 @@ namespace greenlet
         GreenletChecker(void *p)
         {
             if (!p) {
+                return;
+            }
+            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
                 return;
             }
 
@@ -100,6 +104,9 @@ namespace greenlet
         ContextExactChecker(void *p)
         {
             if (!p) {
+                return;
+            }
+            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
                 return;
             }
             if (!PyContext_CheckExact(p)) {

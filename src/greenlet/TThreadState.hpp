@@ -1,6 +1,7 @@
 #ifndef GREENLET_THREAD_STATE_HPP
 #define GREENLET_THREAD_STATE_HPP
 
+#include <cstdlib>
 #include <ctime>
 #include <stdexcept>
 #include <atomic>
@@ -22,6 +23,14 @@ using greenlet::refs::ImmortalString;
 using greenlet::refs::CreatedModule;
 using greenlet::refs::PyErrPieces;
 using greenlet::refs::NewReference;
+
+// Defined in PyModule.cpp; set by an atexit handler to signal
+// that the interpreter is shutting down.  Needed on ALL Python
+// versions because _Py_IsFinalizing() is only set AFTER atexit
+// handlers complete inside Py_FinalizeEx.  Code running in
+// atexit handlers (e.g. uWSGI plugin cleanup) needs this early
+// flag to avoid accessing partially-torn-down greenlet state.
+extern int g_greenlet_shutting_down;
 
 namespace greenlet {
 /**
@@ -100,7 +109,13 @@ private:
     /* Strong reference to the trace function, if any. */
     OwnedObject tracefunc;
 
-    typedef std::vector<PyGreenlet*, PythonAllocator<PyGreenlet*> > deleteme_t;
+    // Use std::allocator (malloc/free) instead of PythonAllocator
+    // (PyMem_Malloc) for the deleteme list.  During Py_FinalizeEx on
+    // Python < 3.11, the PyObject_Malloc pool that holds ThreadState
+    // can be disrupted, corrupting any PythonAllocator-backed
+    // containers.  Using std::allocator makes this vector independent
+    // of Python's allocator lifecycle.
+    typedef std::vector<PyGreenlet*> deleteme_t;
     /* A vector of raw PyGreenlet pointers representing things that need
        deleted when this thread is running. The vector owns the
        references, but you need to manually INCREF/DECREF as you use
@@ -120,7 +135,6 @@ private:
     static std::clock_t _clocks_used_doing_gc;
 #endif
     static ImmortalString get_referrers_name;
-    static PythonAllocator<ThreadState> allocator;
 
     G_NO_COPIES_OF_CLS(ThreadState);
 
@@ -146,15 +160,21 @@ private:
 
 
 public:
-    static void* operator new(size_t UNUSED(count))
+    // Allocate ThreadState with malloc/free rather than Python's object
+    // allocator.  ThreadState outlives many Python objects and must
+    // remain valid throughout Py_FinalizeEx.  On Python < 3.11,
+    // PyObject_Malloc pools can be disrupted during early finalization,
+    // corrupting any C++ objects stored in them.
+    static void* operator new(size_t count)
     {
-        return ThreadState::allocator.allocate(1);
+        void* p = std::malloc(count);
+        if (!p) throw std::bad_alloc();
+        return p;
     }
 
     static void operator delete(void* ptr)
     {
-        return ThreadState::allocator.deallocate(static_cast<ThreadState*>(ptr),
-                                                 1);
+        std::free(ptr);
     }
 
     static void init()
@@ -283,11 +303,29 @@ private:
     inline void clear_deleteme_list(const bool murder=false)
     {
         if (!this->deleteme.empty()) {
-            // It's possible we could add items to this list while
-            // running Python code if there's a thread switch, so we
-            // need to defensively copy it before that can happen.
-            deleteme_t copy = this->deleteme;
-            this->deleteme.clear(); // in case things come back on the list
+            // Move the list contents out with swap — a constant-time
+            // pointer exchange that never allocates.  The previous code
+            // used a copy (deleteme_t copy = this->deleteme) which
+            // allocated through PythonAllocator / PyMem_Malloc; that
+            // could SIGSEGV during early Py_FinalizeEx on Python < 3.11
+            // when the allocator is partially torn down.
+            deleteme_t copy;
+            std::swap(copy, this->deleteme);
+
+            // During Py_FinalizeEx cleanup, the GC or atexit handlers
+            // may have already collected objects in this list, leaving
+            // dangling pointers.  Attempting Py_DECREF on freed memory
+            // causes a SIGSEGV.  g_greenlet_shutting_down covers the
+            // early atexit phase; Py_IsFinalizing() covers later phases.
+            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+                return;
+            }
+
+            // Preserve any pending exception so that cleanup-triggered
+            // errors don't accidentally swallow an unrelated exception
+            // (e.g. one set by throw() before a switch).
+            PyErrPieces incoming_err;
+
             for(deleteme_t::iterator it = copy.begin(), end = copy.end();
                 it != end;
                 ++it ) {
@@ -310,6 +348,8 @@ private:
                     PyErr_Clear();
                 }
             }
+
+            incoming_err.PyErrRestore();
         }
     }
 
@@ -392,8 +432,7 @@ public:
         //
         // Python 3.11+ restructured interpreter finalization so that
         // these APIs remain safe during shutdown.
-#if !GREENLET_PY311
-        if (_Py_IsFinalizing()) {
+        if (g_greenlet_shutting_down || Py_IsFinalizing()) {
             this->tracefunc.CLEAR();
             if (this->current_greenlet) {
                 this->current_greenlet->murder_in_place();
@@ -402,7 +441,6 @@ public:
             this->main_greenlet.CLEAR();
             return;
         }
-#endif
 
         // We should not have an "origin" greenlet; that only exists
         // for the temporary time during a switch, which should not
@@ -527,7 +565,6 @@ public:
 };
 
 ImmortalString ThreadState::get_referrers_name(nullptr);
-PythonAllocator<ThreadState> ThreadState::allocator;
 #ifdef Py_GIL_DISABLED
 std::atomic<std::clock_t> ThreadState::_clocks_used_doing_gc(0);
 #else

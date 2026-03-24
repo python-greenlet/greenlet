@@ -5,7 +5,51 @@
 3.3.3 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix multiple crash paths during interpreter shutdown on **all Python
+  versions** (observed with uWSGI worker recycling on ARM64 and x86_64).
+  Two independent guards now protect all shutdown phases:
+
+  1. ``g_greenlet_shutting_down`` — an atexit handler registered at
+     module init (LIFO = runs first) sets this flag.  Covers the atexit
+     phase of ``Py_FinalizeEx``, where ``Py_IsFinalizing()`` is still
+     ``False`` on all Python versions.
+
+  2. ``Py_IsFinalizing()`` — covers the GC collection and later phases
+     of ``Py_FinalizeEx``, where ``__del__`` methods and C++ destructors
+     run.  A compatibility shim is provided for Python < 3.13 (where
+     only the private ``_Py_IsFinalizing()`` existed).
+
+  These guards are checked in ``mod_getcurrent``,
+  ``PyGreenlet_GetCurrent``, ``GreenletChecker``,
+  ``MainGreenletExactChecker``, ``ContextExactChecker``,
+  ``clear_deleteme_list()``, ``ThreadState::~ThreadState()``,
+  ``_green_dealloc_kill_started_non_main_greenlet``, and
+  ``ThreadState_DestroyNoGIL::AddPendingCall``.
+
+  Additional hardening:
+
+  - ``clear_deleteme_list()`` uses ``std::swap`` (zero-allocation)
+    instead of copying the ``PythonAllocator``-backed vector.
+  - The ``deleteme`` vector uses ``std::allocator`` (system ``malloc``)
+    instead of ``PyMem_Malloc``.
+  - ``ThreadState`` uses ``std::malloc`` / ``std::free`` instead of
+    ``PyObject_Malloc``.
+  - ``clear_deleteme_list()`` preserves any pending Python exception
+    around its cleanup loop.
+
+  Verified via TDD: tests fail on greenlet 3.3.2 (UNGUARDED) and pass
+  with the fix (GUARDED) across Python 3.10-3.14.
+
+  See `PR #499
+  <https://github.com/python-greenlet/greenlet/pull/499>`_ by Nicolas
+  Bouvrette.
+
+- Fix ``test_dealloc_catches_GreenletExit_throws_other`` to use
+  ``sys.unraisablehook`` instead of stderr capture, making it work
+  with both pytest and unittest runners.
+
+- Fix ``test_version`` to skip gracefully when the local setuptools
+  version does not support PEP 639 SPDX license format.
 
 
 3.3.2 (2026-02-20)
