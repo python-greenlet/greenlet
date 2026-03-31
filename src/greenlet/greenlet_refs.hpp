@@ -36,6 +36,13 @@ namespace greenlet
     // an atexit handler registered at module init (LIFO = runs
     // first).
     static int g_greenlet_shutting_down;
+
+    static inline bool
+    IsShuttingDown()
+    {
+        return greenlet::g_greenlet_shutting_down || Py_IsFinalizing();
+    }
+
     namespace refs
     {
         // Type checkers throw a TypeError if the argument is not
@@ -57,7 +64,7 @@ namespace greenlet
             if (!p) {
                 return;
             }
-            if (greenlet::g_greenlet_shutting_down || Py_IsFinalizing()) {
+            if (IsShuttingDown()) {
                 return;
             }
 
@@ -113,7 +120,7 @@ namespace greenlet
             if (!p) {
                 return;
             }
-            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+            if (IsShuttingDown()) {
                 return;
             }
             if (!PyContext_CheckExact(p)) {

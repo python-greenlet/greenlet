@@ -40,7 +40,7 @@ PyDoc_STRVAR(mod_getcurrent_doc,
 static PyObject*
 mod_getcurrent(PyObject* UNUSED(module))
 {
-    if (greenlet::g_greenlet_shutting_down || Py_IsFinalizing()) {
+    if (greenlet::IsShuttingDown()) {
         Py_RETURN_NONE;
     }
     return GET_THREAD_STATE().state().get_current().relinquish_ownership_o();

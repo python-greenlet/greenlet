@@ -176,14 +176,15 @@ private:
 
     static int AddPendingCall(int (*func)(void*), void* arg)
     {
-        // If the interpreter is in the middle of finalizing, we can't add a
-        // pending call. Trying to do so will end up in a SIGSEGV, as
-        // Py_AddPendingCall will not be able to get the interpreter and will
-        // try to dereference a NULL pointer. It's possible this can still
-        // segfault if we happen to get context switched, and maybe we should
-        // just always implement our own AddPendingCall, but I'd like to see if
-        // this works first
-        if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+        // If the interpreter is in the middle of finalizing, we can't
+        // add a pending call. Trying to do so will end up in a
+        // SIGSEGV, as Py_AddPendingCall will not be able to get the
+        // interpreter and will try to dereference a NULL pointer.
+        // It's possible this can still segfault if we happen to get
+        // context switched, and maybe we should just always implement
+        // our own AddPendingCall, but I'd like to see if this works
+        // first
+        if (greenlet::IsShuttingDown()) {
 #ifdef GREENLET_DEBUG
             // No need to log in the general case. Yes, we'll leak,
             // but we're shutting down so it should be ok.

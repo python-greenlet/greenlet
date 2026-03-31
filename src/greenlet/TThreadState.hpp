@@ -306,11 +306,12 @@ private:
             std::swap(copy, this->deleteme);
 
             // During Py_FinalizeEx cleanup, the GC or atexit handlers
-            // may have already collected objects in this list, leaving
-            // dangling pointers.  Attempting Py_DECREF on freed memory
-            // causes a SIGSEGV.  g_greenlet_shutting_down covers the
-            // early atexit phase; Py_IsFinalizing() covers later phases.
-            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+            // may have already collected objects in this list,
+            // leaving dangling pointers. Attempting Py_DECREF on
+            // freed memory causes a SIGSEGV. g_greenlet_shutting_down
+            // covers the early atexit phase; Py_IsFinalizing() covers
+            // later phases.
+            if (greenlet::IsShuttingDown()) {
                 return;
             }
 
@@ -420,12 +421,12 @@ public:
         // During interpreter finalization, Python APIs like
         // PyImport_ImportModule are unsafe (the import machinery may
         // be partially torn down). On Python < 3.11, perform only the
-        // minimal cleanup that is safe: clear our strong references so
-        // we don't leak, but skip the GC-based leak detection.
+        // minimal cleanup that is safe: clear our strong references
+        // so we don't leak, but skip the GC-based leak detection.
         //
         // Python 3.11+ restructured interpreter finalization so that
         // these APIs remain safe during shutdown.
-        if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+        if (greenlet::IsShuttingDown()) {
             this->tracefunc.CLEAR();
             if (this->current_greenlet) {
                 this->current_greenlet->murder_in_place();
