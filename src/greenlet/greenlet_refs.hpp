@@ -35,6 +35,9 @@ namespace greenlet
     // internal state may have been invalidated. This flag is set by
     // an atexit handler registered at module init (LIFO = runs
     // first).
+    //
+    // Because this is only set from an atexit handler, by which point
+    // we're single threaded, there should be no need to make it std::atomic<int>.
     static int g_greenlet_shutting_down;
 
     static inline bool
