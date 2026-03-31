@@ -312,7 +312,7 @@ private:
             // leaving dangling pointers. Attempting Py_DECREF on
             // freed memory causes a SIGSEGV. g_greenlet_shutting_down
             // covers the early atexit phase; Py_IsFinalizing() covers
-            // later phases.
+            // later phases. Thus, we deliberately leak.
             if (greenlet::IsShuttingDown()) {
                 return;
             }
@@ -344,12 +344,21 @@ private:
                     PyErr_Clear();
                 }
             }
-            // Not worried about exception safety here in terms of
+            // Not worried about C++ exception safety here in terms of
             // making sure we restore the error. Either we'll catch it
             // above and establish the error from that exception
             // (which, yes, might overwrite something from before we
             // entered, but we're in an undefined situation at that
-            // point) or we won't catch it at all and will crash the process.
+            // point) or we won't catch it at all and will crash the
+            // process.
+            //
+            // As for Python exception safety, there's no chance we're
+            // overwriting an exception (from the loop) with no
+            // exception (captured NULLs before we entered the loop),
+            // because there CAN'T BE any exception from the loop ---
+            // we clear them. So we're either restoring a pre-existing
+            // exception, or leaving the exception unset (by restoring
+            // NULL).
             incoming_err.PyErrRestore();
         }
     }
