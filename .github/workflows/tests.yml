@@ -204,7 +204,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: all
       - name: Build and test greenlet
