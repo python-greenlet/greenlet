@@ -295,37 +295,25 @@ greenlet_internal_mod_init() noexcept
         PyUnstable_Module_SetGIL(m.borrow(), Py_MOD_GIL_NOT_USED);
 #endif
 
-        // Register an atexit handler that sets g_greenlet_shutting_down.
-        // Python's atexit is LIFO: registered last = called first.  By
-        // registering here (at import time, after most other libraries),
-        // our handler runs before their cleanup code, which may try to
-        // call greenlet.getcurrent() on objects whose type has been
-        // invalidated.  _Py_IsFinalizing() alone is insufficient on ALL
-        // Python versions because it is only set AFTER atexit handlers
-        // complete inside Py_FinalizeEx.
+        // Register an atexit handler that sets
+        // g_greenlet_shutting_down. Python's atexit is LIFO:
+        // registered last = called first. By registering here (at
+        // import time, after most other libraries), our handler runs
+        // before their cleanup code, which may try to call
+        // greenlet.getcurrent() on objects whose type has been
+        // invalidated. _Py_IsFinalizing() alone is insufficient on
+        // ALL Python versions because it is only set AFTER atexit
+        // handlers complete inside Py_FinalizeEx.
         {
-            PyObject* atexit_mod = PyImport_ImportModule("atexit");
-            if (atexit_mod) {
-                PyObject* register_fn = PyObject_GetAttrString(atexit_mod, "register");
-                if (register_fn) {
-                    extern PyMethodDef _greenlet_atexit_method;
-                    PyObject* callback = PyCFunction_New(&_greenlet_atexit_method, NULL);
-                    if (callback) {
-                        PyObject* args = PyTuple_Pack(1, callback);
-                        if (args) {
-                            PyObject* result = PyObject_Call(register_fn, args, NULL);
-                            Py_XDECREF(result);
-                            Py_DECREF(args);
-                        }
-                        Py_DECREF(callback);
-                    }
-                    Py_DECREF(register_fn);
-                }
-                Py_DECREF(atexit_mod);
-            }
-            // Non-fatal: if atexit registration fails, we still have
-            // the _Py_IsFinalizing() fallback.
-            PyErr_Clear();
+            NewReference atexit_mod(Require(PyImport_ImportModule("atexit")));
+            OwnedObject register_fn = atexit_mod.PyRequireAttr("register");
+
+            extern PyMethodDef _greenlet_atexit_method;
+            NewReference callback(Require(
+             PyCFunction_New(&_greenlet_atexit_method, NULL)));
+            NewReference args(Require(PyTuple_Pack(1, callback.borrow())));
+            NewReference result(Require(
+                PyObject_Call(register_fn.borrow(), args.borrow(), NULL)));
         }
 
         return m.borrow(); // But really it's the main reference.
