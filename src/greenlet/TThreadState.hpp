@@ -103,10 +103,10 @@ private:
     OwnedObject tracefunc;
 
     // Use std::allocator (malloc/free) instead of PythonAllocator
-    // (PyMem_Malloc) for the deleteme list.  During Py_FinalizeEx on
+    // (PyMem_Malloc) for the deleteme list. During Py_FinalizeEx on
     // Python < 3.11, the PyObject_Malloc pool that holds ThreadState
     // can be disrupted, corrupting any PythonAllocator-backed
-    // containers.  Using std::allocator makes this vector independent
+    // containers. Using std::allocator makes this vector independent
     // of Python's allocator lifecycle.
     typedef std::vector<PyGreenlet*> deleteme_t;
     /* A vector of raw PyGreenlet pointers representing things that need
@@ -153,15 +153,17 @@ private:
 
 
 public:
-    // Allocate ThreadState with malloc/free rather than Python's object
-    // allocator.  ThreadState outlives many Python objects and must
-    // remain valid throughout Py_FinalizeEx.  On Python < 3.11,
-    // PyObject_Malloc pools can be disrupted during early finalization,
-    // corrupting any C++ objects stored in them.
+    // Allocate ThreadState with malloc/free rather than Python's
+    // object allocator. ThreadState outlives many Python objects and
+    // must remain valid throughout Py_FinalizeEx. On Python < 3.11,
+    // PyObject_Malloc pools can be disrupted during early
+    // finalization, corrupting any C++ objects stored in them.
     static void* operator new(size_t count)
     {
         void* p = std::malloc(count);
-        if (!p) throw std::bad_alloc();
+        if (!p) {
+            throw std::bad_alloc();
+        }
         return p;
     }
 
@@ -297,11 +299,11 @@ private:
     {
         if (!this->deleteme.empty()) {
             // Move the list contents out with swap — a constant-time
-            // pointer exchange that never allocates.  The previous code
-            // used a copy (deleteme_t copy = this->deleteme) which
-            // allocated through PythonAllocator / PyMem_Malloc; that
-            // could SIGSEGV during early Py_FinalizeEx on Python < 3.11
-            // when the allocator is partially torn down.
+            // pointer exchange that never allocates. The previous
+            // code used a copy (deleteme_t copy = this->deleteme)
+            // which allocated through PythonAllocator / PyMem_Malloc;
+            // that could SIGSEGV during early Py_FinalizeEx on Python
+            // < 3.11 when the allocator is partially torn down.
             deleteme_t copy;
             std::swap(copy, this->deleteme);
 
@@ -342,7 +344,12 @@ private:
                     PyErr_Clear();
                 }
             }
-
+            // Not worried about exception safety here in terms of
+            // making sure we restore the error. Either we'll catch it
+            // above and establish the error from that exception
+            // (which, yes, might overwrite something from before we
+            // entered, but we're in an undefined situation at that
+            // point) or we won't catch it at all and will crash the process.
             incoming_err.PyErrRestore();
         }
     }

@@ -153,10 +153,10 @@ static inline void PyThreadState_LeaveTracing(PyThreadState *tstate)
 #  define Py_C_RECURSION_LIMIT C_RECURSION_LIMIT
 #endif
 
-// Py_IsFinalizing() became a public API in Python 3.13.
-// Map it to the private _Py_IsFinalizing() on older versions so all
-// call sites can use the standard name.  Remove this once greenlet
-// drops support for Python < 3.13.
+// Py_IsFinalizing() became a public API in Python 3.13. Map it to the
+// private _Py_IsFinalizing() on older versions so all call sites can
+// use the standard name. Remove this once greenlet drops support for
+// Python < 3.13.
 #if !GREENLET_PY313
 #  define Py_IsFinalizing() _Py_IsFinalizing()
 #endif

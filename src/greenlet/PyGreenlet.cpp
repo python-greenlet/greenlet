@@ -56,12 +56,14 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
     PyGreenlet* o =
         (PyGreenlet*)PyBaseObject_Type.tp_new(type, mod_globs->empty_tuple, mod_globs->empty_dict);
     if (o) {
-        // This looks like a memory leak, but isn't. Constructing the
-        // C++ object assigns it to the pimpl pointer of the Python
-        // object (o); we'll need that later.
-        UserGreenlet* c = new UserGreenlet(o,
-                              GET_THREAD_STATE().state().borrow_current());
+        // Recall: borrowing or getting the current greenlet
+        // causes the "deleteme list" to get cleared. So constructing a greenlet
+        // can do things like cause other greenlets to get finalized.
+        UserGreenlet* c = new UserGreenlet(o, GET_THREAD_STATE().state().borrow_current());
         assert(Py_REFCNT(o) == 1);
+        // Also: This looks like a memory leak, but isn't.
+        // Constructing the C++ object assigns it to the pimpl pointer
+        // of the Python object (o); we'll need that later.
         assert(c == o->pimpl);
     }
     return o;
