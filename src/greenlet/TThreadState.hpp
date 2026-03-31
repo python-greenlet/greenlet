@@ -23,13 +23,6 @@ using greenlet::refs::CreatedModule;
 using greenlet::refs::PyErrPieces;
 using greenlet::refs::NewReference;
 
-// Defined in PyModule.cpp; set by an atexit handler to signal
-// that the interpreter is shutting down.  Needed on ALL Python
-// versions because _Py_IsFinalizing() is only set AFTER atexit
-// handlers complete inside Py_FinalizeEx.  Code running in
-// atexit handlers (e.g. uWSGI plugin cleanup) needs this early
-// flag to avoid accessing partially-torn-down greenlet state.
-extern int g_greenlet_shutting_down;
 
 namespace greenlet {
 /**
@@ -114,10 +107,10 @@ private:
     OwnedObject tracefunc;
 
     // Use std::allocator (malloc/free) instead of PythonAllocator
-    // (PyMem_Malloc) for the deleteme list.  During Py_FinalizeEx on
+    // (PyMem_Malloc) for the deleteme list. During Py_FinalizeEx on
     // Python < 3.11, the PyObject_Malloc pool that holds ThreadState
     // can be disrupted, corrupting any PythonAllocator-backed
-    // containers.  Using std::allocator makes this vector independent
+    // containers. Using std::allocator makes this vector independent
     // of Python's allocator lifecycle.
     typedef std::vector<PyGreenlet*> deleteme_t;
     /* A vector of raw PyGreenlet pointers representing things that need
@@ -160,15 +153,17 @@ private:
 
 
 public:
-    // Allocate ThreadState with malloc/free rather than Python's object
-    // allocator.  ThreadState outlives many Python objects and must
-    // remain valid throughout Py_FinalizeEx.  On Python < 3.11,
-    // PyObject_Malloc pools can be disrupted during early finalization,
-    // corrupting any C++ objects stored in them.
+    // Allocate ThreadState with malloc/free rather than Python's
+    // object allocator. ThreadState outlives many Python objects and
+    // must remain valid throughout Py_FinalizeEx. On Python < 3.11,
+    // PyObject_Malloc pools can be disrupted during early
+    // finalization, corrupting any C++ objects stored in them.
     static void* operator new(size_t count)
     {
         void* p = std::malloc(count);
-        if (!p) throw std::bad_alloc();
+        if (!p) {
+            throw std::bad_alloc();
+        }
         return p;
     }
 
@@ -304,20 +299,21 @@ private:
     {
         if (!this->deleteme.empty()) {
             // Move the list contents out with swap — a constant-time
-            // pointer exchange that never allocates.  The previous code
-            // used a copy (deleteme_t copy = this->deleteme) which
-            // allocated through PythonAllocator / PyMem_Malloc; that
-            // could SIGSEGV during early Py_FinalizeEx on Python < 3.11
-            // when the allocator is partially torn down.
+            // pointer exchange that never allocates. The previous
+            // code used a copy (deleteme_t copy = this->deleteme)
+            // which allocated through PythonAllocator / PyMem_Malloc;
+            // that could SIGSEGV during early Py_FinalizeEx on Python
+            // < 3.11 when the allocator is partially torn down.
             deleteme_t copy;
             std::swap(copy, this->deleteme);
 
             // During Py_FinalizeEx cleanup, the GC or atexit handlers
-            // may have already collected objects in this list, leaving
-            // dangling pointers.  Attempting Py_DECREF on freed memory
-            // causes a SIGSEGV.  g_greenlet_shutting_down covers the
-            // early atexit phase; Py_IsFinalizing() covers later phases.
-            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+            // may have already collected objects in this list,
+            // leaving dangling pointers. Attempting Py_DECREF on
+            // freed memory causes a SIGSEGV. g_greenlet_shutting_down
+            // covers the early atexit phase; Py_IsFinalizing() covers
+            // later phases. Thus, we deliberately leak.
+            if (greenlet::IsShuttingDown()) {
                 return;
             }
 
@@ -339,6 +335,21 @@ private:
                     PyErr_Clear();
                 }
             }
+            // Not worried about C++ exception safety here in terms of
+            // making sure we restore the error. Either we'll catch it
+            // above and establish the error from that exception
+            // (which, yes, might overwrite something from before we
+            // entered, but we're in an undefined situation at that
+            // point) or we won't catch it at all and will crash the
+            // process.
+            //
+            // As for Python exception safety, there's no chance we're
+            // overwriting an exception (from the loop) with no
+            // exception (captured NULLs before we entered the loop),
+            // because there CAN'T BE any exception from the loop ---
+            // we clear them. So we're either restoring a pre-existing
+            // exception, or leaving the exception unset (by restoring
+            // NULL).
             incoming_err.PyErrRestore();
         }
     }
@@ -395,12 +406,12 @@ public:
         // During interpreter finalization, Python APIs like
         // PyImport_ImportModule are unsafe (the import machinery may
         // be partially torn down). On Python < 3.11, perform only the
-        // minimal cleanup that is safe: clear our strong references so
-        // we don't leak, but skip the GC-based leak detection.
+        // minimal cleanup that is safe: clear our strong references
+        // so we don't leak, but skip the GC-based leak detection.
         //
         // Python 3.11+ restructured interpreter finalization so that
         // these APIs remain safe during shutdown.
-        if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+        if (greenlet::IsShuttingDown()) {
             this->tracefunc.CLEAR();
             if (this->current_greenlet) {
                 this->current_greenlet->murder_in_place();

@@ -46,7 +46,7 @@ greenlet::refs::MainGreenletExactChecker(void *p)
     if (!p) {
         return;
     }
-    if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+    if (greenlet::IsShuttingDown()) {
         return;
     }
     // We control the class of the main greenlet exactly.

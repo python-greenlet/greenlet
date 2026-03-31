@@ -17,19 +17,11 @@ using greenlet::ThreadState;
 #    pragma clang diagnostic ignored "-Wunused-variable"
 #endif
 
-// _Py_IsFinalizing() is only set AFTER atexit handlers complete
-// inside Py_FinalizeEx on ALL Python versions (including 3.11+).
-// Code running in atexit handlers (e.g. uWSGI plugin cleanup
-// calling Py_FinalizeEx, New Relic agent shutdown) can still call
-// greenlet.getcurrent(), but by that time type objects or
-// internal state may have been invalidated.  This flag is set by
-// an atexit handler registered at module init (LIFO = runs first).
-int g_greenlet_shutting_down = 0;
 
 static PyObject*
 _greenlet_atexit_callback(PyObject* UNUSED(self), PyObject* UNUSED(args))
 {
-    g_greenlet_shutting_down = 1;
+    greenlet::g_greenlet_shutting_down = 1;
     Py_RETURN_NONE;
 }
 
@@ -48,7 +40,7 @@ PyDoc_STRVAR(mod_getcurrent_doc,
 static PyObject*
 mod_getcurrent(PyObject* UNUSED(module))
 {
-    if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+    if (greenlet::IsShuttingDown()) {
         Py_RETURN_NONE;
     }
     return GET_THREAD_STATE().state().get_current().relinquish_ownership_o();
