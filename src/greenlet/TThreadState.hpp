@@ -24,13 +24,6 @@ using greenlet::refs::CreatedModule;
 using greenlet::refs::PyErrPieces;
 using greenlet::refs::NewReference;
 
-// Defined in PyModule.cpp; set by an atexit handler to signal
-// that the interpreter is shutting down.  Needed on ALL Python
-// versions because _Py_IsFinalizing() is only set AFTER atexit
-// handlers complete inside Py_FinalizeEx.  Code running in
-// atexit handlers (e.g. uWSGI plugin cleanup) needs this early
-// flag to avoid accessing partially-torn-down greenlet state.
-extern int g_greenlet_shutting_down;
 
 namespace greenlet {
 /**

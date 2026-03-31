@@ -307,8 +307,6 @@ greenlet_internal_mod_init() noexcept
         {
             NewReference atexit_mod(Require(PyImport_ImportModule("atexit")));
             OwnedObject register_fn = atexit_mod.PyRequireAttr("register");
-
-            extern PyMethodDef _greenlet_atexit_method;
             NewReference callback(Require(
              PyCFunction_New(&_greenlet_atexit_method, NULL)));
             NewReference args(Require(PyTuple_Pack(1, callback.borrow())));

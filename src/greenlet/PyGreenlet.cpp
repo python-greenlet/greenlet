@@ -201,7 +201,7 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     //
     // See: https://github.com/python-greenlet/greenlet/issues/411
     //      https://github.com/python-greenlet/greenlet/issues/351
-    if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+    if (greenlet::g_greenlet_shutting_down || Py_IsFinalizing()) {
         self->murder_in_place();
         return 1;
     }

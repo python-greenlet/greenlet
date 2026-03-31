@@ -16,7 +16,6 @@ struct _PyMainGreenlet;
 
 typedef struct _greenlet PyGreenlet;
 extern PyTypeObject PyGreenlet_Type;
-extern int g_greenlet_shutting_down;
 
 
 #ifdef  GREENLET_USE_STDIO
@@ -28,7 +27,15 @@ using std::endl;
 namespace greenlet
 {
     class Greenlet;
-
+    // _Py_IsFinalizing() is only set AFTER atexit handlers complete
+    // inside Py_FinalizeEx on ALL Python versions (including 3.11+).
+    // Code running in atexit handlers (e.g. uWSGI plugin cleanup
+    // calling Py_FinalizeEx, New Relic agent shutdown) can still call
+    // greenlet.getcurrent(), but by that time type objects or
+    // internal state may have been invalidated. This flag is set by
+    // an atexit handler registered at module init (LIFO = runs
+    // first).
+    static int g_greenlet_shutting_down;
     namespace refs
     {
         // Type checkers throw a TypeError if the argument is not
@@ -50,7 +57,7 @@ namespace greenlet
             if (!p) {
                 return;
             }
-            if (g_greenlet_shutting_down || Py_IsFinalizing()) {
+            if (greenlet::g_greenlet_shutting_down || Py_IsFinalizing()) {
                 return;
             }
 
