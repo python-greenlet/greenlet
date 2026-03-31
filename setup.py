@@ -225,7 +225,7 @@ setup(
         'Documentation': 'https://greenlet.readthedocs.io/',
         'Changes': 'https://greenlet.readthedocs.io/en/latest/changes.html',
     },
-    license="MIT AND Python-2.0",
+    license="MIT AND PSF-2.0",
     license_files=[
         'LICENSE',
         'LICENSE.PSF',

@@ -17,6 +17,20 @@ using greenlet::ThreadState;
 #    pragma clang diagnostic ignored "-Wunused-variable"
 #endif
 
+
+static PyObject*
+_greenlet_atexit_callback(PyObject* UNUSED(self), PyObject* UNUSED(args))
+{
+    greenlet::g_greenlet_shutting_down = 1;
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef _greenlet_atexit_method = {
+    "_greenlet_cleanup", _greenlet_atexit_callback,
+    METH_NOARGS, NULL
+};
+
+
 PyDoc_STRVAR(mod_getcurrent_doc,
              "getcurrent() -> greenlet\n"
              "\n"
@@ -26,6 +40,9 @@ PyDoc_STRVAR(mod_getcurrent_doc,
 static PyObject*
 mod_getcurrent(PyObject* UNUSED(module))
 {
+    if (greenlet::IsShuttingDown()) {
+        Py_RETURN_NONE;
+    }
     return GET_THREAD_STATE().state().get_current().relinquish_ownership_o();
 }
 

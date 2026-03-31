@@ -29,6 +29,9 @@ extern "C" {
 static PyGreenlet*
 PyGreenlet_GetCurrent(void)
 {
+    if (greenlet::IsShuttingDown()) {
+        return nullptr;
+    }
     return GET_THREAD_STATE().state().get_current().relinquish_ownership();
 }
 

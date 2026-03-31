@@ -61,9 +61,9 @@ green_new(PyTypeObject* type, PyObject* UNUSED(args), PyObject* UNUSED(kwds))
         // can do things like cause other greenlets to get finalized.
         UserGreenlet* c = new UserGreenlet(o, GET_THREAD_STATE().state().borrow_current());
         assert(Py_REFCNT(o) == 1);
-        // Also: This looks like a memory leak, but isn't. Constructing the
-        // C++ object assigns it to the pimpl pointer of the Python object (o);
-        // we'll need that later.
+        // Also: This looks like a memory leak, but isn't.
+        // Constructing the C++ object assigns it to the pimpl pointer
+        // of the Python object (o); we'll need that later.
         assert(c == o->pimpl);
     }
     return o;
@@ -203,12 +203,10 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
     //
     // See: https://github.com/python-greenlet/greenlet/issues/411
     //      https://github.com/python-greenlet/greenlet/issues/351
-#if !GREENLET_PY311
-    if (_Py_IsFinalizing()) {
+    if (greenlet::IsShuttingDown()) {
         self->murder_in_place();
         return 1;
     }
-#endif
 
     /* Hacks hacks hacks copied from instance_dealloc() */
     /* Temporarily resurrect the greenlet. */

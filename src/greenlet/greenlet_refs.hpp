@@ -27,6 +27,24 @@ using std::endl;
 namespace greenlet
 {
     class Greenlet;
+    // _Py_IsFinalizing() is only set AFTER atexit handlers complete
+    // inside Py_FinalizeEx on ALL Python versions (including 3.11+).
+    // Code running in atexit handlers (e.g. uWSGI plugin cleanup
+    // calling Py_FinalizeEx, New Relic agent shutdown) can still call
+    // greenlet.getcurrent(), but by that time type objects or
+    // internal state may have been invalidated. This flag is set by
+    // an atexit handler registered at module init (LIFO = runs
+    // first).
+    //
+    // Because this is only set from an atexit handler, by which point
+    // we're single threaded, there should be no need to make it std::atomic<int>.
+    static int g_greenlet_shutting_down;
+
+    static inline bool
+    IsShuttingDown()
+    {
+        return greenlet::g_greenlet_shutting_down || Py_IsFinalizing();
+    }
 
     namespace refs
     {
@@ -47,6 +65,9 @@ namespace greenlet
         GreenletChecker(void *p)
         {
             if (!p) {
+                return;
+            }
+            if (IsShuttingDown()) {
                 return;
             }
 
@@ -100,6 +121,9 @@ namespace greenlet
         ContextExactChecker(void *p)
         {
             if (!p) {
+                return;
+            }
+            if (IsShuttingDown()) {
                 return;
             }
             if (!PyContext_CheckExact(p)) {
