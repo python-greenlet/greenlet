@@ -5,7 +5,7 @@
 3.3.3 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Publish binary wheels for RiscV 64.
 
 
 3.3.2 (2026-02-20)

@@ -178,25 +178,6 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
 
-  riscv64:
-    runs-on: ubuntu-latest
-    name: RiscV 64
-    steps:
-      - name: checkout
-        uses: actions/checkout@v6
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
-      - name: Build and test greenlet
-        env:
-          DOCKER_IMAGE: riscv64/ubuntu:latest
-        run: bash ./ubuntu-test
-
 
   manylinux:
     runs-on: ubuntu-latest
@@ -210,6 +191,7 @@ jobs:
           - manylinux_2_28_aarch64
           - manylinux_2_28_ppc64le
           - manylinux_2_28_s390x
+          - manylinux_2_39_riscv64
           - musllinux_1_2_x86_64
           - musllinux_1_2_aarch64
     name: ${{ matrix.image }}
