@@ -1352,11 +1352,10 @@ class TestModule(TestCase):
     @unittest.skipUnless(hasattr(sys, '_is_gil_enabled'),
                          "Needs 3.13 and above for sys._is_gil_enabled")
     def test_no_gil_on_free_threaded(self):
-        _is_gil_enabled = getattr(sys, '_is_gil_enabled')
         if RUNNING_ON_FREETHREAD_BUILD:
-            self.assertFalse(_is_gil_enabled())
+            self.assertFalse(sys._is_gil_enabled())
         else:
-            self.assertTrue(_is_gil_enabled())
+            self.assertTrue(sys._is_gil_enabled())
 
 if __name__ == '__main__':
     unittest.main()
