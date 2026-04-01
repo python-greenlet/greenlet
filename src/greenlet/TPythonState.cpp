@@ -329,6 +329,11 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 #if GREENLET_PY314
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     this->current_executor = tstate->current_executor;
+    #ifdef Py_GIL_DISABLED
+    this->c_stack_refs = ((_PyThreadStateImpl*)tstate)->c_stack_refs;
+    #endif
+    // this->stackpointer is left null because this->_top_frame is
+    // null so there is no value to copy.
 #elif GREENLET_PY312
     this->py_recursion_depth = tstate->py_recursion_limit - tstate->py_recursion_remaining;
     // XXX: TODO: Comment from a reviewer:
