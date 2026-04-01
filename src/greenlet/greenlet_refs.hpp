@@ -37,7 +37,9 @@ namespace greenlet
     // first).
     //
     // Because this is only set from an atexit handler, by which point
-    // we're single threaded, there should be no need to make it std::atomic<int>.
+    // we're single threaded, there should be no need to make it
+    // std::atomic<int>.
+    // TODO: Move this to the GreenletGlobals object?
     static int g_greenlet_shutting_down;
 
     static inline bool
@@ -908,6 +910,8 @@ namespace greenlet {
             Require(PyModule_AddIntConstant(this->p, name, new_bool));
         }
 
+        // It is safe to pass a null value to this API because we use
+        // PyModule_AddObjectRef under the covers which allows null.
         void PyAddObject(const char* name, const OwnedObject& new_object)
         {
             // The caller already owns a reference they will decref
