@@ -1008,6 +1008,10 @@ namespace greenlet {
         }
     };
 
+    // TODO: When we run on 3.12+ only (GREENLET_312), switch to the
+    // ``PyErr_GetRaisedException`` family of functions. The
+    // ``PyErr_Fetch`` family is deprecated on 3.12+, but is part
+    // of the stable ABI so it's not going anywhere.
     class PyErrPieces
     {
     private:
