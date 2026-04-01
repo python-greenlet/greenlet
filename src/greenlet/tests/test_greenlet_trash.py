@@ -25,7 +25,6 @@ implementation (like most of the rest of this package):
 
     - If the test fails in that way, the interpreter crashes.
 """
-from __future__ import print_function, absolute_import, division
 
 import unittest
 
@@ -35,21 +34,29 @@ class TestTrashCanReEnter(unittest.TestCase):
     def test_it(self):
         try:
             # pylint:disable-next=no-name-in-module
-            from greenlet._greenlet import get_tstate_trash_delete_nesting # pylint:disable=unused-import
+            from greenlet._greenlet import get_tstate_trash_delete_nesting
         except ImportError:
             import sys
-            # Python 3.13 has not "trash delete nesting" anymore (but "delete later")
+            # Python 3.13 has no "trash delete nesting" anymore (but
+            # "delete later") Our test as written won't be able to check
+            # the nesting depth anymore, but on debug builds it should
+            # still be able to trigger a crash if we get things wrong.
+            # However, at least on 3.14, the greenlet switch in the test
+            # below never finds an active value for
+            # ``tstate->delete_later``, meaning this test isn't testing
+            # what we want it to.
             assert sys.version_info[:2] >= (3, 13)
-            self.skipTest("get_tstate_trash_delete_nesting is not available.")
+            def get_tstate_trash_delete_nesting():
+                return 0
 
         # Try several times to trigger it, because it isn't 100%
         # reliable.
-        for _ in range(10):
-            self.check_it()
+        for i in range(30):
+            with self.subTest(i=i):
+                self.check_it(get_tstate_trash_delete_nesting)
 
-    def check_it(self): # pylint:disable=too-many-statements
+    def check_it(self, get_tstate_trash_delete_nesting): # pylint:disable=too-many-statements
         import greenlet
-        from greenlet._greenlet import get_tstate_trash_delete_nesting # pylint:disable=no-name-in-module
         main = greenlet.getcurrent()
 
         assert get_tstate_trash_delete_nesting() == 0
@@ -57,11 +64,12 @@ class TestTrashCanReEnter(unittest.TestCase):
         # We expect to be in deferred deallocation after this many
         # deallocations have occurred. TODO: I wish we had a better way to do
         # this --- that was before get_tstate_trash_delete_nesting; perhaps
-        # we can use that API to do better?
-        TRASH_UNWIND_LEVEL = 50
+        # we can use that API to do better? (Probably not, it is non-functional in
+        # 3.13+)
+        TRASH_UNWIND_LEVEL = 500 # 50 is the nominal default on 3.12
         # How many objects to put in a container; it's the container that
         # queues objects for deferred deallocation.
-        OBJECTS_PER_CONTAINER = 500
+        OBJECTS_PER_CONTAINER = 1000
 
         class Dealloc: # define the class here because we alter class variables each time we run.
             """

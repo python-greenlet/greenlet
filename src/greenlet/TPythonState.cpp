@@ -172,11 +172,28 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
         this->stackpointer = nullptr;
     }
   #endif
-  #if GREENLET_PY313
+#if GREENLET_PY313
+    // By contract of _PyTrash_thread_deposit_object,
+    // the ``delete_later`` object has a refcount of 0.
+    // We take a strong reference to it.
+    //
+    // Now, ``delete_later`` is managed as a
+    // linked list whose objects are unconditionally deallocated
+    // WITHOUT calling DECREF on them, so it's not clear what that is
+    // actually accomplishing. That is, if another object is pushed on
+    // the list and then the list is deallocated, this object will
+    // still be deallocated. This strong reference serves as a form of
+    // resurrection, meaning that when operator>> DECREFs it, we might
+    // enter its ``tp_dealloc`` function again.
+    //
+    // In practice, it's quite difficult to arrange for this to be
+    // a non-null value during a greenlet switch.
+    // ``greenlet.tests.test_greenlet_trash`` tries, but under 3.14,
+    // at least, fails to do so.
     this->delete_later = Py_XNewRef(tstate->delete_later);
   #elif GREENLET_PY312
     this->trash_delete_nesting = tstate->trash.delete_nesting;
-  #else // not 312
+  #else // not 312 or 3.13+
     this->trash_delete_nesting = tstate->trash_delete_nesting;
   #endif // GREENLET_PY312
 #else // Not 311
@@ -257,9 +274,32 @@ void PythonState::operator>>(PyThreadState *const tstate) noexcept
 #endif
     this->_top_frame.relinquish_ownership();
   #if GREENLET_PY313
-    Py_XDECREF(tstate->delete_later);
-    tstate->delete_later = this->delete_later;
-    Py_CLEAR(this->delete_later);
+    // See comments in operator<<. We own a strong reference to
+    // this->delete_later, which may or may not be the same object as
+    // tstate->delete_later (depending if something pushed an object
+    // onto the trashcan). Again, because ``delete_later`` is managed
+    // as a linked list, it's not clear that saving and restoring the
+    // value, especially without ever setting it to NULL, accomplishes
+    // much...but the code was added by a core dev, so assume correct.
+    //
+    // Recall that tstate->delete_later is supposed to have a refcount
+    // of 0, because objects are added there from their ``tp_dealloc``
+    // method. So we should only need to DECREF it if we're the ones
+    // that INCREF'd it in operator<<. (This is different than the
+    // core dev's original code which always did this.)
+    if (this->delete_later == tstate->delete_later) {
+        Py_XDECREF(tstate->delete_later);
+        tstate->delete_later = this->delete_later;
+        this->delete_later = nullptr;
+    }
+    else {
+        // it got switched behind our back. So the reference we own
+        // needs to be explicitly cleared.
+        tstate->delete_later = this->delete_later;
+        Py_CLEAR(this->delete_later);
+    }
+
+
   #elif GREENLET_PY312
     tstate->trash.delete_nesting = this->trash_delete_nesting;
   #else // not 3.12
