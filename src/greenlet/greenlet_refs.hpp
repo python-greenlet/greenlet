@@ -902,16 +902,10 @@ namespace greenlet {
         {
         }
 
-        // PyAddObject(): Add a reference to the object to the module.
-        // On return, the reference count of the object is unchanged.
-        //
-        // The docs warn that PyModule_AddObject only steals the
-        // reference on success, so if it fails after we've incref'd
-        // or allocated, we're responsible for the decref.
+        // PyAddObject(): Add a new reference to the object to the module.
         void PyAddObject(const char* name, const long new_bool)
         {
-            OwnedObject p = OwnedObject::consuming(Require(PyBool_FromLong(new_bool)));
-            this->PyAddObject(name, p);
+            Require(PyModule_AddIntConstant(this->p, name, new_bool));
         }
 
         void PyAddObject(const char* name, const OwnedObject& new_object)
@@ -932,16 +926,11 @@ namespace greenlet {
             this->PyAddObject(name, reinterpret_cast<PyObject*>(&type));
         }
 
+    private:
+
         void PyAddObject(const char* name, PyObject* new_object)
         {
-            Py_INCREF(new_object);
-            try {
-                Require(PyModule_AddObject(this->p, name, new_object));
-            }
-            catch (const PyErrOccurred&) {
-                Py_DECREF(p);
-                throw;
-            }
+            Require(PyModule_AddObjectRef(this->p, name, new_object));
         }
     };
 
