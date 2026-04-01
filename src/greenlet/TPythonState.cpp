@@ -364,6 +364,12 @@ int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noe
     // The naive way of looping over c_stack_refs->ref and visiting
     // those crashes the process (at least with GIL disabled).
 #endif
+    // Note that we DO NOT visit ``delete_later``. Even if it's
+    // non-null and we technically own a reference to it, its
+    // reference count already went to 0 once and it was in the
+    // process of being deallocated. The trash can mechanism linked it
+    // into a list that will be cleaned at some later time, and it has
+    // become untracked by the GC.
     return 0;
 }
 
