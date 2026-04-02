@@ -240,9 +240,17 @@ _green_dealloc_kill_started_non_main_greenlet(BorrowedGreenlet self)
         PyObject* f = PySys_GetObject("stderr");
         Py_INCREF(self.borrow_o()); /* leak! */
         if (f != NULL) {
+            // PySys_GetObject returns a borrowed ref which could go
+            // away when we run arbitrary code, as we do for any of
+            // the ``PyFile_Write`` APIs.
+            Py_INCREF(f);
+            // Note that we're not handling errors here. They either
+            // work or they don't, and any exception they raised will
+            // be replaced by PyErrRestore.
             PyFile_WriteString("GreenletExit did not kill ", f);
             PyFile_WriteObject(self.borrow_o(), f, 0);
             PyFile_WriteString("\n", f);
+            Py_DECREF(f);
         }
     }
     /* Restore the saved exception. */
