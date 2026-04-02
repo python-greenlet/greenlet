@@ -172,7 +172,7 @@ void PythonState::operator<<(const PyThreadState *const tstate) noexcept
         this->stackpointer = nullptr;
     }
   #endif
-#if GREENLET_PY313
+  #if GREENLET_PY313
     // By contract of _PyTrash_thread_deposit_object,
     // the ``delete_later`` object has a refcount of 0.
     // We take a strong reference to it.

@@ -18,6 +18,7 @@ using greenlet::refs::OwnedMainGreenlet;
 using greenlet::refs::BorrowedGreenlet;
 
 #if PY_VERSION_HEX < 0x30B00A6
+    // prior to 3.11.0a6
 #  define _PyCFrame CFrame
 #  define _PyInterpreterFrame _interpreter_frame
 #endif
@@ -781,9 +782,7 @@ public:
 
     // Instantiate one on the stack to save the GC state,
     // and then disable GC. When it goes out of scope, GC will be
-    // restored to its original state. Sadly, these APIs are only
-    // available on 3.10+; luckily, we only need them on 3.11+.
-#if GREENLET_PY310
+    // restored to its original state.
     class GCDisabledGuard
     {
     private:
@@ -802,7 +801,6 @@ public:
             }
         }
     };
-#endif
 
     OwnedObject& operator<<=(OwnedObject& lhs, greenlet::SwitchingArgs& rhs) noexcept;
 

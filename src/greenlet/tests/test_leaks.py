@@ -2,8 +2,6 @@
 """
 Testing scenarios that may have leaked.
 """
-from __future__ import print_function, absolute_import, division
-
 import sys
 import gc
 
@@ -322,8 +320,6 @@ class TestLeaks(TestCase):
         # false negatives. At the moment, those false results seem to have
         # resolved, so we are actually running this on 3.8+
         assert sys.version_info[0] >= 3
-        if sys.version_info[:2] < (3, 8):
-            self.skipTest('Only observed on 3.11')
         if RUNNING_ON_MANYLINUX:
             self.skipTest("Slow and not worth repeating here")
 
