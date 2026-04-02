@@ -136,6 +136,7 @@ test_exception_switch_and_do_in_g2(PyObject* UNUSED(self), PyObject* args)
     try {
         result = PyGreenlet_Switch(g2, NULL, NULL);
         if (!result) {
+            Py_DECREF(g2);
             return NULL;
         }
     }
