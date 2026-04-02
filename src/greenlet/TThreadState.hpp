@@ -10,6 +10,7 @@
 #include "greenlet_refs.hpp"
 #include "greenlet_thread_support.hpp"
 
+using greenlet::LockGuard;
 using greenlet::refs::BorrowedObject;
 using greenlet::refs::BorrowedGreenlet;
 using greenlet::refs::BorrowedMainGreenlet;
@@ -117,6 +118,12 @@ private:
        refcounts are incremented in the copy.
     */
     deleteme_t deleteme;
+#ifdef Py_GIL_DISABLED
+    // On free-threaded builds, we need to protect shared access to
+    // the deleteme list by a mutex. It can be written from one thread
+    // while being read in another
+    Mutex deleteme_lock;
+#endif
 
 #ifdef GREENLET_NEEDS_EXCEPTION_STATE_SAVED
     void* exception_state;
@@ -297,70 +304,74 @@ private:
      */
     inline void clear_deleteme_list(const bool murder=false)
     {
-        if (!this->deleteme.empty()) {
-            // Move the list contents out with swap — a constant-time
-            // pointer exchange that never allocates. The previous
-            // code used a copy (deleteme_t copy = this->deleteme)
-            // which allocated through PythonAllocator / PyMem_Malloc;
-            // that could SIGSEGV during early Py_FinalizeEx on Python
-            // < 3.11 when the allocator is partially torn down.
-            deleteme_t copy;
-            std::swap(copy, this->deleteme);
-
-            // During Py_FinalizeEx cleanup, the GC or atexit handlers
-            // may have already collected objects in this list,
-            // leaving dangling pointers. Attempting Py_DECREF on
-            // freed memory causes a SIGSEGV. g_greenlet_shutting_down
-            // covers the early atexit phase; Py_IsFinalizing() covers
-            // later phases. Thus, we deliberately leak.
-            if (greenlet::IsShuttingDown()) {
-                return;
-            }
-
-            // Preserve any pending exception so that cleanup-triggered
-            // errors don't accidentally swallow an unrelated exception
-            // (e.g. one set by throw() before a switch).
-            PyErrPieces incoming_err;
-
-            for(deleteme_t::iterator it = copy.begin(), end = copy.end();
-                it != end;
-                ++it ) {
-                PyGreenlet* to_del = *it;
-                if (murder) {
-                    // Force each greenlet to appear dead; we can't raise an
-                    // exception into it anymore anyway.
-                    to_del->pimpl->murder_in_place();
-                }
-
-                // The only reference to these greenlets should be in
-                // this list, decreffing them should let them be
-                // deleted again, triggering calls to green_dealloc()
-                // in the correct thread (if we're not murdering).
-                // This may run arbitrary Python code and switch
-                // threads or greenlets!
-                Py_DECREF(to_del);
-                if (PyErr_Occurred()) {
-                    PyErr_WriteUnraisable(nullptr);
-                    PyErr_Clear();
-                }
-            }
-            // Not worried about C++ exception safety here in terms of
-            // making sure we restore the error. Either we'll catch it
-            // above and establish the error from that exception
-            // (which, yes, might overwrite something from before we
-            // entered, but we're in an undefined situation at that
-            // point) or we won't catch it at all and will crash the
-            // process.
-            //
-            // As for Python exception safety, there's no chance we're
-            // overwriting an exception (from the loop) with no
-            // exception (captured NULLs before we entered the loop),
-            // because there CAN'T BE any exception from the loop ---
-            // we clear them. So we're either restoring a pre-existing
-            // exception, or leaving the exception unset (by restoring
-            // NULL).
-            incoming_err.PyErrRestore();
+#ifdef Py_GIL_DISABLED
+        LockGuard deleteme_guard(this->deleteme_lock);
+#endif
+        if (this->deleteme.empty()) {
+            return;
         }
+        // Move the list contents out with swap — a constant-time
+        // pointer exchange that never allocates. The previous
+        // code used a copy (deleteme_t copy = this->deleteme)
+        // which allocated through PythonAllocator / PyMem_Malloc;
+        // that could SIGSEGV during early Py_FinalizeEx on Python
+        // < 3.11 when the allocator is partially torn down.
+        deleteme_t copy;
+        std::swap(copy, this->deleteme);
+
+        // During Py_FinalizeEx cleanup, the GC or atexit handlers
+        // may have already collected objects in this list,
+        // leaving dangling pointers. Attempting Py_DECREF on
+        // freed memory causes a SIGSEGV. g_greenlet_shutting_down
+        // covers the early atexit phase; Py_IsFinalizing() covers
+        // later phases. Thus, we deliberately leak.
+        if (greenlet::IsShuttingDown()) {
+            return;
+        }
+
+        // Preserve any pending exception so that cleanup-triggered
+        // errors don't accidentally swallow an unrelated exception
+        // (e.g. one set by throw() before a switch).
+        PyErrPieces incoming_err;
+
+        for(deleteme_t::iterator it = copy.begin(), end = copy.end();
+             it != end;
+             ++it ) {
+            PyGreenlet* to_del = *it;
+            if (murder) {
+                // Force each greenlet to appear dead; we can't raise an
+                // exception into it anymore anyway.
+                to_del->pimpl->murder_in_place();
+            }
+
+            // The only reference to these greenlets should be in
+            // this list, decreffing them should let them be
+            // deleted again, triggering calls to green_dealloc()
+            // in the correct thread (if we're not murdering).
+            // This may run arbitrary Python code and switch
+            // threads or greenlets!
+            Py_DECREF(to_del);
+            if (PyErr_Occurred()) {
+                PyErr_WriteUnraisable(nullptr);
+                PyErr_Clear();
+            }
+        }
+        // Not worried about C++ exception safety here in terms of
+        // making sure we restore the error. Either we'll catch it
+        // above and establish the error from that exception
+        // (which, yes, might overwrite something from before we
+        // entered, but we're in an undefined situation at that
+        // point) or we won't catch it at all and will crash the
+        // process.
+        //
+        // As for Python exception safety, there's no chance we're
+        // overwriting an exception (from the loop) with no
+        // exception (captured NULLs before we entered the loop),
+        // because there CAN'T BE any exception from the loop ---
+        // we clear them. So we're either restoring a pre-existing
+        // exception, or leaving the exception unset (by restoring
+        // NULL).
+        incoming_err.PyErrRestore();
     }
 
 public:
@@ -393,6 +404,9 @@ public:
     inline void delete_when_thread_running(PyGreenlet* to_del)
     {
         Py_INCREF(to_del);
+#ifdef Py_GIL_DISABLED
+        LockGuard deleteme_guard(this->deleteme_lock);
+#endif
         this->deleteme.push_back(to_del);
     }
 
