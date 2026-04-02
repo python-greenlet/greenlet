@@ -112,9 +112,9 @@ class CAPITests(TestCase):
 
     @ignores_leakcheck
     def test_leaks(self):
-        from . import RUNNING_ON_FREETHREAD_BUILD
+        from . import PY314
         iters = 100
-        if RUNNING_ON_FREETHREAD_BUILD:
+        if PY314:
             expected_refs = [1] * iters
         else:
             expected_refs = [2] * iters
