@@ -56,7 +56,7 @@ class CAPITests(TestCase):
     def test_throw(self):
         seen = []
 
-        def foo():         # pylint:disable=disallowed-name
+        def foo(): # pylint:disable=disallowed-name
             try:
                 greenlet.getcurrent().parent.switch()
             except ValueError:
@@ -108,6 +108,30 @@ class CAPITests(TestCase):
             )
         self.assertEqual(str(exc.exception),
                          "exceptions must be classes, or instances, not str")
+
+    def test_leaks(self):
+        from . import RUNNING_ON_FREETHREAD_BUILD
+        iters = 100
+        if RUNNING_ON_FREETHREAD_BUILD:
+            expected_refs = [1] * iters
+        else:
+            expected_refs = [2] * iters
+        for name, caller in (
+            ("test_switch",
+             lambda: _test_extension.test_switch(greenlet.greenlet(object))),
+            ("test_switch_kwargs",
+             lambda: _test_extension.test_switch_kwargs(greenlet.greenlet(object))),
+            ("test_new_greenlet",
+             lambda: _test_extension.test_new_greenlet(object)),
+        ):
+            with self.subTest(name):
+                results = [caller() for _ in range(iters)]
+                refs = [
+                    sys.getrefcount(i) - 1 # ignore ref in ``i``
+                    for i
+                    in results
+                ]
+                self.assertEqual(refs, expected_refs)
 
 
 if __name__ == '__main__':

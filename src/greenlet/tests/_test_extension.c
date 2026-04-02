@@ -52,7 +52,6 @@ test_switch(PyObject* UNUSED(self), PyObject* greenlet)
         }
         return NULL;
     }
-    Py_INCREF(result);
     return result;
 }
 
@@ -79,7 +78,6 @@ test_switch_kwargs(PyObject* UNUSED(self), PyObject* args, PyObject* kwargs)
         }
         return NULL;
     }
-    Py_XINCREF(result);
     return result;
 }
 
@@ -138,7 +136,6 @@ test_new_greenlet(PyObject* UNUSED(self), PyObject* callable)
         return NULL;
     }
 
-    Py_INCREF(result);
     return result;
 }
 

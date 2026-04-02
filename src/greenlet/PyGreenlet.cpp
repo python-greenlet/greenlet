@@ -397,7 +397,6 @@ green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
     // second byte of the CALL_METHOD op for ``getcurrent()``).
 
     try {
-        //OwnedObject result = single_result(self->pimpl->g_switch());
         OwnedObject result(single_result(self->pimpl->g_switch()));
 #ifndef NDEBUG
         // Note that the current greenlet isn't necessarily self. If self
