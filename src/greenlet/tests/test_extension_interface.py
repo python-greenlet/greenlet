@@ -17,6 +17,9 @@ class CAPITests(TestCase):
         g = greenlet.greenlet(adder)
         self.assertEqual(6, _test_extension.test_switch_kwargs(g, x=3, y=2))
 
+        with self.assertRaisesRegex(TypeError, "argument 1 must be greenlet"):
+            _test_extension.test_switch_kwargs("not a greenlet")
+
     def test_setparent(self):
         # pylint:disable=disallowed-name
         def foo():

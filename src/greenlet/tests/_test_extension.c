@@ -62,7 +62,9 @@ test_switch_kwargs(PyObject* UNUSED(self), PyObject* args, PyObject* kwargs)
     PyGreenlet* g = NULL;
     PyObject* result = NULL;
 
-    PyArg_ParseTuple(args, "O!", &PyGreenlet_Type, &g);
+    if (!PyArg_ParseTuple(args, "O!", &PyGreenlet_Type, &g)) {
+        return NULL;
+    }
 
     if (g == NULL || !PyGreenlet_Check(g)) {
         PyErr_BadArgument();
