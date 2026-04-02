@@ -100,6 +100,7 @@ test_setparent(PyObject* UNUSED(self), PyObject* arg)
 {
     PyGreenlet* current;
     PyGreenlet* greenlet = NULL;
+    PyObject* switch_result = NULL;
 
     if (arg == NULL || !PyGreenlet_Check(arg)) {
         PyErr_BadArgument();
@@ -114,9 +115,12 @@ test_setparent(PyObject* UNUSED(self), PyObject* arg)
         return NULL;
     }
     Py_DECREF(current);
-    if (PyGreenlet_Switch(greenlet, NULL, NULL) == NULL) {
+
+    switch_result = PyGreenlet_Switch(greenlet, NULL, NULL);
+    if (switch_result == NULL) {
         return NULL;
     }
+    Py_DECREF(switch_result);
     Py_RETURN_NONE;
 }
 

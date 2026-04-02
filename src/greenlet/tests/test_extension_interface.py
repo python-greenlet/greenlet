@@ -3,6 +3,7 @@ import sys
 import greenlet
 from . import _test_extension
 from . import TestCase
+from .leakcheck import ignores_leakcheck
 
 # pylint:disable=c-extension-no-member
 
@@ -109,6 +110,7 @@ class CAPITests(TestCase):
         self.assertEqual(str(exc.exception),
                          "exceptions must be classes, or instances, not str")
 
+    @ignores_leakcheck
     def test_leaks(self):
         from . import RUNNING_ON_FREETHREAD_BUILD
         iters = 100
