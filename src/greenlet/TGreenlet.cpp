@@ -392,6 +392,10 @@ g_handle_exit(const OwnedObject& greenlet_result)
     if (!greenlet_result && mod_globs->PyExc_GreenletExit.PyExceptionMatches()) {
         /* catch and ignore GreenletExit */
         PyErrFetchParam val;
+        // TODO: When we run on 3.12+ only (GREENLET_312), switch to the
+        // ``PyErr_GetRaisedException`` family of functions. The
+        // ``PyErr_Fetch`` family is deprecated on 3.12+, but is part
+        // of the stable ABI so it's not going anywhere.
         PyErr_Fetch(PyErrFetchParam(), val, PyErrFetchParam());
         if (!val) {
             return OwnedObject::None();

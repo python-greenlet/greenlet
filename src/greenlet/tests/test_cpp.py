@@ -1,13 +1,14 @@
-from __future__ import print_function
-from __future__ import absolute_import
-
+import gc
 import subprocess
 import unittest
 
 import greenlet
-from . import _test_extension_cpp
-from . import TestCase
+import objgraph
+
 from . import WIN
+from . import TestCase
+from . import _test_extension_cpp
+
 
 class CPPTests(TestCase):
     def test_exception_switch(self):
@@ -67,6 +68,23 @@ class CPPTests(TestCase):
     def test_unhandled_exception_in_greenlet_aborts(self):
         # verify that unhandled throw called in greenlet aborts too
         self._do_test_unhandled_exception('run_unhandled_exception_in_greenlet_aborts')
+
+
+    def test_leak_test_exception_switch_and_do_in_g2(self):
+        def raiser():
+            raise ValueError("boom")
+
+        gc.collect()
+        before = objgraph.count("greenlet")
+
+        for _ in range(1000):
+            with self.assertRaises(ValueError):
+                _test_extension_cpp.test_exception_switch_and_do_in_g2(raiser)
+
+        gc.collect()
+        after = objgraph.count("greenlet")
+        leaked = after - before
+        self.assertEqual(0, leaked)
 
 
 if __name__ == '__main__':

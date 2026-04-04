@@ -1,11 +1,9 @@
-from __future__ import print_function
-from __future__ import absolute_import
-
 import sys
 
 import greenlet
 from . import _test_extension
 from . import TestCase
+from .leakcheck import ignores_leakcheck
 
 # pylint:disable=c-extension-no-member
 
@@ -19,6 +17,9 @@ class CAPITests(TestCase):
             return x * y
         g = greenlet.greenlet(adder)
         self.assertEqual(6, _test_extension.test_switch_kwargs(g, x=3, y=2))
+
+        with self.assertRaisesRegex(TypeError, "argument 1 must be greenlet"):
+            _test_extension.test_switch_kwargs("not a greenlet")
 
     def test_setparent(self):
         # pylint:disable=disallowed-name
@@ -56,7 +57,7 @@ class CAPITests(TestCase):
     def test_throw(self):
         seen = []
 
-        def foo():         # pylint:disable=disallowed-name
+        def foo(): # pylint:disable=disallowed-name
             try:
                 greenlet.getcurrent().parent.switch()
             except ValueError:
@@ -108,6 +109,31 @@ class CAPITests(TestCase):
             )
         self.assertEqual(str(exc.exception),
                          "exceptions must be classes, or instances, not str")
+
+    @ignores_leakcheck
+    def test_leaks(self):
+        from . import PY314
+        iters = 100
+        if PY314:
+            expected_refs = [1] * iters
+        else:
+            expected_refs = [2] * iters
+        for name, caller in (
+            ("test_switch",
+             lambda: _test_extension.test_switch(greenlet.greenlet(object))),
+            ("test_switch_kwargs",
+             lambda: _test_extension.test_switch_kwargs(greenlet.greenlet(object))),
+            ("test_new_greenlet",
+             lambda: _test_extension.test_new_greenlet(object)),
+        ):
+            with self.subTest(name):
+                results = [caller() for _ in range(iters)]
+                refs = [
+                    sys.getrefcount(i) - 1 # ignore ref in ``i``
+                    for i
+                    in results
+                ]
+                self.assertEqual(refs, expected_refs)
 
 
 if __name__ == '__main__':

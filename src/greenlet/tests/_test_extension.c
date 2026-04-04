@@ -52,7 +52,6 @@ test_switch(PyObject* UNUSED(self), PyObject* greenlet)
         }
         return NULL;
     }
-    Py_INCREF(result);
     return result;
 }
 
@@ -62,7 +61,9 @@ test_switch_kwargs(PyObject* UNUSED(self), PyObject* args, PyObject* kwargs)
     PyGreenlet* g = NULL;
     PyObject* result = NULL;
 
-    PyArg_ParseTuple(args, "O!", &PyGreenlet_Type, &g);
+    if (!PyArg_ParseTuple(args, "O!", &PyGreenlet_Type, &g)) {
+        return NULL;
+    }
 
     if (g == NULL || !PyGreenlet_Check(g)) {
         PyErr_BadArgument();
@@ -77,7 +78,6 @@ test_switch_kwargs(PyObject* UNUSED(self), PyObject* args, PyObject* kwargs)
         }
         return NULL;
     }
-    Py_XINCREF(result);
     return result;
 }
 
@@ -100,6 +100,7 @@ test_setparent(PyObject* UNUSED(self), PyObject* arg)
 {
     PyGreenlet* current;
     PyGreenlet* greenlet = NULL;
+    PyObject* switch_result = NULL;
 
     if (arg == NULL || !PyGreenlet_Check(arg)) {
         PyErr_BadArgument();
@@ -114,9 +115,12 @@ test_setparent(PyObject* UNUSED(self), PyObject* arg)
         return NULL;
     }
     Py_DECREF(current);
-    if (PyGreenlet_Switch(greenlet, NULL, NULL) == NULL) {
+
+    switch_result = PyGreenlet_Switch(greenlet, NULL, NULL);
+    if (switch_result == NULL) {
         return NULL;
     }
+    Py_DECREF(switch_result);
     Py_RETURN_NONE;
 }
 
@@ -136,7 +140,6 @@ test_new_greenlet(PyObject* UNUSED(self), PyObject* callable)
         return NULL;
     }
 
-    Py_INCREF(result);
     return result;
 }
 

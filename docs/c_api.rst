@@ -83,6 +83,8 @@ Functions
     Switches to the greenlet *g*. Besides *g*, the remaining
     parameters are optional and may be ``NULL``.
 
+    Returns a new reference.
+
     :param args: If ``args`` is NULL, an empty tuple is passed to the
                  target greenlet. If given, must be a :class:`tuple`.
 

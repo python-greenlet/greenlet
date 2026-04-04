@@ -37,7 +37,9 @@ namespace greenlet
     // first).
     //
     // Because this is only set from an atexit handler, by which point
-    // we're single threaded, there should be no need to make it std::atomic<int>.
+    // we're single threaded, there should be no need to make it
+    // std::atomic<int>.
+    // TODO: Move this to the GreenletGlobals object?
     static int g_greenlet_shutting_down;
 
     static inline bool
@@ -902,18 +904,14 @@ namespace greenlet {
         {
         }
 
-        // PyAddObject(): Add a reference to the object to the module.
-        // On return, the reference count of the object is unchanged.
-        //
-        // The docs warn that PyModule_AddObject only steals the
-        // reference on success, so if it fails after we've incref'd
-        // or allocated, we're responsible for the decref.
+        // PyAddObject(): Add a new reference to the object to the module.
         void PyAddObject(const char* name, const long new_bool)
         {
-            OwnedObject p = OwnedObject::consuming(Require(PyBool_FromLong(new_bool)));
-            this->PyAddObject(name, p);
+            Require(PyModule_AddIntConstant(this->p, name, new_bool));
         }
 
+        // It is safe to pass a null value to this API because we use
+        // PyModule_AddObjectRef under the covers which allows null.
         void PyAddObject(const char* name, const OwnedObject& new_object)
         {
             // The caller already owns a reference they will decref
@@ -932,16 +930,11 @@ namespace greenlet {
             this->PyAddObject(name, reinterpret_cast<PyObject*>(&type));
         }
 
+    private:
+
         void PyAddObject(const char* name, PyObject* new_object)
         {
-            Py_INCREF(new_object);
-            try {
-                Require(PyModule_AddObject(this->p, name, new_object));
-            }
-            catch (const PyErrOccurred&) {
-                Py_DECREF(p);
-                throw;
-            }
+            Require(PyModule_AddObjectRef(this->p, name, new_object));
         }
     };
 
@@ -1015,6 +1008,10 @@ namespace greenlet {
         }
     };
 
+    // TODO: When we run on 3.12+ only (GREENLET_312), switch to the
+    // ``PyErr_GetRaisedException`` family of functions. The
+    // ``PyErr_Fetch`` family is deprecated on 3.12+, but is part
+    // of the stable ABI so it's not going anywhere.
     class PyErrPieces
     {
     private:
