@@ -2,15 +2,25 @@
  Changes
 =========
 
-3.3.3 (unreleased)
+3.4.0 (unreleased)
 ==================
 
 - Publish binary wheels for RiscV 64.
-- Fix multiple rare crash paths during interpreter shutdown on.
+- Fix multiple rare crash paths during interpreter shutdown.
+
+  Note that this now relies on the ``atexit`` module, and introduces
+  subtle API changes during interpreter shutdown (for example,
+  ``getcurrent`` is no longer available once the ``atexit`` callback fires).
 
   See `PR #499
   <https://github.com/python-greenlet/greenlet/pull/499>`_ by Nicolas
   Bouvrette.
+- Address the results of an automated code audit performed by
+  devdanzin. This includes several minor correctness changes that
+  theoretically could have been crashing bugs, but typically only in
+  very rare circumstances.
+
+  See `PR 502 <https://github.com/python-greenlet/greenlet/pull/502>`_.
 
 3.3.2 (2026-02-20)
 ==================
