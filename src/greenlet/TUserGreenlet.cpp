@@ -117,9 +117,14 @@ UserGreenlet::was_running_in_dead_thread() const noexcept
 OwnedObject
 UserGreenlet::g_switch()
 {
-    assert(this->args() || PyErr_Occurred());
-
     try {
+        if (!this->args() && !PyErr_Occurred()) {
+            // we have nothing to send as the result of switching, most
+            // likely the result of trying to switch to a dead
+            // greenlet.
+            throw PyErrOccurred(mod_globs->PyExc_GreenletError,
+                                "cannot switch with no pending arguments or exception");
+        }
         this->check_switch_allowed();
     }
     catch (const PyErrOccurred&) {

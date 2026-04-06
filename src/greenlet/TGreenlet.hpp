@@ -754,7 +754,7 @@ public:
     private:
         static greenlet::PythonAllocator<MainGreenlet> allocator;
         refs::BorrowedMainGreenlet _self;
-        ThreadState* _thread_state;
+        std::atomic<ThreadState*> _thread_state;
         G_NO_COPIES_OF_CLS(MainGreenlet);
     public:
         static void* operator new(size_t UNUSED(count));

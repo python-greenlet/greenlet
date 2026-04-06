@@ -230,7 +230,7 @@ Greenlet::check_switch_allowed() const
 
     // If the thread this greenlet was running in is dead,
     // we'll still have a reference to a main greenlet, but the
-    // thread state pointer we have is bogus.
+    // thread state pointer we have is bogus (should be nullptr)
     // TODO: Give the objects an API to determine if they belong
     // to a dead thread.
 

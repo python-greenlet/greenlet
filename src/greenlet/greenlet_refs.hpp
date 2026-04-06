@@ -446,6 +446,8 @@ namespace greenlet {
         void CLEAR()
         {
             Py_CLEAR(this->p);
+            // XXX: Have failed this assertion in free-threaded builds
+            // using multiple threads
             assert(this->p == nullptr);
         }
     };
