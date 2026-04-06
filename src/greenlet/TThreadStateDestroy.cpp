@@ -162,9 +162,11 @@ private:
         // The thread_state in the main greenlet has already been
         // cleared by the time this function runs from our pending
         // callback, but the greenlet itself is still there.
+#ifndef NDEBUG
         PyGreenlet* main(state->borrow_main_greenlet());
         assert(main);
         assert(main->pimpl->thread_state() == nullptr);
+#endif
         delete state; // Deleting this runs the destructor, DECREFs the main greenlet.
     }
 
