@@ -1134,6 +1134,39 @@ namespace greenlet {
         }
     };
 
+#ifdef Py_GIL_DISABLED
+        // building on 3.13 or newer, free-threaded
+        class PyCriticalObjectSection {
+        private:
+            G_NO_COPIES_OF_CLS(PyCriticalObjectSection);
+            PyCriticalSection _py_cs;
+        public:
+            explicit PyCriticalObjectSection(PyObject* p)
+            {
+                PyCriticalSection_Begin(&this->_py_cs, p);
+            }
+            explicit PyCriticalObjectSection(const PyGreenlet* p)
+            : PyCriticalObjectSection(
+                  reinterpret_cast<PyObject*>(
+                      const_cast<PyGreenlet*>(p)))
+            {}
+            ~PyCriticalObjectSection()
+            {
+                PyCriticalSection_End(&this->_py_cs);
+            }
+        };
+#else
+        class PyCriticalObjectSection {
+        public:
+            explicit PyCriticalObjectSection(PyObject* UNUSED(p))
+            {}
+            explicit PyCriticalObjectSection(const PyGreenlet* UNUSED(p))
+            {}
+        };
+
+#endif
+
+
 };};
 
 #endif

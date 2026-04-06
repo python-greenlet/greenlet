@@ -47,7 +47,7 @@ using greenlet::MainGreenlet;
 using greenlet::BrokenGreenlet;
 using greenlet::ThreadState;
 using greenlet::PythonState;
-
+using greenlet::refs::PyCriticalObjectSection;
 
 
 static PyGreenlet*
@@ -489,6 +489,7 @@ green_bool(PyGreenlet* self)
 static PyObject*
 green_getdict(PyGreenlet* self, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     if (self->dict == NULL) {
         self->dict = PyDict_New();
         if (self->dict == NULL) {
@@ -502,8 +503,6 @@ green_getdict(PyGreenlet* self, void* UNUSED(context))
 static int
 green_setdict(PyGreenlet* self, PyObject* val, void* UNUSED(context))
 {
-    PyObject* tmp;
-
     if (val == NULL) {
         PyErr_SetString(PyExc_TypeError, "__dict__ may not be deleted");
         return -1;
@@ -512,7 +511,8 @@ green_setdict(PyGreenlet* self, PyObject* val, void* UNUSED(context))
         PyErr_SetString(PyExc_TypeError, "__dict__ must be a dictionary");
         return -1;
     }
-    tmp = self->dict;
+    PyCriticalObjectSection cs(self);
+    PyObject* tmp = self->dict;
     Py_INCREF(val);
     self->dict = val;
     Py_XDECREF(tmp);
@@ -535,6 +535,7 @@ _green_not_dead(BorrowedGreenlet self)
 static PyObject*
 green_getdead(PyGreenlet* self, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     if (_green_not_dead(self)) {
         Py_RETURN_FALSE;
     }
@@ -553,6 +554,7 @@ green_get_stack_saved(PyGreenlet* self, void* UNUSED(context))
 static PyObject*
 green_getrun(PyGreenlet* self, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     try {
         OwnedObject result(BorrowedGreenlet(self)->run());
         return result.relinquish_ownership();
@@ -566,6 +568,7 @@ green_getrun(PyGreenlet* self, void* UNUSED(context))
 static int
 green_setrun(PyGreenlet* self, PyObject* nrun, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     try {
         BorrowedGreenlet(self)->run(nrun);
         return 0;
@@ -578,6 +581,7 @@ green_setrun(PyGreenlet* self, PyObject* nrun, void* UNUSED(context))
 static PyObject*
 green_getparent(PyGreenlet* self, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     return BorrowedGreenlet(self)->parent().acquire_or_None();
 }
 
@@ -585,6 +589,7 @@ green_getparent(PyGreenlet* self, void* UNUSED(context))
 static int
 green_setparent(PyGreenlet* self, PyObject* nparent, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     try {
         BorrowedGreenlet(self)->parent(nparent);
     }
@@ -598,6 +603,7 @@ green_setparent(PyGreenlet* self, PyObject* nparent, void* UNUSED(context))
 static PyObject*
 green_getcontext(const PyGreenlet* self, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     const Greenlet *const g = self->pimpl;
     try {
         OwnedObject result(g->context());
@@ -611,6 +617,7 @@ green_getcontext(const PyGreenlet* self, void* UNUSED(context))
 static int
 green_setcontext(PyGreenlet* self, PyObject* nctx, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     try {
         BorrowedGreenlet(self)->context(nctx);
         return 0;
@@ -624,6 +631,7 @@ green_setcontext(PyGreenlet* self, PyObject* nctx, void* UNUSED(context))
 static PyObject*
 green_getframe(PyGreenlet* self, void* UNUSED(context))
 {
+    PyCriticalObjectSection cs(self);
     const PythonState::OwnedFrame& top_frame = BorrowedGreenlet(self)->top_frame();
     return top_frame.acquire_or_None();
 }
