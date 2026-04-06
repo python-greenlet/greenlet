@@ -1,34 +1,28 @@
 import gc
 import sys
 import unittest
-
+from contextvars import Context
+from contextvars import ContextVar
+from contextvars import copy_context
 from functools import partial
-from unittest import skipUnless
-from unittest import skipIf
 
-from greenlet import greenlet
 from greenlet import getcurrent
-from . import TestCase
+from greenlet import greenlet
+
 from . import PY314
+from . import TestCase
 
-try:
-    from contextvars import Context
-    from contextvars import ContextVar
-    from contextvars import copy_context
-    # From the documentation:
-    #
-    # Important: Context Variables should be created at the top module
-    # level and never in closures. Context objects hold strong
-    # references to context variables which prevents context variables
-    # from being properly garbage collected.
-    ID_VAR = ContextVar("id", default=None)
-    VAR_VAR = ContextVar("var", default=None)
-    ContextVar = None
-except ImportError:
-    Context = ContextVar = copy_context = None
+# From the documentation:
+#
+# Important: Context Variables should be created at the top module
+# level and never in closures. Context objects hold strong
+# references to context variables which prevents context variables
+# from being properly garbage collected.
+ID_VAR = ContextVar("id", default=None)
+VAR_VAR = ContextVar("var", default=None)
+ContextVar = None
 
-# We don't support testing if greenlet's built-in context var support is disabled.
-@skipUnless(Context is not None, "ContextVar not supported")
+
 class ContextVarsTests(TestCase):
     def _new_ctx_run(self, *args, **kwargs):
         return copy_context().run(*args, **kwargs)
@@ -282,28 +276,6 @@ class ContextVarsTests(TestCase):
         with self.assertRaisesRegex(TypeError,
                                     "greenlet context must be a contextvars.Context or None"):
             g.gr_context = self
-
-
-@skipIf(Context is not None, "ContextVar supported")
-class NoContextVarsTests(TestCase):
-    def test_contextvars_errors(self):
-        let1 = greenlet(getcurrent().switch)
-        self.assertFalse(hasattr(let1, 'gr_context'))
-        with self.assertRaises(AttributeError):
-            getattr(let1, 'gr_context')
-
-        with self.assertRaises(AttributeError):
-            let1.gr_context = None
-
-        let1.switch()
-
-        with self.assertRaises(AttributeError):
-            getattr(let1, 'gr_context')
-
-        with self.assertRaises(AttributeError):
-            let1.gr_context = None
-
-        del let1
 
 
 if __name__ == '__main__':
