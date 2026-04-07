@@ -403,6 +403,18 @@ namespace greenlet
         }
 
         virtual OwnedObject throw_GreenletExit_during_dealloc(const ThreadState& current_thread_state);
+
+        /**
+         * Depends on the state of this->args() or the current Python
+         * error indicator. Thus, it is not threadsafe or reentrant.
+         * You (you being ``green_switch``, the Python-level
+         * ``greenlet.switch`` method) should call
+         * ``check_switch_allowed`` in free-threaded builds before
+         * calling this method and catch ``PyErrOccurred`` if it isn't
+         * a valid switch. This method should also call that method
+         * because there are places where we can switch internally
+         * without going through the Python method.
+         */
         virtual OwnedObject g_switch() = 0;
         /**
          * Force the greenlet to appear dead. Used when it's not
@@ -500,6 +512,11 @@ namespace greenlet
         // slp_switch() failed.
         virtual bool force_slp_switch_error() const noexcept;
 
+        // Check the preconditions for switching to this greenlet; if they
+        // aren't met, throws PyErrOccurred. Most callers will want to
+        // catch this and clear the arguments if they've been set.
+        inline void check_switch_allowed() const;
+
     protected:
         inline void release_args();
 
@@ -566,11 +583,6 @@ namespace greenlet
         // Returns the previous greenlet we just switched away from.
         virtual OwnedGreenlet g_switchstack_success() noexcept;
 
-
-        // Check the preconditions for switching to this greenlet; if they
-        // aren't met, throws PyErrOccurred. Most callers will want to
-        // catch this and clear the arguments
-        inline void check_switch_allowed() const;
         class GreenletStartedWhileInPython : public std::runtime_error
         {
         public:

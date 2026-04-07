@@ -37,7 +37,8 @@ Free-threading Is Experimental
 ==============================
 
 Beginning with greenlet 3.3.0, support for Python 3.14's free-threaded
-mode is enabled. Use caution, as it has only limited testing.
+mode is enabled; greenlet 3.4.0 expands this support and fixes several
+race conditions. Use caution, as it has only limited testing.
 
 There are known issues running greenlets in a free-threaded CPython.
 These include:
@@ -52,4 +53,6 @@ These include:
   hence the specializing interpreter) to avoid a rare crash. If your
   process crashes on accessing an attribute or object, or at shutdown
   during module cleanup, try setting the environment variable
-  ``PYTHON_TLBC=0`` or using the ``-X tlbc=0`` argument.
+  ``PYTHON_TLBC=0`` or using the ``-X tlbc=0`` argument. (If you
+  encounter this with greenlet 3.4, please open an issue and let the
+  maintainers know.)

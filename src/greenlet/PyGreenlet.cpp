@@ -372,6 +372,29 @@ PyDoc_STRVAR(
 static PyObject*
 green_switch(PyGreenlet* self, PyObject* args, PyObject* kwargs)
 {
+    // Our use of Greenlet::args() makes this method non-reentrant.
+    // Therefore, check to be sure the switch will be allowed ---
+    // we're calling from the same thread that ``self`` belongs to ---
+    // BEFORE doing anything with args(). If we don't do this, we can
+    // find args() getting clobbered by switches that will never
+    // succeed.
+    //
+    // TODO: We're only doing this for free-threaded builds because
+    // those are the only ones that have demonstrated an issue,
+    // trusting our later checks in g_switch to perform the same
+    // function and the GIL to keep us from being reentered in regular
+    // builds. BUT should we always do this as an extra measure of
+    // safety in case we run code at unexpected times (e.g., a GC?)
+#ifdef Py_GIL_DISABLED
+    try {
+        self->pimpl->check_switch_allowed();
+    }
+    catch (const PyErrOccurred&) {
+        return nullptr;
+    }
+#endif
+
+
     using greenlet::SwitchingArgs;
     SwitchingArgs switch_args(OwnedObject::owning(args), OwnedObject::owning(kwargs));
     self->pimpl->may_switch_away();
@@ -454,6 +477,16 @@ PyDoc_STRVAR(
 static PyObject*
 green_throw(PyGreenlet* self, PyObject* args)
 {
+    // See green_switch for why we call this early.
+#ifdef Py_GIL_DISABLED
+    try {
+        self->pimpl->check_switch_allowed();
+    }
+    catch (const PyErrOccurred&) {
+        return nullptr;
+    }
+#endif
+
     PyArgParseParam typ(mod_globs->PyExc_GreenletExit);
     PyArgParseParam val;
     PyArgParseParam tb;

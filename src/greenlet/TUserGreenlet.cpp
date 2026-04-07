@@ -119,9 +119,16 @@ UserGreenlet::g_switch()
 {
     try {
         if (!this->args() && !PyErr_Occurred()) {
-            // we have nothing to send as the result of switching, most
-            // likely the result of trying to switch to a dead
-            // greenlet.
+            // we have nothing to send as the result of switching,
+            // most likely because we've somehow allowed concurrent
+            // uses of switch from multiple threads (which may or may
+            // not be allowed by check_switch_allowed)
+            // ``green_switch`` defends against this by calling
+            // ``check_switch_allowed`` before messing with
+            // ``args()``, but we have at least one internal caller
+            // (``throw_GreenletExit_during_dealloc``) so we keep both
+            // this explicit check and our call to
+            // ``check_switch_allowed``
             throw PyErrOccurred(mod_globs->PyExc_GreenletError,
                                 "cannot switch with no pending arguments or exception");
         }
