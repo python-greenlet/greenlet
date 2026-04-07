@@ -53,6 +53,4 @@ These include:
   hence the specializing interpreter) to avoid a rare crash. If your
   process crashes on accessing an attribute or object, or at shutdown
   during module cleanup, try setting the environment variable
-  ``PYTHON_TLBC=0`` or using the ``-X tlbc=0`` argument. (If you
-  encounter this with greenlet 3.4, please open an issue and let the
-  maintainers know.)
+  ``PYTHON_TLBC=0`` or using the ``-X tlbc=0`` argument.

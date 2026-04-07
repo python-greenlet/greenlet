@@ -24,9 +24,7 @@
 
 - Fix several race conditions that could arise in free-threaded
   builds when using greenlet objects from multiple threads, some of
-  which could lead to assertion failures or interpreter crashes. On CI,
-  this also eliminated the need to disable the thread-local bytecode
-  cache.
+  which could lead to assertion failures or interpreter crashes.
 
   See `issue 503
   <https://github.com/python-greenlet/greenlet/issues/503>`_, with
