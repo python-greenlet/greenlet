@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.4.0 (unreleased)
+3.4.0 (2026-04-08)
 ==================
 
 - Publish binary wheels for RiscV 64.
