@@ -249,6 +249,23 @@ public:
     }
 
     /**
+     * If we have a main greenlet, mark it as dead by setting its
+     * thread_state to null (this part is atomic with respect to other
+     * threads looking at the main greenlet's thread_state).
+     */
+    inline bool mark_main_greenlet_dead() noexcept
+    {
+        PyGreenlet* main_greenlet = this->main_greenlet.borrow();
+        if (!main_greenlet) {
+            return false;
+        }
+        assert(main_greenlet->pimpl->thread_state() == this
+               || main_greenlet->pimpl->thread_state() == nullptr);
+        dynamic_cast<MainGreenlet*>(main_greenlet->pimpl)->thread_state(nullptr);
+        return true;
+    }
+
+    /**
      * In addition to returning a new reference to the currunt
      * greenlet, this performs any maintenance needed.
      */
@@ -440,6 +457,9 @@ public:
 #endif
     }
 
+    // Runs in some arbitrary thread that Python is using to invoke
+    // pending callbacks. This may not be the thread that was
+    // running the greenlets.
     ~ThreadState()
     {
         if (!PyInterpreterState_Head()) {
@@ -485,7 +505,10 @@ public:
         // switched to us, leaving a reference to the main greenlet
         // on the stack, somewhere uncollectible. Try to detect that.
         if (this->current_greenlet == this->main_greenlet && this->current_greenlet) {
-            assert(this->current_greenlet->is_currently_running_in_some_thread());
+            assert(
+                this->current_greenlet->is_currently_running_in_some_thread()
+                || this->current_greenlet->was_running_in_dead_thread()
+            );
             // Drop one reference we hold.
             this->current_greenlet.CLEAR();
             assert(!this->current_greenlet);

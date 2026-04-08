@@ -15,6 +15,7 @@ from . import PY313
 from . import PY314
 from . import RUNNING_ON_FREETHREAD_BUILD
 from .leakcheck import fails_leakcheck
+from .leakcheck import ignores_leakcheck
 
 
 # We manually manage locks in many tests
@@ -147,6 +148,70 @@ class TestGreenlet(TestCase):
         for th in ths:
             th.join(10)
         self.assertEqual(len(success), len(ths))
+
+    @ignores_leakcheck
+    def test_switching_many_threads(self):
+        # This can expose issues on the free-threaded build.
+        def creates_greenlet(greenlets, wait_to_die_until):
+            def body():
+                while True:
+                    greenlet.getcurrent().parent.switch()
+            g = greenlet.greenlet(body)
+            g.switch()
+            greenlets.append(g)
+            wait_to_die_until.wait()
+
+        def switches_from_other_thread(greenlets, wait_to_check_until, quit_after):
+            wait_to_check_until.wait()
+            while not quit_after.is_set():
+                for g in list(greenlets):
+                    try:
+                        if not g.dead:
+                            g.switch()
+                    except greenlet.error:
+                        # Every attempt where the greenlet isn't dead should
+                        # raise this
+                        pass
+
+        def run_it(thread_count=16):
+            greenlets = []
+            greenlets_all_created = threading.Event()
+            all_threads_dead = threading.Event()
+
+            creators = [
+                threading.Thread(target=creates_greenlet, args=(greenlets,
+                                                                greenlets_all_created))
+                for _
+                in range(thread_count)
+            ]
+
+            switchers = [
+                threading.Thread(target=switches_from_other_thread,
+                                 args=(greenlets, greenlets_all_created,
+                                       all_threads_dead))
+                for _
+                in range(thread_count)
+            ]
+
+            for t in (creators + switchers):
+                t.start()
+
+            # Simple polling loop
+            while len(greenlets) < thread_count:
+                time.sleep(0.0001)
+            greenlets_all_created.set()
+
+            for t in creators:
+                t.join(1.0)
+            all_threads_dead.set()
+            for t in switchers:
+                t.join(1.0)
+
+        # enough reps to have a chance of repeating, not so many it
+        # takes forever
+        for _ in range(20):
+            run_it()
+            gc.collect()
 
     def test_exception(self):
         seen = []

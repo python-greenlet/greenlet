@@ -16,11 +16,19 @@
   <https://github.com/python-greenlet/greenlet/pull/499>`_ by Nicolas
   Bouvrette.
 - Address the results of an automated code audit performed by
-  devdanzin. This includes several minor correctness changes that
+  Daniel Diniz. This includes several minor correctness changes that
   theoretically could have been crashing bugs, but typically only in
   very rare circumstances.
 
   See `PR 502 <https://github.com/python-greenlet/greenlet/pull/502>`_.
+
+- Fix several race conditions that could arise in free-threaded
+  builds when using greenlet objects from multiple threads, some of
+  which could lead to assertion failures or interpreter crashes.
+
+  See `issue 503
+  <https://github.com/python-greenlet/greenlet/issues/503>`_, with
+  thanks to Nitay Dariel and Daniel Diniz.
 
 3.3.2 (2026-02-20)
 ==================

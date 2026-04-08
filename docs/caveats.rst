@@ -37,7 +37,8 @@ Free-threading Is Experimental
 ==============================
 
 Beginning with greenlet 3.3.0, support for Python 3.14's free-threaded
-mode is enabled. Use caution, as it has only limited testing.
+mode is enabled; greenlet 3.4.0 expands this support and fixes several
+race conditions. Use caution, as it has only limited testing.
 
 There are known issues running greenlets in a free-threaded CPython.
 These include:
