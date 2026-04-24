@@ -19,7 +19,7 @@
   objects will continue to function at least until the greenlet C
   extension has been garbage collected and finalized.
 
-  See `issue 507 <https://github.com/python-greenlet/greenlet/issues/507>`_.
+  See `PR 508 <https://github.com/python-greenlet/greenlet/pull/508>`_.
 
 
 3.4.0 (2026-04-08)
