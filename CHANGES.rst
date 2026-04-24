@@ -2,10 +2,24 @@
  Changes
 =========
 
-3.4.1 (unreleased)
+3.5.0 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Remove the ``atexit`` callback. This callback caused greenlet APIs
+  to become unavailable far too soon during interpreter shutdown. Now
+  they remain available while all ``atexit`` callbacks run. Sometime
+  after ``Py_IsFinalizing`` becomes true, they may begin misbehaving.
+  Because the order in which C extensions are finalized is undefined,
+  C extensions that are sensitive to this need to check the results of
+  that function before invoking greenlet APIs. As a convenience,
+  ``PyGreenlet_GetCurrent`` sets an exception and returns ``NULL``
+  when this happens (and ``greenlet.getcurrent`` begins returning
+  ``None``); other greenlet C API functions have undefined behaviour.
+  Methods invoked directly on pre-existing ``greenlet.greenlet``
+  objects will continue to function at least until the greenlet C
+  extension has been garbage collected and finalized.
+
+  See `issue 507 <https://github.com/python-greenlet/greenlet/issues/507>`_.
 
 
 3.4.0 (2026-04-08)

@@ -30,6 +30,14 @@ Exceptions
 Functions
 =========
 
+.. important::
+
+   Because the order in which extension modules are destroyed when the
+   Python interpreter is finalized is undefined, it is undefined
+   behaviour to call these APIs when ``Py_IsFinalizing`` returns true,
+   unless otherwise documented. This is because the internal state of
+   the greenlet module may have been torn down already.
+
 .. c:function:: void PyGreenlet_Import(void)
 
    A macro that imports the greenlet module and initializes the C API. This
@@ -66,6 +74,20 @@ Functions
 .. c:function:: PyGreenlet* PyGreenlet_GetCurrent(void)
 
     Returns the currently active greenlet object.
+
+    If called during interpreter finalization, returns ``NULL``
+    and raises a :exc:`RuntimeError`.
+
+    .. versionchanged:: 3.4.0
+       Began returning ``NULL`` during interpreter shutdown.
+       This implementation returned ``NULL`` too early, while the
+       interpreter state was still guaranteed to be valid (during
+       ``atexit`` handlers). This has been corrected in 3.5.
+    .. versionchanged:: 3.5.0
+       Now sets an exception before returning ``NULL``. This prevents
+       a :exc:`SystemError` from being generated if this API was
+       exposed directly to Python, and prevents a crash if this API
+       was being called by Cython-generated code.
 
 
 .. c:function:: PyGreenlet* PyGreenlet_New(PyObject* run, PyObject* parent)

@@ -189,6 +189,13 @@ test_throw_exact(PyObject* UNUSED(self), PyObject* args)
     Py_RETURN_NONE;
 }
 
+static PyObject*
+getcurrent_api(PyObject* UNUSED(self))
+{
+    return (PyObject*)PyGreenlet_GetCurrent();
+
+}
+
 static PyMethodDef test_methods[] = {
     {"test_switch",
      (PyCFunction)test_switch,
@@ -227,6 +234,11 @@ static PyMethodDef test_methods[] = {
      (PyCFunction)test_throw_exact,
      METH_VARARGS,
      "Throw exactly the arguments given at the provided greenlet"},
+    {
+        "getcurrent_api",
+        (PyCFunction)getcurrent_api,
+        METH_NOARGS,
+        "Direct call to the PyGreenlet_GetCurrent API."},
     {NULL, NULL, 0, NULL}
 };
 
