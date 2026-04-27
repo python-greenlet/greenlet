@@ -27,25 +27,52 @@ using std::endl;
 namespace greenlet
 {
     class Greenlet;
-    // _Py_IsFinalizing() is only set AFTER atexit handlers complete
-    // inside Py_FinalizeEx on ALL Python versions (including 3.11+).
-    // Code running in atexit handlers (e.g. uWSGI plugin cleanup
-    // calling Py_FinalizeEx, New Relic agent shutdown) can still call
-    // greenlet.getcurrent(), but by that time type objects or
-    // internal state may have been invalidated. This flag is set by
-    // an atexit handler registered at module init (LIFO = runs
-    // first).
-    //
-    // Because this is only set from an atexit handler, by which point
-    // we're single threaded, there should be no need to make it
-    // std::atomic<int>.
-    // TODO: Move this to the GreenletGlobals object?
-    static int g_greenlet_shutting_down;
 
     static inline bool
     IsShuttingDown()
     {
-        return greenlet::g_greenlet_shutting_down || Py_IsFinalizing();
+        // This used to check a flag set by an ``atexit`` callback.
+        // This was wrong: the interpreter is still fully functional
+        // while *all* atexit callbacks are run, and it is perfectly
+        // valid for an atexit callback that runs after our atexit
+        // callback (i.e., registered first/before ours) to want to
+        // make use of greenlet services --- this comes up easily with
+        // gevent monkey-patching. Almost immediately after atexit callbacks,
+        // and before any destructive action is taken, Python arranges
+        // for Py_IsFinalizing to become true.
+
+        // It may see me could potentially tighten this check even more (and
+        // eliminate a function call) by setting a flag in a
+        // destructor function for our PyCapsule object (_C_API) to
+        // determine when we're shutting down. ``Py_IsFinalizing``
+        // becomes true relatively early in the shutdown process,
+        // while Capsule destructor functions only run when the module
+        // has actually been torn down --- well, when all of its dicts are
+        // cleared and collected; recall that because we use
+        // single-phase init, there is a "hidden" copy of the module
+        // dict kept by CPython internals used to re-populate a module
+        // if greenlet is imported twice, so Python code can't trigger
+        // C_API to get GC'd early without seriously poking at CPython
+        // internals, e.g., by using `gc.get_referrers` to find the
+        // hidden dict. However, C extensions could have INCREF the
+        // capsule object and prevent it from *ever* getting torn
+        // down, so this isn't reliable.
+
+        // We could probably be even "smarter" and replace values in
+        // _PyGreenlet_API with different values at destruction time.
+        // For the PyObject* returning APIs, we could replace them
+        // with versions that set an exception and return null --- the
+        // benefit being that we don't have to include a
+        // Py_IsFinalizing() call in the normal path; int returning
+        // APIs would be handled on a case-by-case basis; unclear what
+        // to do with the types. This is of questionable benefit
+        // though because by the time our destructor is called, our
+        // module is about to be destroyed which may take our
+        // allocated storage with it (if CPython ever dynamically
+        // unloads loaded shared libraries, which as of 3.14 it never
+        // does).
+
+        return Py_IsFinalizing();
     }
 
     namespace refs

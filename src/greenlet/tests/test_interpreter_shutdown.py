@@ -2,18 +2,6 @@
 """
 Tests for greenlet behavior during interpreter shutdown (Py_FinalizeEx).
 
-During interpreter shutdown, several greenlet code paths can access
-partially-destroyed Python state, leading to SIGSEGV.  Two independent
-guards protect against this on ALL Python versions:
-
-  1. g_greenlet_shutting_down — set by an atexit handler registered at
-     greenlet import time (LIFO = runs before other cleanup).  Covers
-     the atexit phase of Py_FinalizeEx, where _Py_IsFinalizing() is
-     still False on all Python versions.
-
-  2. Py_IsFinalizing() — covers the GC collection and later phases of
-     Py_FinalizeEx, where __del__ methods and destructor code run.
-
 These tests are organized into four groups:
 
   A. Core safety (smoke): no crashes with active greenlets at shutdown.
@@ -58,14 +46,14 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
     # -----------------------------------------------------------------
 
     def test_active_greenlet_at_shutdown_no_crash(self):
-        """
-        An active (suspended) greenlet that is deallocated during
-        interpreter shutdown should not crash the process.
 
-        Before the fix, this would SIGSEGV on Python < 3.11 because
-        _green_dealloc_kill_started_non_main_greenlet tried to call
-        g_switch() during Py_FinalizeEx.
-        """
+        # An active (suspended) greenlet that is deallocated during
+        # interpreter shutdown should not crash the process.
+
+        # Before the fix, this would SIGSEGV on Python < 3.11 because
+        # _green_dealloc_kill_started_non_main_greenlet tried to call
+        # g_switch() during Py_FinalizeEx.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import greenlet
 
@@ -82,10 +70,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: exiting with active greenlet", stdout)
 
     def test_multiple_active_greenlets_at_shutdown(self):
-        """
-        Multiple suspended greenlets at shutdown should all be cleaned
-        up without crashing.
-        """
+        # Multiple suspended greenlets at shutdown should all be cleaned
+        # up without crashing.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import greenlet
 
@@ -105,9 +92,8 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: 10 active greenlets at shutdown", stdout)
 
     def test_nested_greenlets_at_shutdown(self):
-        """
-        Nested (chained parent) greenlets at shutdown should not crash.
-        """
+        # Nested (chained parent) greenlets at shutdown should not crash.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import greenlet
 
@@ -128,10 +114,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: nested greenlets at shutdown", stdout)
 
     def test_threaded_greenlets_at_shutdown(self):
-        """
-        Greenlets in worker threads that are still referenced at
-        shutdown should not crash.
-        """
+        # Greenlets in worker threads that are still referenced at
+        # shutdown should not crash.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import greenlet
             import threading
@@ -171,12 +156,11 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
     # NOT interpreter shutdown; the guards do not fire here.
 
     def test_greenlet_cleanup_during_thread_exit(self):
-        """
-        When a thread exits normally while holding active greenlets,
-        GreenletExit IS thrown and cleanup code runs.  This is the
-        standard cleanup path used in production (e.g. uWSGI worker
-        threads finishing a request).
-        """
+        # When a thread exits normally while holding active greenlets,
+        # GreenletExit IS thrown and cleanup code runs.  This is the
+        # standard cleanup path used in production (e.g. uWSGI worker
+        # threads finishing a request).
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import os
             import threading
@@ -208,10 +192,8 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("CLEANUP: GreenletExit caught", stdout)
 
     def test_finally_block_during_thread_exit(self):
-        """
-        try/finally blocks in active greenlets run correctly when the
-        owning thread exits.
-        """
+        # try/finally blocks in active greenlets run correctly when the
+        # owning thread exits.
         rc, stdout, stderr = self._run_shutdown_script("""\
             import os
             import threading
@@ -239,10 +221,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("FINALLY: cleanup executed", stdout)
 
     def test_many_greenlets_with_cleanup_at_shutdown(self):
-        """
-        Stress test: many active greenlets with cleanup code at shutdown.
-        Ensures no crashes regardless of deallocation order.
-        """
+        # Stress test: many active greenlets with cleanup code at shutdown.
+        # Ensures no crashes regardless of deallocation order.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import sys
             import greenlet
@@ -271,10 +252,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: 50 greenlets about to shut down", stdout)
 
     def test_deeply_nested_greenlets_at_shutdown(self):
-        """
-        Deeply nested greenlet parent chains at shutdown.
-        Tests that the deallocation order doesn't cause issues.
-        """
+        # Deeply nested greenlet parent chains at shutdown.
+        # Tests that the deallocation order doesn't cause issues.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import greenlet
 
@@ -292,10 +272,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: nested to depth 10", stdout)
 
     def test_greenlet_with_traceback_at_shutdown(self):
-        """
-        A greenlet that has an active exception context when it's
-        suspended should not crash during shutdown cleanup.
-        """
+        # A greenlet that has an active exception context when it's
+        # suspended should not crash during shutdown cleanup.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import greenlet
 
@@ -318,21 +297,13 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
     # -----------------------------------------------------------------
     # Group C: getcurrent() / construction / gettrace() / settrace()
     # during atexit — registered AFTER greenlet import
-    #
-    # These atexit handlers are registered AFTER ``import greenlet``,
-    # so they run BEFORE greenlet's own cleanup handler (LIFO).  At
-    # this point g_greenlet_shutting_down is still 0 and
-    # _Py_IsFinalizing() is False, so getcurrent() must still return
-    # a valid greenlet object.  These tests guard against the fix
-    # being too aggressive (over-blocking getcurrent early).
     # -----------------------------------------------------------------
 
     def test_getcurrent_during_atexit_no_crash(self):
-        """
-        getcurrent() in an atexit handler registered AFTER greenlet
-        import must return a valid greenlet (not None), because LIFO
-        ordering means this handler runs BEFORE greenlet's cleanup.
-        """
+        # getcurrent() in an atexit handler registered AFTER greenlet
+        # import must return a valid greenlet (not None), because LIFO
+        # ordering means this handler runs BEFORE greenlet's cleanup.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -359,9 +330,8 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
                       "before greenlet's cleanup handler (LIFO ordering)")
 
     def test_gettrace_during_atexit_no_crash(self):
-        """
-        Calling greenlet.gettrace() during atexit must not crash.
-        """
+        # Calling greenlet.gettrace() during atexit must not crash.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -380,9 +350,8 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: registered", stdout)
 
     def test_settrace_during_atexit_no_crash(self):
-        """
-        Calling greenlet.settrace() during atexit must not crash.
-        """
+        # Calling greenlet.settrace() during atexit must not crash.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -401,11 +370,10 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: registered", stdout)
 
     def test_getcurrent_with_active_greenlets_during_atexit(self):
-        """
-        getcurrent() during atexit (registered after import) with active
-        greenlets must still return a valid greenlet, since LIFO means
-        this runs before greenlet's cleanup.
-        """
+        # getcurrent() during atexit (registered after import) with active
+        # greenlets must still return a valid greenlet, since LIFO means
+        # this runs before greenlet's cleanup.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -441,10 +409,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
                       "before greenlet's cleanup handler (LIFO ordering)")
 
     def test_greenlet_construction_during_atexit_no_crash(self):
-        """
-        Constructing a new greenlet during atexit (registered after
-        import) must succeed, since this runs before greenlet's cleanup.
-        """
+        # Constructing a new greenlet during atexit (registered after
+        # import) must succeed, since this runs before greenlet's cleanup.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -469,11 +436,10 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: created greenlet successfully", stdout)
 
     def test_greenlet_construction_with_active_greenlets_during_atexit(self):
-        """
-        Constructing new greenlets during atexit when other active
-        greenlets already exist (maximizes the chance of a non-empty
-        deleteme list).
-        """
+        # Constructing new greenlets during atexit when other active
+        # greenlets already exist (maximizes the chance of a non-empty
+        # deleteme list).
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -504,14 +470,12 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         self.assertIn("OK: 10 active greenlets, atexit registered", stdout)
 
     def test_greenlet_construction_with_cross_thread_deleteme_during_atexit(self):
-        """
-        Create greenlets in a worker thread, transfer them to the main
-        thread, then drop them — populating the deleteme list. Then
-        construct a new greenlet during atexit. On Python < 3.11
-        clear_deleteme_list() could previously crash if the
-        PythonAllocator vector copy failed during early Py_FinalizeEx;
-        using std::swap eliminates that allocation.
-        """
+        # Create greenlets in a worker thread, transfer them to the main
+        # thread, then drop them — populating the deleteme list. Then
+        # construct a new greenlet during atexit. On Python < 3.11
+        # clear_deleteme_list() could previously crash if the
+        # PythonAllocator vector copy failed during early Py_FinalizeEx;
+        # using std::swap eliminates that allocation.
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import greenlet
@@ -568,15 +532,13 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
     # -----------------------------------------------------------------
 
     def test_getcurrent_returns_none_during_gc_finalization(self):
-        """
-        greenlet.getcurrent() must return None when called from a
-        __del__ method during Py_FinalizeEx's GC collection pass.
+        # greenlet.getcurrent() must return None when called from a
+        # __del__ method during Py_FinalizeEx's GC collection pass.
 
-        On Python >= 3.11, _Py_IsFinalizing() is True during this
-        phase.  Without the Py_IsFinalizing() guard in mod_getcurrent,
-        this would return a greenlet — the same unguarded code path
-        that leads to SIGSEGV in production (uWSGI worker recycling).
-        """
+        # On Python >= 3.11, _Py_IsFinalizing() is True during this
+        # phase.  Without the Py_IsFinalizing() guard in mod_getcurrent,
+        # this would return a greenlet — the same unguarded code path
+        # that leads to SIGSEGV in production (uWSGI worker recycling).
         rc, stdout, stderr = self._run_shutdown_script("""\
             import gc
             import os
@@ -611,10 +573,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
                       "returned a live object instead (missing Py_IsFinalizing guard)")
 
     def test_getcurrent_returns_none_during_gc_finalization_with_active_greenlets(self):
-        """
-        Same as above but with active greenlets at shutdown, which
-        increases the amount of C++ destructor work during finalization.
-        """
+        # Same as above but with active greenlets at shutdown, which
+        # increases the amount of C++ destructor work during finalization.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import gc
             import os
@@ -658,13 +619,12 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
                       "returned a live object instead (missing Py_IsFinalizing guard)")
 
     def test_getcurrent_returns_none_during_gc_finalization_cross_thread(self):
-        """
-        Combines cross-thread greenlet deallocation (deleteme list)
-        with the GC finalization check.  This simulates the production
-        scenario where uWSGI worker threads create greenlets that are
-        transferred to the main thread, then cleaned up during
-        Py_FinalizeEx.
-        """
+        # Combines cross-thread greenlet deallocation (deleteme list)
+        # with the GC finalization check.  This simulates the production
+        # scenario where uWSGI worker threads create greenlets that are
+        # transferred to the main thread, then cleaned up during
+        # Py_FinalizeEx.
+
         rc, stdout, stderr = self._run_shutdown_script("""\
             import gc
             import os
@@ -735,15 +695,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
     # -----------------------------------------------------------------
 
     def test_getcurrent_returns_none_during_atexit_phase(self):
-        """
-        greenlet.getcurrent() must return None when called from an
-        atexit handler that runs AFTER greenlet's own atexit handler.
+        # greenlet.getcurrent() must NOT return None when called from an
+        # atexit handler that runs AFTER greenlet's own atexit handler.
 
-        This tests the g_greenlet_shutting_down flag, which is needed
-        because _Py_IsFinalizing() is still False during the atexit
-        phase on ALL Python versions.  Without g_greenlet_shutting_down,
-        getcurrent() proceeds unguarded into partially-torn-down state.
-        """
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import os
@@ -770,16 +724,11 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         """)
         self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
         self.assertIn("OK: atexit registered before greenlet import", stdout)
-        self.assertIn("GUARDED: getcurrent=None", stdout,
-                      "getcurrent() must return None during atexit phase; "
-                      "returned a live object instead (missing "
-                      "g_greenlet_shutting_down atexit handler)")
+        self.assertIn("UNGUARDED", stdout)
+
 
     def test_getcurrent_returns_none_during_atexit_phase_with_active_greenlets(self):
-        """
-        Same as above but with active greenlets, ensuring the atexit
-        guard works even when there is greenlet state to clean up.
-        """
+        # Same as above but with active greenlets
         rc, stdout, stderr = self._run_shutdown_script("""\
             import atexit
             import os
@@ -812,10 +761,63 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         """)
         self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
         self.assertIn("OK: 10 active greenlets, atexit registered", stdout)
-        self.assertIn("GUARDED: getcurrent=None", stdout,
-                      "getcurrent() must return None during atexit phase; "
-                      "returned a live object instead (missing "
-                      "g_greenlet_shutting_down atexit handler)")
+        self.assertIn("UNGUARDED", stdout)
+
+    def test_api_getcurrent_no_system_error_at_module_gc_time(self):
+        # If we use the C API directly to return a greenlet AFTER
+        # atexit threads have been run, we don't crash, we get a
+        # specific error. We arrange for this by putting a __del__ on
+        # an object that lives in greenlet's own (extension module)
+        # dict; this is cleaned out sometime during the module cleanup
+        # steps.
+        rc, stdout, stderr = self._run_shutdown_script("""\
+            import greenlet
+            from greenlet.tests import _test_extension
+
+            class WithDel:
+                # must cache the method we want, because by the time we
+                # run, module globals may have been cleaned up.
+                def __del__(self, gc=_test_extension.getcurrent_api):
+                    print('Destructor running')
+                    gc() # Should print an unraisable RuntimeException
+
+            greenlet._greenlet.with_del = WithDel()
+        """)
+        self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
+        self.assertIn('Destructor running', stdout)
+        self.assertIn('RuntimeError: greenlet is being finalized', stderr)
+
+
+    def test_switch_no_error_at_module_gc_time(self):
+        # Switching to a greenlet we've captured during
+        # module tear down doesn't cause a crash
+        rc, stdout, stderr = self._run_shutdown_script("""\
+            import greenlet
+            from greenlet.tests import _test_extension
+
+            gs = []
+            # must cache the objects we want, because by the time we
+            # run, module globals may have been cleaned up.
+            def do_it(gs=gs):
+                print('current', gs)
+                gs[0].parent.switch(1)
+
+
+            gs.append(greenlet.greenlet(do_it))
+            gs.append(greenlet.greenlet(do_it))
+            gs[1].switch()
+
+            class WithDel:
+                def __del__(self, gs=gs):
+                    print('Destructor running')
+                    r = gs[0].switch()
+                    print('Result', r)
+
+            greenlet._greenlet.with_del = WithDel()
+        """)
+        self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
+        self.assertIn('Destructor running', stdout)
+        self.assertIn('Result 1', stdout)
 
 
 if __name__ == '__main__':

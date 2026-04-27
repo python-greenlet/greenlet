@@ -18,19 +18,6 @@ using greenlet::ThreadState;
 #endif
 
 
-static PyObject*
-_greenlet_atexit_callback(PyObject* UNUSED(self), PyObject* UNUSED(args))
-{
-    greenlet::g_greenlet_shutting_down = 1;
-    Py_RETURN_NONE;
-}
-
-static PyMethodDef _greenlet_atexit_method = {
-    "_greenlet_cleanup", _greenlet_atexit_callback,
-    METH_NOARGS, NULL
-};
-
-
 PyDoc_STRVAR(mod_getcurrent_doc,
              "getcurrent() -> greenlet\n"
              "\n"

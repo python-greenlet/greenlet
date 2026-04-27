@@ -295,25 +295,6 @@ greenlet_internal_mod_init() noexcept
         PyUnstable_Module_SetGIL(m.borrow(), Py_MOD_GIL_NOT_USED);
 #endif
 
-        // Register an atexit handler that sets
-        // g_greenlet_shutting_down. Python's atexit is LIFO:
-        // registered last = called first. By registering here (at
-        // import time, after most other libraries), our handler runs
-        // before their cleanup code, which may try to call
-        // greenlet.getcurrent() on objects whose type has been
-        // invalidated. _Py_IsFinalizing() alone is insufficient on
-        // ALL Python versions because it is only set AFTER atexit
-        // handlers complete inside Py_FinalizeEx.
-        {
-            NewReference atexit_mod(Require(PyImport_ImportModule("atexit")));
-            OwnedObject register_fn = atexit_mod.PyRequireAttr("register");
-            NewReference callback(Require(
-             PyCFunction_New(&_greenlet_atexit_method, NULL)));
-            NewReference args(Require(PyTuple_Pack(1, callback.borrow())));
-            NewReference result(Require(
-                PyObject_Call(register_fn.borrow(), args.borrow(), NULL)));
-        }
-
         return m.borrow(); // But really it's the main reference.
     }
     catch (const LockInitError& e) {
