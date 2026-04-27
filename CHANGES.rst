@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.5.0 (unreleased)
+3.5.0 (2026-04-27)
 ==================
 
 - Remove the ``atexit`` callback. This callback caused greenlet APIs
