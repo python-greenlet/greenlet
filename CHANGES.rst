@@ -12,7 +12,7 @@
 - Fix the discrepancy in the way the two ``getcurrent`` APIs behave
   during greenlet teardown. One API (the C API used by, e.g.,  gevent) raised a
   ``RuntimeError``; the other (the Python ``greenlet.getcurrent`` API)
-  returned ``None``. This second way breaks greenlet's type
+  returned ``None``. This second way is incompatible with greenlet's type
   annotations, so ``greenlet.getcurrent`` now raises a
   ``RuntimeError`` as well.
 
