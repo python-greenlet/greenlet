@@ -5,7 +5,16 @@
 3.5.1 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Add preliminary support for Python 3.15b1. This has not been
+  reviewed by CPython core developers, but all tests pass. Binary
+  wheels of this version won't work on earlier Python 3.15 builds and
+  may not work on later 3.15 builds.
+- Fix the discrepancy in the way the two ``getcurrent`` APIs behave
+  during greenlet teardown. One API (the C API used by, e.g.,  gevent) raised a
+  ``RuntimeError``; the other (the Python ``greenlet.getcurrent`` API)
+  returned ``None``. This second way breaks greenlet's type
+  annotations, so ``greenlet.getcurrent`` now raises a
+  ``RuntimeError`` as well.
 
 
 3.5.0 (2026-04-27)
