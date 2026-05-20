@@ -29,6 +29,8 @@ jobs:
           - "3.13"
           - "3.14"
           - "3.14t"
+          - "3.15-dev"
+          - "3.15t-dev"
 
         # Recall the macOS and windows builds upload built wheels so all supported versions
         # need to run on mac.
@@ -99,7 +101,8 @@ jobs:
         ARCHFLAGS: "-arch x86_64 -arch arm64"
 
     - name: Check greenlet build
-      if: ${{ ! startsWith(runner.os, 'Windows') }}
+      # 3.15b1 has a problem with readme renderer, ModuleNotFoundError: No module named 'nh3.nh3'
+      if: ${{ !startsWith(runner.os, 'Windows') && !endsWith(matrix.python-version, '-dev')}}
       run: |
         ls -l dist
         twine check dist/*

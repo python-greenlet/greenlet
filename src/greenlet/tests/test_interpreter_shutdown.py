@@ -532,7 +532,7 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
     # -----------------------------------------------------------------
 
     def test_getcurrent_returns_none_during_gc_finalization(self):
-        # greenlet.getcurrent() must return None when called from a
+        # greenlet.getcurrent() must raise an exception when called from a
         # __del__ method during Py_FinalizeEx's GC collection pass.
 
         # On Python >= 3.11, _Py_IsFinalizing() is True during this
@@ -549,8 +549,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
             class CleanupChecker:
                 def __del__(self):
                     try:
-                        cur = greenlet.getcurrent()
-                        if cur is None:
+                        try:
+                            greenlet.getcurrent()
+                        except RuntimeError:
                             os.write(1, b"GUARDED: getcurrent=None\\n")
                         else:
                             os.write(1, b"UNGUARDED: getcurrent="
@@ -568,9 +569,7 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         """)
         self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
         self.assertIn("OK: deferred cycle created", stdout)
-        self.assertIn("GUARDED: getcurrent=None", stdout,
-                      "getcurrent() must return None during GC finalization; "
-                      "returned a live object instead (missing Py_IsFinalizing guard)")
+        self.assertIn("GUARDED: getcurrent=None", stdout)
 
     def test_getcurrent_returns_none_during_gc_finalization_with_active_greenlets(self):
         # Same as above but with active greenlets at shutdown, which
@@ -586,8 +585,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
             class CleanupChecker:
                 def __del__(self):
                     try:
-                        cur = greenlet.getcurrent()
-                        if cur is None:
+                        try:
+                            greenlet.getcurrent()
+                        except RuntimeError:
                             os.write(1, b"GUARDED: getcurrent=None\\n")
                         else:
                             os.write(1, b"UNGUARDED: getcurrent="
@@ -614,9 +614,7 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         """)
         self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
         self.assertIn("OK: 10 active greenlets, cycle deferred", stdout)
-        self.assertIn("GUARDED: getcurrent=None", stdout,
-                      "getcurrent() must return None during GC finalization; "
-                      "returned a live object instead (missing Py_IsFinalizing guard)")
+        self.assertIn("GUARDED: getcurrent=None", stdout)
 
     def test_getcurrent_returns_none_during_gc_finalization_cross_thread(self):
         # Combines cross-thread greenlet deallocation (deleteme list)
@@ -636,8 +634,9 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
             class CleanupChecker:
                 def __del__(self):
                     try:
-                        cur = greenlet.getcurrent()
-                        if cur is None:
+                        try:
+                            greenlet.getcurrent()
+                        except RuntimeError:
                             os.write(1, b"GUARDED: getcurrent=None\\n")
                         else:
                             os.write(1, b"UNGUARDED: getcurrent="
@@ -669,9 +668,7 @@ class TestInterpreterShutdown(TestCase): # pylint:disable=too-many-public-method
         """)
         self.assertEqual(rc, 0, f"Process crashed (rc={rc}):\n{stdout}{stderr}")
         self.assertIn("OK: cross-thread cleanup + cycle deferred", stdout)
-        self.assertIn("GUARDED: getcurrent=None", stdout,
-                      "getcurrent() must return None during GC finalization; "
-                      "returned a live object instead (missing Py_IsFinalizing guard)")
+        self.assertIn("GUARDED: getcurrent=None", stdout)
 
 
     # -----------------------------------------------------------------

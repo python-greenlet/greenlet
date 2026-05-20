@@ -41,7 +41,7 @@ if [ -d /greenlet -a -d /opt/python ]; then
     which auditwheel
     echo "Installed Python versions"
     ls -l /opt/python
-    for variant in  /opt/python/cp{314,313,312,311,310}*; do
+    for variant in  /opt/python/cp{315,314,313,312,311,310}*; do
         if [[ "$variant" == *3t ]]; then
             echo "Skipping no-gil build for 3.13; only 3.14 is fully supported."
             continue
