@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.5.1 (unreleased)
+3.5.1 (2026-05-20)
 ==================
 
 - Add preliminary support for Python 3.15b1. This has not been
