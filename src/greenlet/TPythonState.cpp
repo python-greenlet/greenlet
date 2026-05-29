@@ -348,21 +348,34 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 #endif
 }
 // TODO: Better state management about when we own the top frame.
-int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noexcept
+int PythonState::tp_traverse(visitproc visit, void* arg) noexcept
 {
     Py_VISIT(this->_context.borrow());
-    if (own_top_frame) {
-        Py_VISIT(this->_top_frame.borrow());
+    Py_VISIT(this->_top_frame.borrow());
+#if GREENLET_PY314 && defined(Py_GIL_DISABLED)
+    // Visit the references held by our suspended frames. They're owned by
+    // the (live) thread but parked off its current_frame chain, and
+    // frame_traverse only walks a frame's stack when it's
+    // FRAME_OWNED_BY_FRAME_OBJECT -- so nothing else visits them, and
+    // deferred-refcount objects (code, functions, types) reachable only
+    // through this greenlet would be collected while live.
+    if (this->_top_frame) {
+        for (_PyInterpreterFrame* iframe = this->_top_frame->f_frame;
+             iframe != nullptr; iframe = iframe->previous) {
+            // Skip generator/coroutine frames; their object's traverse
+            // already visits them (gen_traverse), so we'd double-count.
+            // expose_frames leaves them in the ->previous chain.
+            if (iframe->owner != FRAME_OWNED_BY_THREAD) {
+                continue;
+            }
+            _Py_VISIT_STACKREF(iframe->f_executable);
+            _Py_VISIT_STACKREF(iframe->f_funcobj);
+            int frame_result = _PyGC_VisitFrameStack(iframe, visit, arg);
+            if (frame_result) {
+                return frame_result;
+            }
+        }
     }
-#if GREENLET_PY314
-    // TODO: Should we be visiting the c_stack_refs objects?
-    // CPython uses a specific macro to do that which takes into
-    // account boxing and null values and then calls
-    // ``_PyGC_VisitStackRef``, but we don't have access to that, and
-    // we can't duplicate it ourself (because it compares
-    // ``visitproc`` to another function we can't access).
-    // The naive way of looping over c_stack_refs->ref and visiting
-    // those crashes the process (at least with GIL disabled).
 #endif
     // Note that we DO NOT visit ``delete_later``. Even if it's
     // non-null and we technically own a reference to it, its

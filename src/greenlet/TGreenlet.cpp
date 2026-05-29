@@ -589,13 +589,7 @@ Greenlet::tp_traverse(visitproc visit, void* arg)
     if ((result = this->exception_state.tp_traverse(visit, arg)) != 0) {
         return result;
     }
-    //XXX: This is ugly. But so is handling everything having to do
-    //with the top frame.
-    bool visit_top_frame = this->was_running_in_dead_thread();
-    // When true, the thread is dead. Our implicit weak reference to the
-    // frame is now all that's left; we consider ourselves to
-    // strongly own it now.
-    if ((result = this->python_state.tp_traverse(visit, arg, visit_top_frame)) != 0) {
+    if ((result = this->python_state.tp_traverse(visit, arg)) != 0) {
         return result;
     }
     return 0;
