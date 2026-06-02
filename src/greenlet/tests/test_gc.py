@@ -85,23 +85,50 @@ class TestGC(TestCase):
         greenlet.getcurrent()
         gc.collect()
 
-    def test_crashing_cycle(self):
-         # CPython 3.14 free threaded crashes on this
-         # (from docs/greenlet_gc.rst)
-         import doctest
-         def with_doctest():
-             """
-             >>> import gc
-             >>> from greenlet import getcurrent, greenlet, GreenletExit
-             >>> def collect_it():
-             ...      print("Collecting garbage")
-             ...      gc.collect()
-             >>> def outer():
-             ...     gc.collect()
-             >>> outer_glet = greenlet(outer)
-             >>> outer_glet.switch()
-             Collecting garbage
-             >>> print(list(globals()))
-             >>> print(list(locals()))
-             """
-         doctest.run_docstring_examples(with_doctest, dict())
+    def test_crashing_deferred_object(self):
+        import doctest
+        def with_doctest():
+            """
+            >>> import gc
+            >>> from greenlet import getcurrent, greenlet, GreenletExit
+            >>> def outer():
+            ...     gc.collect()
+            >>> outer_glet = greenlet(outer)
+            >>> outer_glet.switch()
+            """
+        doctest.run_docstring_examples(with_doctest, dict())
+
+    def test_cycle_in_suspended_frame(self):
+        import doctest
+        def with_doctest():
+            """
+            >>> import gc
+            >>> from greenlet import getcurrent, greenlet
+            >>> class Cycle:
+            ...     def __del__(self):
+            ...         print("(Running finalizer)")
+            >>> def collect_it():
+            ...     print("Collecting garbage")
+            ...     gc.collect()
+            >>> def inner():
+            ...     cycle1 = Cycle()
+            ...     cycle2 = Cycle()
+            ...     cycle1.cycle = cycle2
+            ...     cycle2.cycle = cycle1
+            ...     getcurrent().parent.switch()
+            >>> def outer():
+            ...     glet = greenlet(inner)
+            ...     glet.switch()
+            ...     collect_it()
+
+            >>> outer_glet = greenlet(outer)
+            >>> outer_glet.switch()
+            Collecting garbage
+            >>> outer_glet.dead
+            True
+            >>> collect_it()
+            Collecting garbage
+            (Running finalizer)
+            (Running finalizer)
+            """
+        doctest.run_docstring_examples(with_doctest, dict())
