@@ -352,7 +352,7 @@ int PythonState::tp_traverse(visitproc visit, void* arg) noexcept
 {
     Py_VISIT(this->_context.borrow());
     Py_VISIT(this->_top_frame.borrow());
-#if GREENLET_PY314 && defined(Py_GIL_DISABLED)
+#if GREENLET_PY315
     // Visit the references held by our suspended frames. They're owned by
     // the (live) thread but parked off its current_frame chain, and
     // frame_traverse only walks a frame's stack when it's
