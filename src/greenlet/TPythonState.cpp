@@ -353,12 +353,12 @@ int PythonState::tp_traverse(visitproc visit, void* arg) noexcept
     Py_VISIT(this->_context.borrow());
     Py_VISIT(this->_top_frame.borrow());
 #if GREENLET_PY315
-    // Visit the references held by our suspended frames. They're owned by
-    // the (live) thread but parked off its current_frame chain, and
-    // frame_traverse only walks a frame's stack when it's
-    // FRAME_OWNED_BY_FRAME_OBJECT -- so nothing else visits them, and
-    // deferred-refcount objects (code, functions, types) reachable only
-    // through this greenlet would be collected while live.
+    // Visit the references held by our suspended frames.
+    // This is important specially on free-threading where the
+    // the suspended frames may contain deferred references to
+    // objects, and if they are not traversed then the interpreter
+    // can free objects early causing a use-after-free crash
+    // at runtime exit.
     if (this->_top_frame) {
         for (_PyInterpreterFrame* iframe = this->_top_frame->f_frame;
              iframe != nullptr; iframe = iframe->previous) {
