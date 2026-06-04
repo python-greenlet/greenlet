@@ -42,6 +42,14 @@ using greenlet::refs::BorrowedGreenlet;
 #endif
 #endif
 
+
+#if GREENLET_PY315
+#include "internal/pycore_gc.h"
+#if !defined(_MSC_VER) && !defined(__MINGW64__)
+#include "internal/pycore_stackref.h"
+#endif
+#endif
+
 // XXX: TODO: Work to remove all virtual functions
 // for speed of calling and size of objects (no vtable).
 // One pattern is the Curiously Recurring Template
@@ -612,14 +620,8 @@ namespace greenlet
            Further, you con't even access ``g_thread_state_global``
            before and after the switch from the global variable.
            Because it is thread local some compilers cache it in a
-           register/on the stack, notably new versions of MSVC; this
-           breaks with strange crashes sometime later, because writing
-           to anything in ``g_thread_state_global`` after the switch
            is actually writing to random memory. For this reason, we
            call a non-inlined function to finish the operation. (XXX:
-           The ``/GT`` MSVC compiler argument probably fixes that.)
-
-           It is very important that stack switch is 'atomic', i.e. no
            calls into other Python code allowed (except very few that
            are safe), because global variables are very fragile. (This
            should no longer be the case with thread-local variables.)

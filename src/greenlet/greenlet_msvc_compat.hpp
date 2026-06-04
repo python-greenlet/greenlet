@@ -50,11 +50,33 @@ _PyCode_GetTLBCArray(PyCodeObject *co)
 #else
 #define Py_TAG_BITS     ((uintptr_t)1)
 #define Py_TAG_DEFERRED (1)
+#define Py_INT_TAG      3
 #endif
 
 
 static const _PyStackRef PyStackRef_NULL = { .bits = Py_TAG_DEFERRED};
 #define PyStackRef_IsNull(stackref) ((stackref).bits == PyStackRef_NULL.bits)
+
+static inline bool
+PyStackRef_IsTaggedInt(_PyStackRef i)
+{
+    return (i.bits & Py_INT_TAG) == Py_INT_TAG;
+}
+
+static inline bool
+PyStackRef_IsNullOrInt(_PyStackRef stackref)
+{
+    return PyStackRef_IsNull(stackref) || PyStackRef_IsTaggedInt(stackref);
+}
+
+#define _Py_VISIT_STACKREF(ref)                                         \
+    do {                                                                \
+        if (!PyStackRef_IsNullOrInt(ref)) {                             \
+            int vret = _PyGC_VisitStackRef(&(ref), visit, arg);         \
+            if (vret)                                                   \
+                return vret;                                            \
+        }                                                               \
+    } while (0)
 
 static inline PyObject *
 PyStackRef_AsPyObjectBorrow(_PyStackRef stackref)
@@ -64,7 +86,7 @@ PyStackRef_AsPyObjectBorrow(_PyStackRef stackref)
 }
 
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
-    assert(!PyStackRef_IsNull(f->f_executable));
+    assert(!PyStackRef_IsNullOrInt(f->f_executable));
     PyObject *executable = PyStackRef_AsPyObjectBorrow(f->f_executable);
     assert(PyCode_Check(executable));
     return (PyCodeObject *)executable;
