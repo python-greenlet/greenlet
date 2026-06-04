@@ -1,7 +1,7 @@
 import gc
 
 import weakref
-
+import sys
 import greenlet
 
 
@@ -16,7 +16,6 @@ class TestGC(TestCase):
         o = weakref.ref(greenlet.greenlet(greenlet.getcurrent).switch())
         gc.collect()
         if o() is not None:
-            import sys
             print("O IS NOT NONE.", sys.getrefcount(o()))
         self.assertIsNone(o())
         self.assertFalse(gc.garbage, gc.garbage)
@@ -86,6 +85,8 @@ class TestGC(TestCase):
         gc.collect()
 
     def test_crashing_deferred_object(self):
+        if sys.version_info < (3, 15):
+            self.skipTest("Test is 3.15+ only")
         import doctest
         def with_doctest():
             """
@@ -99,6 +100,8 @@ class TestGC(TestCase):
         doctest.run_docstring_examples(with_doctest, dict())
 
     def test_cycle_in_suspended_frame(self):
+        if sys.version_info < (3, 15):
+            self.skipTest("Test is 3.15+ only")
         import doctest
         def with_doctest():
             """
