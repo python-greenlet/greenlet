@@ -368,8 +368,10 @@ int PythonState::tp_traverse(visitproc visit, void* arg) noexcept
             if (iframe->owner != FRAME_OWNED_BY_THREAD) {
                 continue;
             }
-            _Py_VISIT_STACKREF(iframe->f_executable);
+            Py_VISIT(iframe->frame_obj);
+            Py_VISIT(iframe->f_locals);
             _Py_VISIT_STACKREF(iframe->f_funcobj);
+            _Py_VISIT_STACKREF(iframe->f_executable);
             int frame_result = _PyGC_VisitFrameStack(iframe, visit, arg);
             if (frame_result) {
                 return frame_result;
