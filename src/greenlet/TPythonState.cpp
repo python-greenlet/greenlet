@@ -348,10 +348,12 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 #endif
 }
 // TODO: Better state management about when we own the top frame.
-int PythonState::tp_traverse(visitproc visit, void* arg) noexcept
+int PythonState::tp_traverse(visitproc visit, void* arg, bool visit_top_frame) noexcept
 {
     Py_VISIT(this->_context.borrow());
-    Py_VISIT(this->_top_frame.borrow());
+    if (visit_top_frame) {
+        Py_VISIT(this->_top_frame.borrow());
+    }
 #if GREENLET_PY315
     // Visit the references held by our suspended frames.
     // This is important specially on free-threading where the

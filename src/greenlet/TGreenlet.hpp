@@ -180,7 +180,7 @@ namespace greenlet
         inline void operator>>(PyThreadState* tstate) noexcept;
         void clear() noexcept;
 
-        int tp_traverse(visitproc visit, void* arg) noexcept;
+        int tp_traverse(visitproc visit, void* arg, bool visit_top_frame) noexcept;
         void tp_clear(bool own_top_frame) noexcept;
         void set_initial_state(const PyThreadState* const tstate) noexcept;
 #if GREENLET_USE_CFRAME
