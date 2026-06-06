@@ -506,7 +506,6 @@ class TestGreenlet(TestCase):
         g = mygreenlet(lambda: None)
         self.assertRaises(SomeError, g.throw, SomeError())
 
-    @fails_leakcheck
     def _do_test_throw_to_dead_thread_doesnt_crash(self, wait_for_cleanup=False):
         result = []
         def worker():
@@ -564,7 +563,6 @@ class TestGreenlet(TestCase):
         # See issue 252
         self.expect_greenlet_leak = True # direct us not to wait for it to go away
 
-    @fails_leakcheck
     def test_throw_to_dead_thread_doesnt_crash(self):
         self._do_test_throw_to_dead_thread_doesnt_crash()
 

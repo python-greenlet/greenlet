@@ -43,7 +43,6 @@ class TestGC(TestCase):
         self.assertIsNone(o())
         self.assertFalse(gc.garbage, gc.garbage)
 
-    @fails_leakcheck
     def test_finalizer_crash(self):
         # This test is designed to crash when active greenlets
         # are made garbage collectable, until the underlying
