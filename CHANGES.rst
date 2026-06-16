@@ -5,7 +5,10 @@
 3.5.2 (unreleased)
 ==================
 
-- Nothing changed yet.
+- The minimum supported version of Python 3.15 is now 3.15b2.
+- Fix some garbage-collection related crashes on free-threaded Python
+  3.15. Thanks to Kumar Aditya in `PR #511
+  <https://github.com/python-greenlet/greenlet/pull/511>`_.
 
 
 3.5.1 (2026-05-20)
