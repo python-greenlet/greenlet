@@ -348,21 +348,38 @@ void PythonState::set_initial_state(const PyThreadState* const tstate) noexcept
 #endif
 }
 // TODO: Better state management about when we own the top frame.
-int PythonState::tp_traverse(visitproc visit, void* arg, bool own_top_frame) noexcept
+int PythonState::tp_traverse(visitproc visit, void* arg, bool visit_top_frame) noexcept
 {
     Py_VISIT(this->_context.borrow());
-    if (own_top_frame) {
+    if (visit_top_frame) {
         Py_VISIT(this->_top_frame.borrow());
     }
-#if GREENLET_PY314
-    // TODO: Should we be visiting the c_stack_refs objects?
-    // CPython uses a specific macro to do that which takes into
-    // account boxing and null values and then calls
-    // ``_PyGC_VisitStackRef``, but we don't have access to that, and
-    // we can't duplicate it ourself (because it compares
-    // ``visitproc`` to another function we can't access).
-    // The naive way of looping over c_stack_refs->ref and visiting
-    // those crashes the process (at least with GIL disabled).
+#if GREENLET_PY315
+    // Visit the references held by our suspended frames.
+    // This is important specially on free-threading where the
+    // the suspended frames may contain deferred references to
+    // objects, and if they are not traversed then the interpreter
+    // can free objects early causing a use-after-free crash
+    // at runtime exit.
+    if (this->_top_frame) {
+        for (_PyInterpreterFrame* iframe = this->_top_frame->f_frame;
+             iframe != nullptr; iframe = iframe->previous) {
+            // Skip generator/coroutine frames; their object's traverse
+            // already visits them (gen_traverse), so we'd double-count.
+            // expose_frames leaves them in the ->previous chain.
+            if (iframe->owner != FRAME_OWNED_BY_THREAD) {
+                continue;
+            }
+            Py_VISIT(iframe->frame_obj);
+            Py_VISIT(iframe->f_locals);
+            _Py_VISIT_STACKREF(iframe->f_funcobj);
+            _Py_VISIT_STACKREF(iframe->f_executable);
+            int frame_result = _PyGC_VisitFrameStack(iframe, visit, arg);
+            if (frame_result) {
+                return frame_result;
+            }
+        }
+    }
 #endif
     // Note that we DO NOT visit ``delete_later``. Even if it's
     // non-null and we technically own a reference to it, its

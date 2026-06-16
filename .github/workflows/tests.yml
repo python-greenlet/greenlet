@@ -130,7 +130,8 @@ jobs:
         # standalone in a unit test doesn't produce the error.
         #
         # So this is a temporary workaround.
-        PYTHON_TLBC: "0"
+        # This has been fixed for 3.15+
+        PYTHON_TLBC: ${{ matrix.python-version == '3.14t' && '0' || '1' }}
       run: |
         sphinx-build -b doctest -d docs/_build/doctrees2 docs docs/_build/doctest2
     - name: Lint
