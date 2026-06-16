@@ -445,9 +445,28 @@ class TestLeaks(TestCase):
         # due to working set trimming, page table updates, etc. Allow a
         # small tolerance so OS-level noise doesn't cause false failures.
         # Real leaks produce MBs of growth (each iteration creates 20k
-        # greenlets), so 512 KB is well below the detection threshold for
-        # genuine issues.
-        tolerance = 512 * 1024 if WIN else 0
+        # greenlets; the greenlet Python object alone, not counting the C++
+        # state it points to, is 56 bytes so 20k greenlets alone is
+        # slightly over a megabyte; the C++ UserGreenlet clocks in at 208
+        # bytes, which adds another 4MB), so 512 KB is well below the detection
+        # threshold for genuine issues.
+        #
+        # 2025-06-16: We have now observed the same problem on both
+        # ubuntu-latest 3.14t (2948K "leak") and macos-latest 3.15t (192K
+        # "leak"). This was after the merge of PR #511, but that change
+        # should be unrelated. In particular, the ubuntu failure was after
+        # 30 loops and the macos failure was after only 3 --- both much
+        # smaller than UNTRACK_ATTEMPTS=100! We break out of the loop if we
+        # see a USS at the end of the loop that's smaller than at the start
+        # of the loop, and then we wait for pending cleanups and get the
+        # USS again. So this means that we think we have success, break out
+        # of the loop, and the pending cleanups cause our USS to grow -
+        # perhaps by touching pages that had been paged out? An immediately
+        # prior attempt of both platforms had been successful.
+        #
+        # At any rate, we need a larger tolerance than 512K, and we
+        # need it on all platforms, not just Windows.
+        tolerance = 3 * 1024 * 1024
         self.assertLessEqual(uss_after, uss_before + tolerance,
                              "after attempts %d" % (count,))
 
