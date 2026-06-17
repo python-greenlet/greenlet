@@ -1309,7 +1309,7 @@ class TestMainGreenlet(TestCase):
         g = greenlet.greenlet(do_it)
         self.assertEqual(g.switch(), 42)
         with self.assertRaises(AttributeError):
-            g.run
+            getattr(g, 'run')
 
 
 class TestBrokenGreenlets(TestCase):
