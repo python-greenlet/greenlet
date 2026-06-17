@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.5.2 (unreleased)
+3.5.2 (2026-06-17)
 ==================
 
 - The minimum supported version of Python 3.15 is now 3.15b2.
