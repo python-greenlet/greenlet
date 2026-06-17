@@ -13,9 +13,12 @@ from . import TestCase
 from . import RUNNING_ON_MANYLINUX
 from . import PY313
 from . import PY314
+from . import WIN
 from . import RUNNING_ON_FREETHREAD_BUILD
 from .leakcheck import fails_leakcheck
+from .leakcheck import fails_leakcheck_on_py314_or_less
 from .leakcheck import ignores_leakcheck
+from .leakcheck import ignores_leakcheck_if
 
 
 # We manually manage locks in many tests
@@ -506,7 +509,7 @@ class TestGreenlet(TestCase):
         g = mygreenlet(lambda: None)
         self.assertRaises(SomeError, g.throw, SomeError())
 
-    @fails_leakcheck
+    @fails_leakcheck_on_py314_or_less
     def _do_test_throw_to_dead_thread_doesnt_crash(self, wait_for_cleanup=False):
         result = []
         def worker():
@@ -564,7 +567,11 @@ class TestGreenlet(TestCase):
         # See issue 252
         self.expect_greenlet_leak = True # direct us not to wait for it to go away
 
-    @fails_leakcheck
+    @fails_leakcheck_on_py314_or_less
+    @ignores_leakcheck_if(
+        WIN and sys.version_info[:2] == (3, 10),
+        "does not leaks on Windows 3.10, but does on other platforms"
+    )
     def test_throw_to_dead_thread_doesnt_crash(self):
         self._do_test_throw_to_dead_thread_doesnt_crash()
 
@@ -1301,6 +1308,15 @@ class TestMainGreenlet(TestCase):
         self._check_current_is_main()
         self.assertIsInstance(greenlet.getcurrent(), RawGreenlet)
 
+    def test_greenlet_run(self):
+        def do_it():
+            with self.assertRaises(AttributeError):
+                getattr(g, 'run')
+
+        g = greenlet.greenlet(do_it)
+        g.switch()
+        with self.assertRaises(AttributeError):
+            getattr(g, 'run')
 
 
 class TestBrokenGreenlets(TestCase):

@@ -397,7 +397,36 @@ void PythonState::tp_clear(bool own_top_frame) noexcept
     // we got dealloc'd without being finished. We may or may not be
     // in the same thread.
     if (own_top_frame) {
+#if GREENLET_PY315
+        // Release the references held by our suspended frames.
+        // this->top_frame gets implicitly cleared by the Py_CLEAR(iframe->frame_obj)
+        // of the first complete frame, so in the end we relinquish ownership of it.
+        if (this->_top_frame) {
+            for (_PyInterpreterFrame* iframe = this->_top_frame->f_frame;
+                 iframe != nullptr; iframe = iframe->previous) {
+                if (iframe->owner != FRAME_OWNED_BY_THREAD) {
+                    continue;
+                }
+                // Clear the references held by this frame's evaluation stack.
+                _PyStackRef* locals = iframe->localsplus;
+                _PyStackRef* sp = iframe->stackpointer;
+                if (sp) {
+                    while (sp > locals) {
+                        sp--;
+                        PyStackRef_CLEAR(*sp);
+                    }
+                    iframe->stackpointer = locals;
+                }
+                Py_CLEAR(iframe->f_locals);
+                Py_CLEAR(iframe->frame_obj);
+                PyStackRef_CLEAR(iframe->f_funcobj);
+                PyStackRef_CLEAR(iframe->f_executable);
+            }
+        }
+        this->_top_frame.relinquish_ownership();
+#else
         this->_top_frame.CLEAR();
+#endif
     }
 }
 

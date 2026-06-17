@@ -86,6 +86,21 @@ def ignores_leakcheck(func):
     func.ignore_leakcheck = True
     return func
 
+def ignores_leakcheck_if(condition, message):
+    """
+    Return a decorator that marks the function to be ignored during
+    leakchecks (see `ignores_leakcheck`) when *condition* is true.
+
+    *message* describes why the leakcheck is ignored. When *condition*
+    is false, the function is returned unchanged.
+    """
+    def decorator(func):
+        if condition:
+            func = ignores_leakcheck(func)
+            func.ignore_leakcheck_reason = message
+        return func
+    return decorator
+
 def fails_leakcheck(func):
     """
     Mark that the function is known to leak.
@@ -93,6 +108,14 @@ def fails_leakcheck(func):
     func.fails_leakcheck = True
     if SKIP_FAILING_LEAKCHECKS:
         func = unittest.skip("Skipping known failures")(func)
+    return func
+
+def fails_leakcheck_on_py314_or_less(func):
+    """
+    Mark the function as known to leak (fails refcount leakchecks) on Python 3.14 or less.
+    """
+    if sys.version_info[:2] <= (3, 14):
+        return fails_leakcheck(func)
     return func
 
 class LeakCheckError(AssertionError):
@@ -321,6 +344,12 @@ class _RefCountChecker(object):
 
 def wrap_refcount(method):
     if getattr(method, 'ignore_leakcheck', False) or SKIP_LEAKCHECKS:
+        reason = getattr(method, 'ignore_leakcheck_reason', None)
+        if reason and not SKIP_LEAKCHECKS:
+            print(
+                "Ignoring leakchecks for %s: %s" % (method.__name__, reason),
+                file=sys.stderr,
+            )
         return method
 
     @wraps(method)

@@ -85,6 +85,27 @@ PyStackRef_AsPyObjectBorrow(_PyStackRef stackref)
     return cleared;
 }
 
+#define Py_TAG_REFCNT 1
+#define BITS_TO_PTR(ref) ((PyObject *)((ref).bits))
+
+#define PyStackRef_RefcountOnObject(ref) (((ref).bits & Py_TAG_REFCNT) == 0)
+
+#define PyStackRef_CLOSE(REF)                            \
+    do {                                                 \
+        _PyStackRef _close_tmp = (REF);                  \
+        if (PyStackRef_RefcountOnObject(_close_tmp)) {   \
+            Py_DECREF(BITS_TO_PTR(_close_tmp));          \
+        }                                                \
+    } while (0)
+
+#define PyStackRef_CLEAR(REF)                            \
+    do {                                                 \
+        _PyStackRef* _clear_ptr = &(REF);                \
+        _PyStackRef _clear_old = (*_clear_ptr);          \
+        *_clear_ptr = PyStackRef_NULL;                   \
+        PyStackRef_CLOSE(_clear_old);                    \
+    } while (0)
+
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     assert(!PyStackRef_IsNullOrInt(f->f_executable));
     PyObject *executable = PyStackRef_AsPyObjectBorrow(f->f_executable);

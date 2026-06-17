@@ -6,7 +6,7 @@ import greenlet
 
 
 from . import TestCase
-from .leakcheck import fails_leakcheck
+from .leakcheck import fails_leakcheck_on_py314_or_less
 # These only work with greenlet gc support
 # which is no longer optional.
 assert greenlet.GREENLET_USE_GC
@@ -43,7 +43,7 @@ class TestGC(TestCase):
         self.assertIsNone(o())
         self.assertFalse(gc.garbage, gc.garbage)
 
-    @fails_leakcheck
+    @fails_leakcheck_on_py314_or_less
     def test_finalizer_crash(self):
         # This test is designed to crash when active greenlets
         # are made garbage collectable, until the underlying
