@@ -95,12 +95,9 @@ def fails_leakcheck(func):
         func = unittest.skip("Skipping known failures")(func)
     return func
 
-def fails_leakcheck_on_py314_or_less(func):
+def ignores_leakcheck_on_py314_or_less(func):
     """
-    Mark that the function is known to leak on Python 3.14 and earlier.
-
-    The underlying leak is fixed on newer versions (3.15+), where the
-    function is expected to pass the leakcheck.
+    Mark the function to ignore refcount leakchecks on Python 3.14 or less.
     """
     if sys.version_info[:2] <= (3, 14):
         return ignores_leakcheck(func)
