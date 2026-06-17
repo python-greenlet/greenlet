@@ -13,10 +13,12 @@ from . import TestCase
 from . import RUNNING_ON_MANYLINUX
 from . import PY313
 from . import PY314
+from . import WIN
 from . import RUNNING_ON_FREETHREAD_BUILD
 from .leakcheck import fails_leakcheck
 from .leakcheck import fails_leakcheck_on_py314_or_less
 from .leakcheck import ignores_leakcheck
+from .leakcheck import ignores_leakcheck_if
 
 
 # We manually manage locks in many tests
@@ -566,6 +568,10 @@ class TestGreenlet(TestCase):
         self.expect_greenlet_leak = True # direct us not to wait for it to go away
 
     @fails_leakcheck_on_py314_or_less
+    @ignores_leakcheck_if(
+        WIN and sys.version_info[:2] == (3, 10),
+        "does not leaks on Windows 3.10, but does on other platforms"
+    )
     def test_throw_to_dead_thread_doesnt_crash(self):
         self._do_test_throw_to_dead_thread_doesnt_crash()
 
