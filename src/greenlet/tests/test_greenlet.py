@@ -1302,6 +1302,14 @@ class TestMainGreenlet(TestCase):
         self._check_current_is_main()
         self.assertIsInstance(greenlet.getcurrent(), RawGreenlet)
 
+    def test_greenlet_run(self):
+        def do_it():
+            return 42
+
+        g = greenlet.greenlet(do_it)
+        self.assertEqual(g.switch(), 42)
+        with self.assertRaises(AttributeError):
+            g.run
 
 
 class TestBrokenGreenlets(TestCase):
