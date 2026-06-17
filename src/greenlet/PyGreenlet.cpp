@@ -151,6 +151,12 @@ green_is_gc(PyObject* _self)
     if (self->main() || !self->active()) {
         result = 1;
     }
+#if GREENLET_PY315
+    // On 3.15+ we have full support for traversing and clearing the
+    // references held by a suspended greenlet's frames, so even active
+    // (suspended) greenlets can participate in cycle collection.
+    result = 1;
+#endif
     // The main greenlet pointer will eventually go away after the thread dies.
     if (self->was_running_in_dead_thread()) {
         // Our thread is dead! We can never run again. Might as well
@@ -808,7 +814,7 @@ PyTypeObject PyGreenlet_Type = {
     .tp_alloc=PyType_GenericAlloc,                  /* tp_alloc */
     .tp_new=(newfunc)green_new,                          /* tp_new */
     .tp_free=PyObject_GC_Del,                   /* tp_free */
-#ifndef Py_GIL_DISABLED
+#if 0
 /*
   We may have been handling this wrong all along.
 
