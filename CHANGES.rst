@@ -9,6 +9,9 @@
 - Fix some garbage-collection related crashes on free-threaded Python
   3.15. Thanks to Kumar Aditya in `PR #511
   <https://github.com/python-greenlet/greenlet/pull/511>`_.
+- Improve garbage collection of greenlets. This mostly applies to
+  Python 3.15. Thanks to Kumar Aditya in `PR #512
+  <https://github.com/python-greenlet/greenlet/pull/512>`_.
 
 
 3.5.1 (2026-05-20)
