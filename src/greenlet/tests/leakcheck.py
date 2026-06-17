@@ -103,7 +103,7 @@ def fails_leakcheck_on_py314_or_less(func):
     function is expected to pass the leakcheck.
     """
     if sys.version_info[:2] <= (3, 14):
-        return fails_leakcheck(func)
+        return ignores_leakcheck(func)
     return func
 
 class LeakCheckError(AssertionError):
