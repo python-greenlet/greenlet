@@ -1304,10 +1304,11 @@ class TestMainGreenlet(TestCase):
 
     def test_greenlet_run(self):
         def do_it():
-            return 42
+            with self.assertRaises(AttributeError):
+                getattr(g, 'run')
 
         g = greenlet.greenlet(do_it)
-        self.assertEqual(g.switch(), 42)
+        g.switch()
         with self.assertRaises(AttributeError):
             getattr(g, 'run')
 
