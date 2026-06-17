@@ -425,6 +425,8 @@ UserGreenlet::inner_bootstrap(PyGreenlet* origin_greenlet, PyObject* run)
     this->_run_callable.CLEAR();
     // stash the run callable in this->_run_callable to ensure that GC will be
     // able to find the object later.
+    // This is needed for the case of a permanently suspended greenlet
+    // so that the run callable is not leaked.
     this->_run_callable.steal(run);
     run = nullptr;
 

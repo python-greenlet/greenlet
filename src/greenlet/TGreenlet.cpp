@@ -608,7 +608,7 @@ Greenlet::tp_clear()
     this->exception_state.tp_clear();
     this->python_state.tp_clear(own_top_frame);
     if (own_top_frame) {
-        // Throw away any save stack since the owned frame is cleared.
+        // Throw away any saved stack state since the owned frame is cleared.
         this->stack_state.set_inactive();
     }
     return 0;
