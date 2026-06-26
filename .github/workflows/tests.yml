@@ -143,7 +143,7 @@ jobs:
         pip install -U pylint
         python -m pylint --rcfile=.pylintrc greenlet
 
-    - name: Publish package to PyPI (mac)
+    - name: Publish package to PyPI (Mac/Win)
       # We cannot 'uses: pypa/gh-action-pypi-publish@v1.4.1' because
       # that's apparently a container action, and those don't run on
       # the Mac.
@@ -186,6 +186,13 @@ jobs:
 
   manylinux:
     runs-on: ubuntu-latest
+    # If we have 'needs: test', then these wait to start running until
+    # all the test matrix passes. That's good, because these take a
+    # long time, and they take a long time to kill if something goes
+    # wrong. OTOH, if one of the tests fail, and this is a release tag,
+    # we have to notice that and try restarting things so that the
+    # wheels get built and uploaded.
+    needs: test
     # We use a regular Python matrix entry to share as much code as possible.
     strategy:
       fail-fast: false
