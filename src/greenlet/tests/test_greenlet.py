@@ -1027,6 +1027,46 @@ class TestGreenlet(TestCase):
         # The next line crashes on 3.12 if we haven't exposed the frames.
         self.assertIsNone(frame.f_back)
 
+    def test_switching_holding_critical_section_no_crash(self):
+        # https://github.com/python-greenlet/greenlet/issues/513
+        # In no-GIL builds, we were failing to restore the
+        # critical_section pointer, leading to
+        # ``Fatal Python error: PyMutex_Unlock: unlocking mutex that is not locked``
+        # when two greenlets both held a lock on an object, and then
+        # the GIL was released, which, according to
+        # ``Include/cpython/critical_section.h`` causes the critical
+        # section to get released.
+        # The field is present on Python 3.13+, and only used
+        # in no-GIL builds.
+        # Initial version of this test case provided in the
+        # github issue by ddorian
+        def k1(x):
+            g2.switch()  # into G2 while holding G1's sort critical section
+            return x
+
+
+        def k2(x):
+            g1.switch()  # back into G1 while holding G2's sort critical section
+            return x
+
+
+        def g1_body():
+            sorted([0], key=k1)
+            g2.switch()
+
+
+        def g2_body():
+            sorted([0], key=k2)
+            # Do a blocking I/O operation which would cause the
+            # critical sections to get suspended
+            with open(__file__, "rt", encoding='utf-8') as f:
+                f.read()
+
+
+        g1 = greenlet.greenlet(g1_body)
+        g2 = greenlet.greenlet(g2_body)
+        g1.switch()
+
 
 class TestGreenletSetParentErrors(TestCase):
     def test_threaded_reparent(self):

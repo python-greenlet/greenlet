@@ -5,7 +5,11 @@
 3.5.3 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Fix a crash on free-threaded builds when multiple greenlets were
+  holding a critical section on an object and the GIL for the thread
+  was dropped. See `issue 513
+  <https://github.com/python-greenlet/greenlet/issues/513>`_. Thanks
+  to ddorian.
 
 
 3.5.2 (2026-06-17)
