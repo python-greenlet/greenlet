@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.5.3 (unreleased)
+3.5.3 (2026-06-26)
 ==================
 
 - Fix a crash on free-threaded builds when multiple greenlets were
