@@ -6,6 +6,7 @@ import greenlet
 
 
 from . import TestCase
+from . import RUNNING_ON_FREETHREAD_BUILD
 from .leakcheck import fails_leakcheck_on_py314_or_less
 # These only work with greenlet gc support
 # which is no longer optional.
@@ -83,6 +84,16 @@ class TestGC(TestCase):
         del g
         greenlet.getcurrent()
         gc.collect()
+
+    def test_c_stack_refs_suspended_gc(self):
+        # Issue #515: a greenlet suspended while holding a _PyCStackRef must have
+        # those refs visited by tp_traverse, or the free-threaded collector frees
+        # an object reachable only through the suspended C stack. Runs the repro
+        # out of process. https://github.com/python-greenlet/greenlet/issues/515
+        if not RUNNING_ON_FREETHREAD_BUILD:
+            self.skipTest("Only free-threaded builds are affected")
+        output = self.run_script('fail_c_stack_refs_suspended_gc.py')
+        self.assertIn('C STACK REFS GC OK', output)
 
     def test_crashing_deferred_object(self):
         if sys.version_info < (3, 15):
