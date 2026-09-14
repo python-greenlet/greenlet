@@ -2,7 +2,7 @@
  Changes
 =========
 
-3.5.6 (unreleased)
+3.5.6 (2026-09-14)
 ==================
 
 - Correct a race condition that could lead to garbage collection
