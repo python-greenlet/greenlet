@@ -5,7 +5,9 @@
 3.5.6 (unreleased)
 ==================
 
-- Nothing changed yet.
+- Correct a race condition that could lead to garbage collection
+  unintentionally being disabled. See `PR 529
+  <https://github.com/python-greenlet/greenlet/pull/529>`_ by Yurii.
 
 
 3.5.5 (2026-08-10)
